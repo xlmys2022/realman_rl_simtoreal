@@ -6,6 +6,8 @@
 
 02-C1 已增加厂家 **离线 FK 对照**，结论为当前模型尚不一致：SDK 未提供可确认对应旧版 `6F-V` 的枚举，末端长度与 URDF 近似旋转均有差异。未连接真机，也未据此修改模型、IK 或控制器。完整结果见 [REALMAN_KINEMATICS_VALIDATION.md](REALMAN_KINEMATICS_VALIDATION.md)。
 
+02-C2 已增加厂家 **离线 IK 验证**。II+SF、II+ISFV 的主案例分别通过 36/36 次自模型往返；边界案例分别为 11/12，保留了 J5 负限位附近的初值相关失败。模型不一致结论不变。详见 [REALMAN_IK_VALIDATION.md](REALMAN_IK_VALIDATION.md)。
+
 ## 环境
 
 使用已存在的 Conda 环境 `realman_rl`（Python 3.11），不需要新建环境：
@@ -184,3 +186,23 @@ python -I -m unittest discover -s /home/mr-beaver/Documents/robot/realman_rl_sim
 默认 `II + SF` 是依据官方六维力定义选择的**候选**，不是确认的 `6F-V` 配置；`--sensor ISFV` 可查看新版一体化六维力加视觉候选。`--generation II|III|all`、`--sensor B|ZF|SF|ISF|BV|ISFV|all` 支持多配置调查，不会替换 MuJoCo 机器人。没有厂家 IK 或真机接口调用。
 
 脚本计算 home、六轴分别 +3°、组合和另一姿态，共 9 组 FK；只使用独立计算数据，不执行 `mj_step()`。输出位置与 SO(3) 旋转误差；完整 4×4 变换（含 3×3 旋转）、DH、坐标系、原始及相对误差保存在默认 `outputs/fk_comparison.json`，可用 `--json PATH` 覆盖。**退出码 0：数值一致，2：已完成测量但模型不一致，1：运行或 SDK 错误**。数值一致仍不代表实物/TCP 已标定。SDK 缺失时 9 项可选厂家测试跳过，基础仿真不受影响。
+
+## 厂家离线 IK 验证（02-C2）
+
+沿用可选 SDK，不新增依赖。两个候选配置顺序运行；每套 IK 分别使用自己的 FK 生成目标，原有 MuJoCo DLS、模型和控制器保持不变：
+
+```bash
+conda activate realman_rl
+python -I /home/mr-beaver/Documents/robot/realman_rl_simtoreal/scripts/compare_ik.py
+python -I /home/mr-beaver/Documents/robot/realman_rl_simtoreal/scripts/compare_ik.py --sensor SF --repeats 5
+python -I /home/mr-beaver/Documents/robot/realman_rl_simtoreal/scripts/compare_ik.py --sensor ISFV --repeats 5
+python -I -m unittest discover -s /home/mr-beaver/Documents/robot/realman_rl_simtoreal/tests -v
+```
+
+主集是 9 个姿态 × 4 个初值，默认预热后每例计时 5 次；另测逐轴上下限附近、全解、连续小变化、不可达目标和独立的模型交叉诊断。`--repeats` 范围 1–20；完整结果默认保存到 `outputs/ik_comparison.json`，可用 `--json PATH` 指定位置。当前共有 75 项自动化测试；缺少 SDK 时新增 17 项厂家 IK 测试跳过。
+
+`scripts/realman_ik.py` 的 `RealManIK(model_limits, model="II", sensor="SF")` 复用 FK 会话，提供 `solve_ik(position_m, initial_q_rad, rotation_3x3)` 和 `solve_all(...)`。内部使用单位 wxyz 四元数、degree 关节输入，并检查返回码、六轴数量、有限值、双方限位和厂家 FK 残差。只有检查通过时才返回弧度 `q`，失败返回 `q=None`；全解仅允许整数 `2*pi` 等价表示转换，不做关节裁剪或模型零偏修正。
+
+厂家 Algo 使用进程全局配置，不支持并发会话；新建另一配置后旧会话会明确失败。全解是独立诊断，不会自动替代单解失败。当前 J5 边界失败和 MuJoCo 远初值局部失败均保留。
+
+退出码 0 表示实验完成且数值/失败处理审计通过，**不表示所有案例求解成功或两模型一致**；1 表示运行错误，2 表示重复性、成功解复核等审计异常。本程序不调用执行器或 `mj_step()`，不连接真机。IK 成功不保证运动路径无碰撞，厂家关节解不能作为当前 MuJoCo 控制器的可直接替换输入。
