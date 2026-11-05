@@ -10,14 +10,13 @@ import mujoco
 import numpy as np
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "scripts"))
-import control_joints as control
+from realman_rl_simtoreal.simulation import control, model as model_api
 
 
 class JointControlTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.model, cls.jids, cls.aids = control.load_model()
+        cls.model, cls.jids, cls.aids = model_api.load_model()
 
     def test_original_assets_and_static_inspection(self):
         assets = ROOT / "assets/robots/rml63"
@@ -31,7 +30,7 @@ class JointControlTests(unittest.TestCase):
 
     def test_conversion_preserves_geometry_inertia_and_limits(self):
         original = mujoco.MjModel.from_xml_path(str(ROOT / "assets/robots/rml63/rml63_mujoco.urdf"))
-        old_data, data = mujoco.MjData(original), control.initialize(self.model)
+        old_data, data = mujoco.MjData(original), model_api.initialize(self.model)
         old_data.qpos[:6] = data.qpos
         mujoco.mj_forward(original, old_data)
         for bid in range(1, original.nbody):
@@ -47,13 +46,13 @@ class JointControlTests(unittest.TestCase):
             new_gid = self.model.geom(body + suffix).id
             np.testing.assert_allclose(old_data.geom_xpos[gid], data.geom_xpos[new_gid], atol=1e-13, rtol=0)
             np.testing.assert_allclose(old_data.geom_xmat[gid], data.geom_xmat[new_gid], atol=1e-13, rtol=0)
-        for name in control.JOINTS:
+        for name in model_api.JOINTS:
             np.testing.assert_array_equal(original.joint(name).range, self.model.joint(name).range)
-        self.assertEqual([self.model.joint(i).name for i in range(self.model.njnt)], list(control.JOINTS))
+        self.assertEqual([self.model.joint(i).name for i in range(self.model.njnt)], list(model_api.JOINTS))
 
     def test_position_actuator_force_mapping_and_clamps(self):
         for index in range(6):
-            data = control.initialize(self.model)
+            data = model_api.initialize(self.model)
             aid = self.aids[index]
             data.ctrl[aid] += 0.01
             mujoco.mj_forward(self.model, data)
@@ -65,7 +64,7 @@ class JointControlTests(unittest.TestCase):
             self.assertTrue(np.all(np.abs(data.qfrc_actuator) <= [60, 60, 30, 30, 10, 10]))
 
     def test_hold_base_camera_and_uncommanded_joints(self):
-        data = control.initialize(self.model)
+        data = model_api.initialize(self.model)
         base = self.model.body("base_link").id
         tip = self.model.body("link_6").id
         camera = self.model.body("camera_rolink").id
@@ -82,7 +81,7 @@ class JointControlTests(unittest.TestCase):
         for sign in (1, -1):
             for index in range(6):
                 with self.subTest(sign=sign, joint=index + 1):
-                    data = control.initialize(self.model)
+                    data = model_api.initialize(self.model)
                     home = data.ctrl[self.aids].copy()
                     control.run_segment(self.model, data, self.jids, self.aids, home, "settle", ramp=0, hold=2)
                     before = data.qpos.copy()
@@ -94,15 +93,15 @@ class JointControlTests(unittest.TestCase):
                     self.assertLess(np.max(np.abs(np.rad2deg(data.qpos[others] - before[others]))), 0.1)
 
     def test_half_timestep_and_combined_small_motion(self):
-        model, jids, aids = control.load_model()
+        model, jids, aids = model_api.load_model()
         model.opt.timestep = 0.001
-        data = control.initialize(model)
+        data = model_api.initialize(model)
         target = data.ctrl[aids] + np.deg2rad([2, -2, 2, -2, 2, -2])
         result = control.run_segment(model, data, jids, aids, target, "combined at 1ms")
         self.assertEqual(result["max_contacts"], 0)
 
     def test_base_assembly_exclusion_is_specific(self):
-        data = control.initialize(self.model)
+        data = model_api.initialize(self.model)
         for degrees in (-90, -10, 0, 10, 90):
             data.qpos[0] = np.deg2rad(degrees)
             mujoco.mj_forward(self.model, data)
@@ -110,7 +109,7 @@ class JointControlTests(unittest.TestCase):
         self.assertEqual(self.model.nexclude, 1)
 
     def test_nonadjacent_self_collision_is_still_detected(self):
-        data = control.initialize(self.model)
+        data = model_api.initialize(self.model)
         # Forward-only collision fixture, deliberately outside the demo motion region.
         data.qpos[:] = np.deg2rad([17.10682648, 140.16436566, -91.55096729,
                                   1.5055794, -85.31318548, -188.64332841])
@@ -120,23 +119,23 @@ class JointControlTests(unittest.TestCase):
         self.assertIn(frozenset(("base_link_collision", "link_2_collision")), pairs)
 
     def test_environment_collision_detected_and_rejected(self):
-        home_data = control.initialize(self.model)
-        spec = mujoco.MjSpec.from_file(str(control.SCENE))
+        home_data = model_api.initialize(self.model)
+        spec = mujoco.MjSpec.from_file(str(model_api.SCENE))
         spec.worldbody.add_geom(name="test_obstacle", type=mujoco.mjtGeom.mjGEOM_SPHERE,
                                size=[0.02, 0, 0], pos=home_data.xipos[self.model.body("link_2").id])
         model = spec.compile()
-        data = control.initialize(model)
+        data = model_api.initialize(model)
         self.assertTrue(any(c.dist < -0.001 for c in data.contact))
         with self.assertRaisesRegex(ValueError, "Unexpected collision"):
             control.run_segment(model, data, self.jids, self.aids, data.ctrl.copy(), "obstacle")
 
     def test_invalid_commands_and_bad_mapping_rejected(self):
-        data = control.initialize(self.model)
+        data = model_api.initialize(self.model)
         home = data.ctrl.copy()
         for target in ([0] * 5, [np.nan] * 6, home + 1):
             with self.assertRaises(ValueError):
                 control.validate_target(self.model, self.jids, home, target)
-        spec = mujoco.MjSpec.from_file(str(control.SCENE))
+        spec = mujoco.MjSpec.from_file(str(model_api.SCENE))
         spec.actuator("position_1").target = "joint_2"
         # Test the actual loader against a real, incorrectly wired MJCF.
         import tempfile
@@ -146,7 +145,7 @@ class JointControlTests(unittest.TestCase):
             xml = xml.replace('meshdir="upstream/meshes"', f'meshdir="{ROOT / "assets/robots/rml63/upstream/meshes"}"')
             path.write_text(xml)
             with self.assertRaisesRegex(ValueError, "mapping"):
-                control.load_model(path)
+                model_api.load_model(path)
 
 
 if __name__ == "__main__":

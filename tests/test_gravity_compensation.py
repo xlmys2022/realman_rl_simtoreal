@@ -1,5 +1,6 @@
 """Matched A/B dynamics, gravity diagnosis, force routing and total-drive limits."""
 
+import importlib.util
 from pathlib import Path
 import sys
 import unittest
@@ -9,11 +10,12 @@ import mujoco
 import numpy as np
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "scripts"))
-import control_joints as control
-import control_ee as ee
-import compare_controllers as compare
-from kinematics import Kinematics
+from realman_rl_simtoreal.simulation import control, model as model_api
+from realman_rl_simtoreal.simulation import ee_control as ee
+_spec = importlib.util.spec_from_file_location("_test_compare_controllers", ROOT / "scripts/compare_controllers.py")
+compare = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(compare)
+from realman_rl_simtoreal.simulation.kinematics import Kinematics
 
 
 class GravityCompensationTests(unittest.TestCase):
@@ -22,8 +24,8 @@ class GravityCompensationTests(unittest.TestCase):
         cls.report = compare.run_comparison()
 
     def test_only_compensation_configuration_changes(self):
-        baseline, jids, aids = control.load_model()
-        enabled, _, _ = control.load_model(gravity_compensation=True)
+        baseline, jids, aids = model_api.load_model()
+        enabled, _, _ = model_api.load_model(gravity_compensation=True)
         for name in ("body_mass", "body_inertia", "body_ipos", "body_iquat", "body_pos", "body_quat",
                      "body_weldid", "jnt_range", "dof_damping", "actuator_gainprm", "actuator_biasprm",
                      "actuator_gear", "actuator_forcerange", "jnt_actfrcrange", "jnt_actfrclimited",
@@ -39,13 +41,13 @@ class GravityCompensationTests(unittest.TestCase):
         self.assertTrue(np.all(enabled.jnt_actgravcomp[jids]))
         self.assertTrue(np.all(enabled.body_gravcomp[enabled.body_weldid != 0] == 1))
         self.assertFalse(np.any(baseline.body_gravcomp))
-        off_again, _, _ = control.load_model(gravity_compensation=False)
+        off_again, _, _ = model_api.load_model(gravity_compensation=False)
         self.assertEqual(off_again.ngravcomp, 0)
         self.assertFalse(np.any(off_again.body_gravcomp))
 
     def test_zero_velocity_gravity_matches_com_jacobians(self):
-        m, _, _ = control.load_model()
-        data = control.initialize(m)
+        m, _, _ = model_api.load_model()
+        data = model_api.initialize(m)
         for offset in (np.zeros(6), np.deg2rad([2, -2, 2, -2, 2, -2])):
             data.qpos[:] = m.key_qpos[0] + offset  # Calculation-only data, no physical integration.
             mujoco.mj_forward(m, data)
@@ -54,48 +56,48 @@ class GravityCompensationTests(unittest.TestCase):
                 jp = np.zeros((3, m.nv))
                 mujoco.mj_jacBodyCom(m, data, jp, None, bid)
                 g += jp.T @ (-m.body_mass[bid] * m.opt.gravity)
-            np.testing.assert_allclose(compare.gravity_torque(m, data.qpos), g, atol=1e-11, rtol=0)
+            np.testing.assert_allclose(model_api.gravity_torque(m, data.qpos), g, atol=1e-11, rtol=0)
 
     def test_moving_bias_is_not_pure_gravity_and_probe_is_isolated(self):
-        m, _, _ = control.load_model(gravity_compensation=True)
-        data = control.initialize(m)
+        m, _, _ = model_api.load_model(gravity_compensation=True)
+        data = model_api.initialize(m)
         data.qvel[:] = [.6, -.5, .4, -.3, .2, -.1]
         mujoco.mj_forward(m, data)
         before = {name: getattr(data, name).copy() for name in ("qpos", "qvel", "ctrl", "qfrc_bias")}
-        g = compare.gravity_torque(m, data.qpos)
+        g = model_api.gravity_torque(m, data.qpos)
         self.assertGreater(np.linalg.norm(data.qfrc_bias - g), 1e-4)
         np.testing.assert_allclose(data.qfrc_gravcomp, g, atol=1e-11, rtol=0)
         for name, value in before.items():
             np.testing.assert_array_equal(getattr(data, name), value)
 
     def test_static_compensation_is_in_actuator_not_passive_channel(self):
-        m, jids, aids = control.load_model(gravity_compensation=True)
-        data = control.initialize(m)
-        g = compare.gravity_torque(m, data.qpos)
+        m, jids, aids = model_api.load_model(gravity_compensation=True)
+        data = model_api.initialize(m)
+        g = model_api.gravity_torque(m, data.qpos)
         np.testing.assert_allclose(data.qfrc_actuator, g, atol=1e-12, rtol=0)
         np.testing.assert_allclose(data.qfrc_gravcomp, g, atol=1e-12, rtol=0)
         np.testing.assert_allclose(data.actuator_force, 0, atol=1e-12, rtol=0)
         np.testing.assert_array_equal(data.qfrc_passive, np.zeros(6))
-        compare.ForceMonitor(m, jids, aids).observe(data)
+        control.ForceMonitor(m, jids, aids).observe(data)
 
     def test_servo_plus_compensation_saturates_at_joint_total_bounds(self):
-        m, jids, aids = control.load_model(gravity_compensation=True)
+        m, jids, aids = model_api.load_model(gravity_compensation=True)
         for sign in (-1, 1):
-            data = control.initialize(m)
+            data = model_api.initialize(m)
             data.ctrl[aids] = m.actuator_ctrlrange[aids, 0 if sign < 0 else 1]
             mujoco.mj_forward(m, data)  # Deliberate saturation probe; no large motion.
             requested = data.actuator_force[aids] + data.qfrc_gravcomp
             limits = m.jnt_actfrcrange[jids]
             self.assertGreater(np.max(np.abs(requested - data.qfrc_actuator)), 0.01)
             np.testing.assert_allclose(data.qfrc_actuator, np.clip(requested, limits[:, 0], limits[:, 1]), atol=1e-12)
-            compare.ForceMonitor(m, jids, aids).observe(data)
+            control.ForceMonitor(m, jids, aids).observe(data)
 
     def test_multiple_actuators_and_compensation_share_one_joint_limit(self):
-        original, _, _ = control.load_model(gravity_compensation=True)
-        spec = mujoco.MjSpec.from_file(str(control.SCENE))
+        original, _, _ = model_api.load_model(gravity_compensation=True)
+        spec = mujoco.MjSpec.from_file(str(model_api.SCENE))
         for bid in range(1, original.nbody):
             spec.body(original.body(bid).name).gravcomp = float(original.body_gravcomp[bid])
-        for name in control.JOINTS:
+        for name in model_api.JOINTS:
             spec.joint(name).actgravcomp = True
         motor = spec.add_actuator(name="extra_test_motor", target="joint_2", trntype=mujoco.mjtTrn.mjTRN_JOINT)
         motor.gainprm[0], motor.gear[0] = 1, 1
@@ -103,7 +105,7 @@ class GravityCompensationTests(unittest.TestCase):
         spec.key("home").ctrl = np.r_[spec.key("home").ctrl, 0]
         m = spec.compile()
         for sign in (-1, 1):
-            data = control.initialize(m)
+            data = model_api.initialize(m)
             pd, extra = m.actuator("position_2").id, m.actuator("extra_test_motor").id
             data.ctrl[pd] = m.actuator_ctrlrange[pd, 0 if sign < 0 else 1]
             data.ctrl[extra] = sign * 60
@@ -115,23 +117,23 @@ class GravityCompensationTests(unittest.TestCase):
             self.assertTrue(np.all(data.qfrc_actuator <= m.jnt_actfrcrange[:, 1]))
 
     def test_passive_bypass_configuration_is_detected_and_rejected(self):
-        m, jids, aids = control.load_model(gravity_compensation=True)
+        m, jids, aids = model_api.load_model(gravity_compensation=True)
         m.jnt_actgravcomp[:] = False  # Deliberate unsafe counterexample, never integrated.
-        data = control.initialize(m)
+        data = model_api.initialize(m)
         data.ctrl[aids] = m.actuator_ctrlrange[aids, 1]
         mujoco.mj_forward(m, data)
         self.assertGreater(data.qfrc_actuator[1] + data.qfrc_passive[1], 60)
         with self.assertRaisesRegex(ValueError, "routed"):
-            compare.ForceMonitor(m, jids, aids)
+            control.ForceMonitor(m, jids, aids)
 
     def test_missing_joint_limits_and_external_injection_rejected(self):
-        m, jids, aids = control.load_model(gravity_compensation=True)
+        m, jids, aids = model_api.load_model(gravity_compensation=True)
         m.jnt_actfrclimited[0] = False
         with self.assertRaisesRegex(ValueError, "limits"):
-            compare.ForceMonitor(m, jids, aids)
+            control.ForceMonitor(m, jids, aids)
         m.jnt_actfrclimited[0] = True
-        monitor = compare.ForceMonitor(m, jids, aids)
-        data = control.initialize(m)
+        monitor = control.ForceMonitor(m, jids, aids)
+        data = model_api.initialize(m)
         data.qfrc_applied[0] = 1
         mujoco.mj_forward(m, data)
         with self.assertRaisesRegex(ValueError, "External"):
@@ -195,8 +197,8 @@ class GravityCompensationTests(unittest.TestCase):
                 self.assertLessEqual(max(p["tail_speed_deg_s"]), control.MAX_TAIL_SPEED_DEG_S)
 
     def test_compensated_execution_never_rewrites_live_qpos(self):
-        m, jids, aids = control.load_model(gravity_compensation=True)
-        data, kin = control.initialize(m), Kinematics(m)
+        m, jids, aids = model_api.load_model(gravity_compensation=True)
+        data, kin = model_api.initialize(m), Kinematics(m)
         target = kin.home_position + [.005, 0, 0]
         result = kin.solve_ik(target, kin.home_q)
         original_step = mujoco.mj_step

@@ -10,86 +10,19 @@ from pathlib import Path
 import sys
 import time
 
-# Trust only this project's script directory under python -I. control_joints
-# selects the GLFW backend before MuJoCo imports its renderer.
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-import control_joints as control
-from kinematics import Kinematics, rotation_vector
+from realman_rl_simtoreal.viewer import configure_backend, passive_viewer
+configure_backend()
+from realman_rl_simtoreal.simulation import model as model_api, control
+from realman_rl_simtoreal.simulation.kinematics import Kinematics, rotation_vector
+from realman_rl_simtoreal.simulation.ee_control import check_motion, execute_motion
+from realman_rl_simtoreal.experiments.common import joint_result_lines
 import mujoco
 import numpy as np
 
-MAX_TRANSLATION = 0.010  # metres from nominal home; a demo envelope, not a workspace claim.
-MAX_ACTUAL_POSITION_ERROR = 0.005  # metres; includes the existing PD gravity error.
-MAX_ACTUAL_ORIENTATION_ERROR = np.deg2rad(1.0)
 
-
-def check_motion(model, data, joint_ids, actuator_ids, kin, result, target):
-    """Reject failed IK and unsafe demo goals before any integration or ctrl write."""
-    control.require(result.success and result.q is not None, f"IK failed; no motion: {result.reason}")
-    target = np.asarray(target, dtype=float)
-    control.require(target.shape == (3,) and np.isfinite(target).all(), "Expected a finite XYZ target")
-    control.require(np.linalg.norm(target - kin.home_position) <= MAX_TRANSLATION + 1e-12,
-                    "Demo translation exceeds 10 mm from home")
-    q = control.validate_target(model, joint_ids, kin.home_q, result.q)
-    theoretical_position, theoretical_rotation = kin.fk(q)
-    control.require(np.linalg.norm(theoretical_position - target) <= 1e-5
-                    and np.linalg.norm(rotation_vector(kin.home_rotation, theoretical_rotation)) <= 1e-4,
-                    "IK result does not satisfy the requested fixed-orientation pose")
-    # Discrete collision screening in calculation-only data. This is not a
-    # continuous collision guarantee and does not account for tracking error.
-    probe = mujoco.MjData(model)
-    start = data.qpos[kin.qadr].copy()
-    max_rotation_drift = 0.0
-    for alpha in np.linspace(0, 1, 51):
-        angles = start + alpha * (q - start)
-        probe.qpos[kin.qadr] = angles
-        mujoco.mj_forward(model, probe)
-        for contact in probe.contact:
-            control.require(contact.dist >= -0.0001, "Joint interpolation has an unexpected collision")
-        _, rotation = kin.fk(angles)
-        max_rotation_drift = max(max_rotation_drift, float(np.linalg.norm(rotation_vector(kin.home_rotation, rotation))))
-    return theoretical_position, theoretical_rotation, max_rotation_drift
-
-
-def execute_motion(model, data, joint_ids, actuator_ids, kin, result, target, tick=None, step_observer=None):
-    """Drive existing position actuators; live qpos is never assigned here."""
-    theory_p, theory_r, command_rotation_drift = check_motion(model, data, joint_ids, actuator_ids, kin, result, target)
-    mujoco.mj_forward(model, data)
-    initial_position = data.site_xpos[kin.site_id].copy()
-    max_orientation_error, min_distance = 0.0, 0.0
-
-    def sample():
-        nonlocal max_orientation_error, min_distance
-        # mj_step integrates qpos; refresh site poses/contacts at that new state.
-        mujoco.mj_forward(model, data)
-        rotation = data.site_xmat[kin.site_id].reshape(3, 3)
-        angle = float(np.linalg.norm(rotation_vector(kin.home_rotation, rotation)))
-        max_orientation_error = max(max_orientation_error, angle)
-        control.require(angle <= MAX_ACTUAL_ORIENTATION_ERROR, "Actual orientation exceeded the 1 degree demo envelope")
-        for contact in data.contact:
-            min_distance = min(min_distance, float(contact.dist))
-            control.require(contact.dist >= -0.0001, "Unexpected collision after integration")
-        if tick is not None:
-            tick()
-
-    hold = control.run_segment(model, data, joint_ids, actuator_ids, kin.home_q, "settle home", ramp=0, hold=3, tick=sample, step_observer=step_observer)
-    motion_start = data.site_xpos[kin.site_id].copy()
-    motion = control.run_segment(model, data, joint_ids, actuator_ids, result.q, "end-effector target", ramp=2, hold=3, tick=sample, step_observer=step_observer)
-    actual_position = data.site_xpos[kin.site_id].copy()
-    actual_rotation = data.site_xmat[kin.site_id].reshape(3, 3).copy()
-    position_error = float(np.linalg.norm(np.asarray(target) - actual_position))
-    orientation_error = float(np.linalg.norm(rotation_vector(kin.home_rotation, actual_rotation)))
-    control.require(position_error <= MAX_ACTUAL_POSITION_ERROR, "Actual end-effector error exceeds 5 mm")
-    return dict(initial_position_m=initial_position.tolist(), motion_start_position_m=motion_start.tolist(),
-                target_position_m=np.asarray(target).tolist(), target_rotation=kin.home_rotation.tolist(),
-                theoretical_position_m=theory_p.tolist(), theoretical_rotation=theory_r.tolist(),
-                actual_position_m=actual_position.tolist(), actual_rotation=actual_rotation.tolist(),
-                actual_position_error_m=position_error, actual_orientation_error_rad=orientation_error,
-                max_actual_orientation_error_rad=max_orientation_error,
-                max_command_interpolation_rotation_error_rad=command_rotation_drift,
-                min_contact_distance_m=min_distance, joint_target_rad=result.q.tolist(),
-                joint_actual_rad=data.qpos[kin.qadr].tolist(), simulation_time_s=float(data.time),
-                hold=hold, motion=motion)
+def print_result(result):
+    for line in joint_result_lines(result):
+        print(line, flush=True)
 
 
 def result_dict(result):
@@ -107,13 +40,13 @@ def print_report(report):
     print(f"Maximum actual orientation error during motion/hold: {np.rad2deg(report['max_actual_orientation_error_rad']):.6f} deg")
     print(f"Nominal joint-interpolation orientation drift: {np.rad2deg(report['max_command_interpolation_rotation_error_rad']):.6f} deg")
     print("Actual site-to-world rotation:\n", np.array(report["actual_rotation"]))
-    control.print_result(report["hold"])
-    control.print_result(report["motion"])
+    print_result(report["hold"])
+    print_result(report["motion"])
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--model", type=Path, default=control.SCENE)
+    parser.add_argument("--model", type=Path, default=model_api.SCENE)
     goal = parser.add_mutually_exclusive_group()
     goal.add_argument("--delta-mm", nargs=3, type=float, metavar=("DX", "DY", "DZ"), help="world translation from home; default +X 5 mm")
     goal.add_argument("--target", nargs=3, type=float, metavar=("X", "Y", "Z"), help="absolute world position in metres")
@@ -126,8 +59,8 @@ def main():
     output = dict(completed=False, motion_executed=False)
     data = None
     try:
-        model, jids, aids = control.load_model(args.model)
-        data = control.initialize(model)
+        model, jids, aids = model_api.load_model(args.model)
+        data = model_api.initialize(model)
         kin = Kinematics(model)
         target = (np.asarray(args.target) if args.target is not None else
                   kin.home_position + np.asarray(args.delta_mm if args.delta_mm is not None else [5, 0, 0]) / 1000)
@@ -145,7 +78,6 @@ def main():
             control.require(bool(os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY")), "No desktop display")
             import glfw
             control.require(bool(glfw.init()), "GLFW could not initialize display")
-            from view_robot import passive_viewer
             context = passive_viewer(model, data)
         with context as viewer:
             start_wall, start_sim, last_sync = time.monotonic(), data.time, 0.0

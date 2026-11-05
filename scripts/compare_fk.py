@@ -7,31 +7,20 @@ import json
 from pathlib import Path
 import sys
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-import control_joints as control
-from kinematics import Kinematics, rotation_vector
-from realman_fk import RealManFK, SDKUnavailable, MODELS, SENSORS, quaternion_matrix, euler_matrix
+from realman_rl_simtoreal.viewer import configure_backend
+configure_backend()
+from realman_rl_simtoreal.simulation import model as model_api
+from realman_rl_simtoreal.paths import OUTPUTS
+from realman_rl_simtoreal.experiments.common import transform, inverse, sample_poses
+from realman_rl_simtoreal.simulation.kinematics import Kinematics, rotation_vector
+from realman_rl_simtoreal.vendor.realman_fk import RealManFK, SDKUnavailable, MODELS, SENSORS, quaternion_matrix, euler_matrix
 import mujoco
 import numpy as np
 
-ROOT = Path(__file__).resolve().parents[1]
 # Numerical consistency criterion, not real-arm accuracy. Much larger than the
 # measured float32 SDK conversion noise; smaller than the URDF rounding errors.
 POSITION_TOLERANCE_M = 1e-5
 ROTATION_TOLERANCE_RAD = np.deg2rad(0.001)
-
-
-def transform(position, rotation):
-    result = np.eye(4)
-    result[:3, :3], result[:3, 3] = rotation, position
-    return result
-
-
-def inverse(t):
-    result = np.eye(4)
-    result[:3, :3] = t[:3, :3].T
-    result[:3, 3] = -result[:3, :3] @ t[:3, 3]
-    return result
 
 
 def errors(a, b):
@@ -59,17 +48,6 @@ def mdh_fk(dh, q):
     return result
 
 
-def sample_poses(home):
-    poses = [("home", home.copy())]
-    for i in range(6):
-        q = home.copy()
-        q[i] += np.deg2rad(3)
-        poses.append((f"J{i+1}_plus_3deg", q))
-    poses.extend([("combined", home + np.deg2rad([2, -2, 2, 1, -1, 2])),
-                  ("diverse_fk_only", np.deg2rad([25, -45, 55, 20, 40, -30]))])
-    return poses
-
-
 def maxima(records):
     return dict(max_position_error_m=max(r["position_error_m"] for r in records),
                 max_rotation_error_rad=max(r["rotation_error_rad"] for r in records),
@@ -79,7 +57,7 @@ def maxima(records):
 def measure_configuration(kin, generation="II", sensor="SF"):
     """Compare frames without fitting or changing either robot's parameters."""
     model = kin.model
-    data = control.initialize(model)  # Private reference data, never integrated.
+    data = model_api.initialize(model)  # Private reference data, never integrated.
     base = model.body("base_link").id
     world_from_base = transform(data.xpos[base], data.xmat[base].reshape(3, 3))
     base_from_world = inverse(world_from_base)
@@ -157,8 +135,8 @@ def measure_configuration(kin, generation="II", sensor="SF"):
                 caveat="Sensor mapping and true TCP are unconfirmed. No fitted transform is used to declare equivalence.")
 
 
-def run_comparison(generation="II", sensor="SF", path=control.SCENE):
-    model, _, _ = control.load_model(path)
+def run_comparison(generation="II", sensor="SF", path=model_api.SCENE):
+    model, _, _ = model_api.load_model(path)
     kin = Kinematics(model)
     configurations = []
     for gen in MODELS if generation == "all" else [generation]:
@@ -203,8 +181,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--generation", choices=[*MODELS, "all"], default="II")
     parser.add_argument("--sensor", choices=[*SENSORS, "all"], default="SF", help="candidate, not confirmed 6F-V mapping")
-    parser.add_argument("--model", type=Path, default=control.SCENE)
-    parser.add_argument("--json", type=Path, default=ROOT / "outputs/fk_comparison.json")
+    parser.add_argument("--model", type=Path, default=model_api.SCENE)
+    parser.add_argument("--json", type=Path, default=OUTPUTS / "fk_comparison.json")
     args = parser.parse_args()
     try:
         report = run_comparison(args.generation, args.sensor, args.model)

@@ -14,12 +14,13 @@ import mujoco
 import numpy as np
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "scripts"))
-import compare_ik as comparison
-import control_joints as control
-from kinematics import Kinematics
-import realman_fk
-from realman_ik import (RealManIK, quaternion_pose, periodic_equivalent,
+_spec = importlib.util.spec_from_file_location("_test_compare_ik", ROOT / "scripts/compare_ik.py")
+comparison = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(comparison)
+from realman_rl_simtoreal.simulation import control, model as model_api
+from realman_rl_simtoreal.simulation.kinematics import Kinematics
+from realman_rl_simtoreal.vendor import realman_fk
+from realman_rl_simtoreal.vendor.realman_ik import (RealManIK, quaternion_pose, periodic_equivalent,
                        POSITION_TOLERANCE_M, ORIENTATION_TOLERANCE_RAD)
 
 
@@ -68,7 +69,7 @@ class IKEncodingTests(unittest.TestCase):
 class VendorIKTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.model, _, _ = control.load_model()
+        cls.model, _, _ = model_api.load_model()
         cls.kin = Kinematics(cls.model)
         cls.report = comparison.run_comparison(repeats=2)
 
@@ -311,7 +312,7 @@ class VendorIKTests(unittest.TestCase):
 
     def test_full_comparison_never_connects_steps_or_commands(self):
         from Robotic_Arm import rm_robot_interface as sdk
-        data = control.initialize(self.model)
+        data = model_api.initialize(self.model)
         before = {k: getattr(data, k).copy() for k in ("qpos", "qvel", "ctrl", "site_xpos")}
         assets = [ROOT/"assets/robots/rml63"/name for name in ("scene.xml", "rml63_dynamics.xml", "rml63_mujoco.urdf")]
         original = [p.read_bytes() for p in assets]

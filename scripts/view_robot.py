@@ -2,35 +2,14 @@
 """Show RML63II-6F-V at its URDF zero pose without advancing physics."""
 
 import argparse
-from contextlib import contextmanager
 import math
 import os
 from pathlib import Path
 import sys
-import threading
 import time
 
-DEFAULT_MODEL = (Path(__file__).resolve().parents[1] / "assets" / "robots" /
-                 "rml63" / "rml63_mujoco.urdf")
-
-
-@contextmanager
-def passive_viewer(model, data):
-    """Wait for this standalone viewer's threads before GLFW shuts down."""
-    import mujoco.viewer
-
-    existing_threads = set(threading.enumerate())
-    viewer_threads = []
-    try:
-        with mujoco.viewer.launch_passive(model, data) as viewer:
-            # MuJoCo 3.17.0 close() requests shutdown but does not join its
-            # daemon render thread. This CLI starts no other Python workers.
-            viewer_threads = [thread for thread in threading.enumerate()
-                              if thread not in existing_threads]
-            yield viewer
-    finally:
-        for thread in viewer_threads:
-            thread.join()
+from realman_rl_simtoreal.paths import DEFAULT_URDF as DEFAULT_MODEL
+from realman_rl_simtoreal.viewer import configure_backend, passive_viewer
 
 
 def positive_seconds(value):
@@ -55,8 +34,7 @@ def main():
     # pyGLFW supports this process-local backend selection. The native Wayland
     # backend had libdecor initialization errors; use X11/XWayland if present.
     # An explicit user selection still takes precedence.
-    if sys.platform.startswith("linux") and os.environ.get("DISPLAY"):
-        os.environ.setdefault("PYGLFW_LIBRARY_VARIANT", "x11")
+    configure_backend()
     try:
         import mujoco
         import mujoco.viewer
