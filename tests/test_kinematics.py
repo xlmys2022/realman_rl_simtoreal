@@ -12,16 +12,15 @@ import mujoco
 import numpy as np
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "scripts"))
-import control_joints as control
-import control_ee as ee
-from kinematics import Kinematics, rotation_vector
+from realman_rl_simtoreal.simulation import control, model as model_api
+from realman_rl_simtoreal.simulation import ee_control as ee
+from realman_rl_simtoreal.simulation.kinematics import Kinematics, rotation_vector
 
 
 class KinematicsTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.model, cls.jids, cls.aids = control.load_model()
+        cls.model, cls.jids, cls.aids = model_api.load_model()
 
     def setUp(self):
         self.kin = Kinematics(self.model)
@@ -37,7 +36,7 @@ class KinematicsTests(unittest.TestCase):
         self.assertEqual(model.site_bodyid[sid], model.body("link_6").id)
         np.testing.assert_array_equal(model.site_pos[sid], [0, 0, 0])
         np.testing.assert_array_equal(model.site_quat[sid], [1, 0, 0, 0])
-        d = control.initialize(model)
+        d = model_api.initialize(model)
         np.testing.assert_allclose(p, d.xpos[model.body("link_6").id], atol=1e-14)
         p[:] = 99  # Return values do not alias the private MuJoCo buffers.
         self.assertLess(np.max(np.abs(kin.fk(kin.home_q)[0])), 2)
@@ -49,13 +48,13 @@ class KinematicsTests(unittest.TestCase):
                            cwd="/tmp", text=True, capture_output=True, timeout=30)
         self.assertEqual(p.returncode, 0, p.stderr)
         self.assertEqual(path.read_bytes(), before)
-        rebuilt, _, _ = control.load_model()
+        rebuilt, _, _ = model_api.load_model()
         self.assertEqual(rebuilt.nsite, 1)
         np.testing.assert_array_equal(rebuilt.body_mass, self.model.body_mass)
         np.testing.assert_array_equal(rebuilt.body_inertia, self.model.body_inertia)
 
     def test_fk_ik_do_not_mutate_live_data_or_model(self):
-        d = control.initialize(self.model)
+        d = model_api.initialize(self.model)
         snapshots = {name: getattr(d, name).copy() for name in ("qpos", "qvel", "ctrl", "qacc", "site_xpos")}
         model_mass = self.model.body_mass.copy()
         target = self.kin.home_position + [.005, 0, 0]
@@ -189,7 +188,7 @@ class KinematicsTests(unittest.TestCase):
 
     def test_e_failed_or_excessive_goal_never_steps(self):
         kin = self.kin
-        data = control.initialize(self.model)
+        data = model_api.initialize(self.model)
         q, ctrl = data.qpos.copy(), data.ctrl.copy()
         target = np.array([10, 10, 10])
         failed = kin.solve_ik(target, kin.home_q)
@@ -208,7 +207,7 @@ class KinematicsTests(unittest.TestCase):
 
     def test_c_dynamics_uses_actuators_without_live_qpos_overwrites(self):
         kin = self.kin
-        data = control.initialize(self.model)
+        data = model_api.initialize(self.model)
         target = kin.home_position + [.005, 0, 0]
         solution = kin.solve_ik(target, kin.home_q)
         step = mujoco.mj_step
@@ -232,12 +231,12 @@ class KinematicsTests(unittest.TestCase):
         self.assertGreater(displacement[0], .004)
 
     def test_collision_path_is_rejected_before_execution(self):
-        spec = mujoco.MjSpec.from_file(str(control.SCENE))
-        home = control.initialize(self.model)
+        spec = mujoco.MjSpec.from_file(str(model_api.SCENE))
+        home = model_api.initialize(self.model)
         spec.worldbody.add_geom(name="obstacle", type=mujoco.mjtGeom.mjGEOM_SPHERE,
                                size=[.02, 0, 0], pos=home.xipos[self.model.body("link_2").id])
         model = spec.compile()
-        data, kin = control.initialize(model), Kinematics(model)
+        data, kin = model_api.initialize(model), Kinematics(model)
         target = kin.home_position + [.005, 0, 0]
         result = kin.solve_ik(target, kin.home_q)
         with patch.object(mujoco, "mj_step", side_effect=AssertionError("Must not step")):

@@ -8,16 +8,16 @@ from pathlib import Path
 import sys
 from time import perf_counter
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-import control_joints as control
-from compare_fk import sample_poses, transform, inverse
-from kinematics import Kinematics, rotation_vector
-from realman_fk import SDKUnavailable
-from realman_ik import RealManIK, periodic_equivalent, POSITION_TOLERANCE_M, ORIENTATION_TOLERANCE_RAD
+from realman_rl_simtoreal.viewer import configure_backend
+configure_backend()
+from realman_rl_simtoreal.simulation import model as model_api
+from realman_rl_simtoreal.paths import OUTPUTS
+from realman_rl_simtoreal.experiments.common import sample_poses, transform, inverse
+from realman_rl_simtoreal.simulation.kinematics import Kinematics, rotation_vector
+from realman_rl_simtoreal.vendor.realman_fk import SDKUnavailable
+from realman_rl_simtoreal.vendor.realman_ik import RealManIK, periodic_equivalent, POSITION_TOLERANCE_M, ORIENTATION_TOLERANCE_RAD
 import mujoco
 import numpy as np
-
-ROOT = Path(__file__).resolve().parents[1]
 
 
 def result_dict(result):
@@ -185,7 +185,7 @@ def investigate_boundary_failures(vendor, boundary_rows, home):
 def cross_diagnostics(kin, vendor, poses):
     # Only the KNOWN world/base placement is transformed. No calibrated TCP
     # transform is available: these are deliberately different nominal endpoints.
-    data = control.initialize(kin.model)
+    data = model_api.initialize(kin.model)
     bid = kin.model.body("base_link").id
     wb = transform(data.xpos[bid], data.xmat[bid].reshape(3, 3))
     bw = inverse(wb)
@@ -217,12 +217,12 @@ def cross_diagnostics(kin, vendor, poses):
                 rows=rows)
 
 
-def run_comparison(repeats=5, sensors=("SF", "ISFV"), path=control.SCENE):
+def run_comparison(repeats=5, sensors=("SF", "ISFV"), path=model_api.SCENE):
     if not isinstance(repeats, int) or not 1 <= repeats <= 20:
         raise ValueError("repeats must be an integer in [1,20]")
     if not sensors or len(set(sensors)) != len(sensors) or any(s not in ("SF", "ISFV") for s in sensors):
         raise ValueError("Select SF and/or ISFV candidates, sequentially")
-    model, _, _ = control.load_model(path)
+    model, _, _ = model_api.load_model(path)
     kin = Kinematics(model)
     poses, seeds = sample_poses(kin.home_q), seeds_for(kin.home_q)
     mj = internal_experiment(kin.solve_ik, kin.fk, poses, seeds, repeats)
@@ -308,8 +308,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--sensor", choices=("SF", "ISFV", "both"), default="both")
     parser.add_argument("--repeats", type=int, default=5)
-    parser.add_argument("--model", type=Path, default=control.SCENE)
-    parser.add_argument("--json", type=Path, default=ROOT / "outputs/ik_comparison.json")
+    parser.add_argument("--model", type=Path, default=model_api.SCENE)
+    parser.add_argument("--json", type=Path, default=OUTPUTS / "ik_comparison.json")
     args = parser.parse_args()
     try:
         report = run_comparison(args.repeats, ("SF", "ISFV") if args.sensor == "both" else (args.sensor,), args.model)

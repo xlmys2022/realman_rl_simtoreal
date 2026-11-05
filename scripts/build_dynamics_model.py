@@ -2,12 +2,12 @@
 """Rebuild the six-axis MJCF from the unchanged phase-one compatible URDF."""
 
 from pathlib import Path
+from realman_rl_simtoreal.paths import ROBOT_ASSETS as ASSETS
 import tempfile
 import xml.etree.ElementTree as ET
 
 import mujoco
 
-ASSETS = Path(__file__).resolve().parents[1] / "assets/robots/rml63"
 KP = (500, 1000, 800, 200, 120, 80)  # N*m/rad; simulation tuning, not hardware gains.
 KV = (50, 90, 70, 15, 10, 5)        # N*m*s/rad.
 DAMPING = (1, 1, 0.5, 0.2, 0.1, 0.05)

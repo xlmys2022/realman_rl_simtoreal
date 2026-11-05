@@ -6,3 +6,6 @@ __pycache__/
 *.tmp
 MUJOCO_LOG.TXT
 outputs/
+*.egg-info/
+build/
+dist/

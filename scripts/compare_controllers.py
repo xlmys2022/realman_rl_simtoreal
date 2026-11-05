@@ -8,71 +8,21 @@ import json
 from pathlib import Path
 import sys
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-import control_joints as control
-import control_ee as ee
-from kinematics import Kinematics, rotation_vector
+from realman_rl_simtoreal.viewer import configure_backend
+configure_backend()
+from realman_rl_simtoreal.simulation import model as model_api, control, ee_control as ee
+from realman_rl_simtoreal.simulation.model import gravity_torque
+from realman_rl_simtoreal.simulation.control import ForceMonitor
+from realman_rl_simtoreal.simulation.kinematics import Kinematics, rotation_vector
+from realman_rl_simtoreal.experiments.common import run_joint_demo, joint_result_lines
+from realman_rl_simtoreal.paths import OUTPUTS
 import mujoco
 import numpy as np
 
 
-def gravity_torque(model, q):
-    """g(q): zero-velocity bias in private data; live moving bias is not pure gravity."""
-    q = np.asarray(q, dtype=float)
-    control.require(q.shape == (model.nq,) and np.isfinite(q).all(), "Expected finite model coordinates")
-    probe = mujoco.MjData(model)
-    probe.qpos[:] = q
-    probe.qvel[:] = 0
-    mujoco.mj_forward(model, probe)
-    return probe.qfrc_bias.copy()
-
-
-class ForceMonitor:
-    """Check the step's total drive, including compensation, before cache refresh."""
-
-    def __init__(self, model, joint_ids, actuator_ids):
-        self.model, self.jids, self.aids = model, joint_ids, actuator_ids
-        self.vadr = model.jnt_dofadr[joint_ids]
-        control.require(np.all(model.jnt_actfrclimited[joint_ids]), "Joint total-drive limits must be active")
-        if np.any(model.body_gravcomp):
-            control.require(model.ngravcomp > 0 and np.all(model.jnt_actgravcomp[joint_ids]),
-                            "Gravity compensation must be compiled and routed through joint actuator limits")
-        self.limits = model.jnt_actfrcrange[joint_ids].copy()
-        self.steps, self.saturated_steps = 0, 0
-        self.peak_total = np.zeros(6)
-        self.peak_servo = np.zeros(6)
-        self.peak_gravity = np.zeros(6)
-        self.peak_speed = np.zeros(6)
-
-    def observe(self, data):
-        total = data.qfrc_actuator[self.vadr]
-        servo = data.actuator_force[self.aids]  # This model has one gear=1 servo per hinge.
-        gc = data.qfrc_gravcomp[self.vadr]
-        routed_gc = np.where(self.model.jnt_actgravcomp[self.jids], gc, 0)
-        requested = servo + routed_gc
-        expected = np.clip(requested, self.limits[:, 0], self.limits[:, 1])
-        control.require(np.isfinite(np.concatenate([total, servo, gc, data.qfrc_passive])).all(), "Non-finite force channel")
-        control.require(np.all(total >= self.limits[:, 0] - 1e-9)
-                        and np.all(total <= self.limits[:, 1] + 1e-9), "Total joint drive exceeds torque limits")
-        control.require(np.allclose(total, expected, rtol=0, atol=1e-9), "Unexpected drive composition or gravity routing")
-        # Physical damping remains passive; gravity compensation must not bypass
-        # motor limits as passive force or externally applied force.
-        passive_mechanical = data.qfrc_damper + data.qfrc_spring + data.qfrc_fluid
-        control.require(np.allclose(data.qfrc_passive, passive_mechanical, rtol=0, atol=1e-9),
-                        "Unexpected passive force (possible gravity compensation bypass)")
-        control.require(not np.any(data.qfrc_applied) and not np.any(data.xfrc_applied), "External force injection is not allowed")
-        self.steps += 1
-        self.saturated_steps += int(np.max(np.abs(requested - total)) > 1e-9)
-        self.peak_total = np.maximum(self.peak_total, np.abs(total))
-        self.peak_servo = np.maximum(self.peak_servo, np.abs(servo))
-        self.peak_gravity = np.maximum(self.peak_gravity, np.abs(gc))
-        self.peak_speed = np.maximum(self.peak_speed, np.abs(data.qvel[self.vadr]))
-
-    def summary(self):
-        return dict(steps=self.steps, saturated_steps=self.saturated_steps,
-                    joint_total_limits_nm=self.limits.tolist(), peak_total_drive_nm=self.peak_total.tolist(),
-                    peak_servo_generated_nm=self.peak_servo.tolist(), peak_raw_gravity_compensation_nm=self.peak_gravity.tolist(),
-                    peak_speed_deg_s=np.rad2deg(self.peak_speed).tolist())
+def print_result(result):
+    for line in joint_result_lines(result):
+        print(line, flush=True)
 
 
 def diagnose(model, data, kin, joint_ids, actuator_ids):
@@ -117,7 +67,7 @@ def pose_metrics(kin, target, rotation, settled_home, actual, actual_rotation):
 
 
 def run_home(model, jids, aids):
-    kin, data = Kinematics(model), control.initialize(model)
+    kin, data = Kinematics(model), model_api.initialize(model)
     monitor = ForceMonitor(model, jids, aids)
     stats = control.run_segment(model, data, jids, aids, kin.home_q, "home hold", ramp=0, hold=3,
                                 tick=lambda: mujoco.mj_forward(model, data), step_observer=monitor.observe)
@@ -133,7 +83,7 @@ def run_home(model, jids, aids):
 
 
 def run_ee_case(model, jids, aids, target, solution):
-    kin, data = Kinematics(model), control.initialize(model)
+    kin, data = Kinematics(model), model_api.initialize(model)
     monitor = ForceMonitor(model, jids, aids)
     home_diagnostics = None
     def sample():
@@ -151,7 +101,7 @@ def run_ee_case(model, jids, aids, target, solution):
 
 
 def run_joint_sequence(model, jids, aids):
-    kin, data = Kinematics(model), control.initialize(model)
+    kin, data = Kinematics(model), model_api.initialize(model)
     monitor = ForceMonitor(model, jids, aids)
     ends = [3] + [t for i in range(6) for t in (7 + 6 * i, 9 + 6 * i)]
     snapshots, settled_home = [], None
@@ -167,7 +117,7 @@ def run_joint_sequence(model, jids, aids):
                                   diagnostics=diagnose(model, data, kin, jids, aids)))
     log = io.StringIO()
     with redirect_stdout(log):
-        stats = control.run_demo(model, data, jids, aids, tick=sample, step_observer=monitor.observe)
+        stats = run_joint_demo(model, data, jids, aids, tick=sample, step_observer=monitor.observe, reporter=print_result)
     control.require(len(snapshots) == len(stats) == 13, "Joint sequence snapshots are incomplete")
     for snapshot, values in zip(snapshots, stats):
         snapshot["label"], snapshot["joint_stats"] = values["label"], values
@@ -175,7 +125,7 @@ def run_joint_sequence(model, jids, aids):
 
 
 def run_comparison(controllers=("pd", "gravity")):
-    reference, _, _ = control.load_model()
+    reference, _, _ = model_api.load_model()
     kin = Kinematics(reference)
     goals = {name: kin.home_position + delta for name, delta in
              (("x_plus_5mm", [.005, 0, 0]), ("x_minus_5mm", [-.005, 0, 0]), ("z_plus_5mm", [0, 0, .005]))}
@@ -190,7 +140,7 @@ def run_comparison(controllers=("pd", "gravity")):
                                   joint_total_limits_nm=reference.jnt_actfrcrange.tolist()), controllers={})
     for mode in controllers:
         control.require(mode in ("pd", "gravity"), "Unknown controller")
-        model, jids, aids = control.load_model(gravity_compensation=mode == "gravity")
+        model, jids, aids = model_api.load_model(gravity_compensation=mode == "gravity")
         cases = dict(home=run_home(model, jids, aids))
         for name, target in goals.items():
             cases[name] = run_ee_case(model, jids, aids, target, solutions[name])
@@ -221,7 +171,7 @@ def print_summary(report):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--controller", choices=("both", "pd", "gravity"), default="both")
-    parser.add_argument("--json", type=Path, default=Path(__file__).resolve().parents[1] / "outputs/control_comparison.json")
+    parser.add_argument("--json", type=Path, default=OUTPUTS / "control_comparison.json")
     args = parser.parse_args()
     try:
         modes = ("pd", "gravity") if args.controller == "both" else (args.controller,)

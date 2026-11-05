@@ -4,11 +4,11 @@
 import argparse
 import hashlib
 from pathlib import Path
+from realman_rl_simtoreal.paths import ROBOT_ASSETS as ASSET_DIR
 import struct
 import sys
 import xml.etree.ElementTree as ET
 
-ASSET_DIR = Path(__file__).resolve().parents[1] / "assets" / "robots" / "rml63"
 DEFAULT_MODEL = ASSET_DIR / "rml63_mujoco.urdf"
 ARM_JOINTS = tuple(f"joint_{i}" for i in range(1, 7))
 

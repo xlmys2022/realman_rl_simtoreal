@@ -4,9 +4,9 @@
 
 实际模型为官方 **RML63II-6F-V**。它与目标实物 RML63-6F-V 的代际关系尚未核实。静态检查 URDF 保留相机支架转动关节，为 `nq=nv=7, nu=0`；新增动力学 MJCF 将相机刚性固定，为 `nq=nv=nu=6`。
 
-02-C1 已增加厂家 **离线 FK 对照**，结论为当前模型尚不一致：SDK 未提供可确认对应旧版 `6F-V` 的枚举，末端长度与 URDF 近似旋转均有差异。未连接真机，也未据此修改模型、IK 或控制器。完整结果见 [REALMAN_KINEMATICS_VALIDATION.md](REALMAN_KINEMATICS_VALIDATION.md)。
+02-C1 已增加厂家 **离线 FK 对照**，结论为当前模型尚不一致：SDK 未提供可确认对应旧版 `6F-V` 的枚举，末端长度与 URDF 近似旋转均有差异。未连接真机，也未据此修改模型、IK 或控制器。完整结果见 [REALMAN_KINEMATICS_VALIDATION.md](docs/validation/REALMAN_KINEMATICS_VALIDATION.md)。
 
-02-C2 已增加厂家 **离线 IK 验证**。II+SF、II+ISFV 的主案例分别通过 36/36 次自模型往返；边界案例分别为 11/12，保留了 J5 负限位附近的初值相关失败。模型不一致结论不变。详见 [REALMAN_IK_VALIDATION.md](REALMAN_IK_VALIDATION.md)。
+02-C2 已增加厂家 **离线 IK 验证**。II+SF、II+ISFV 的主案例分别通过 36/36 次自模型往返；边界案例分别为 11/12，保留了 J5 负限位附近的初值相关失败。模型不一致结论不变。详见 [REALMAN_IK_VALIDATION.md](docs/validation/REALMAN_IK_VALIDATION.md)。
 
 ## 环境
 
@@ -15,10 +15,15 @@
 ```bash
 conda activate realman_rl
 python -I -m pip install -r /home/mr-beaver/Documents/robot/realman_rl_simtoreal/requirements.txt
+python -I -m pip install --no-build-isolation -e /home/mr-beaver/Documents/robot/realman_rl_simtoreal
 python -I -m pip check
 ```
 
 已验证 MuJoCo 3.17.0、NumPy 2.4.6，所有运行依赖版本见 `requirements.txt`。`-I` 忽略用户包和继承的 `PYTHONPATH`，避免本机 ROS Python 3.14 路径干扰此 Python 3.11 环境。只使用官方 `mujoco`，未安装 `mujoco-py`。
+
+核心功能现在位于标准 src 包中，先完成 editable 安装再运行脚本。上述命令复用当前环境的构建工具；标准写法 `python -I -m pip install -e .` 也使用相同包配置。资源保留在源码仓库，仅支持本次约定的 editable 用法，不提供独立 wheel 资源安装保证。
+
+[工程架构与迁移说明](docs/architecture.md) · [02-D 重构验证](docs/validation/REFACTOR_VALIDATION.md)。旧命令行路径继续可用；Python调用统一使用 `realman_rl_simtoreal.simulation` / `vendor`，不再从scripts导入核心模块。
 
 ## 运行
 
@@ -64,7 +69,7 @@ python -I /home/mr-beaver/Documents/robot/realman_rl_simtoreal/scripts/control_j
 
 `--json /absolute/path/results.json` 保存完整数值结果；`--viewer --duration 5` 限制显示时间。提前关闭或 Ctrl+C 正常退出，并明确提示完整测试尚未结束。
 
-控制使用六个官方 `position` 执行器：`ctrl` 为弧度，`tau = kp*(ctrl-q) - kv*qvel`，并有力矩限幅。没有重力补偿或积分项，因此会有小幅重力稳态偏差；默认测试最大末态误差约 0.368°。重力为 −9.81 m/s²，时间步长 0.002 秒，使用 `implicitfast`。完整参数、碰撞诊断及验收结果见 `DYNAMICS_VALIDATION.md` 和模型目录的 `SOURCE.md`。
+控制使用六个官方 `position` 执行器：`ctrl` 为弧度，`tau = kp*(ctrl-q) - kv*qvel`，并有力矩限幅。没有重力补偿或积分项，因此会有小幅重力稳态偏差；默认测试最大末态误差约 0.368°。重力为 −9.81 m/s²，时间步长 0.002 秒，使用 `implicitfast`。完整参数、碰撞诊断及验收结果见 `docs/validation/DYNAMICS_VALIDATION.md` 和模型目录的 `SOURCE.md`。
 
 重新生成 MJCF 和运行持久化的自动测试：
 
@@ -99,7 +104,7 @@ python -I /home/mr-beaver/Documents/robot/realman_rl_simtoreal/scripts/control_e
 
 IK 成功后，仍需通过 10 mm 位移范围、每轴 home ±5°、位姿复核和 51 点关节路径碰撞预检。符合条件才复用现有关节执行器：先保持 home 3 秒，再用 2 秒平滑关节目标插值及 3 秒保持。正常运动不改写实际 `data.qpos`。IK 失败时不调用 `mj_step()`。
 
-默认实验的 IK 理论误差约 0.00014 mm / 0.000017°，动力学实际误差约 2.39 mm / 0.50°；现有 PD 重力误差仍然存在。固定朝向是 IK 终点约束，关节插值与动力学误差不保证全过程朝向严格不变。验收范围为实际位置误差 ≤5 mm、朝向误差 ≤1°，详见 `KINEMATICS_VALIDATION.md`。
+默认实验的 IK 理论误差约 0.00014 mm / 0.000017°，动力学实际误差约 2.39 mm / 0.50°；现有 PD 重力误差仍然存在。固定朝向是 IK 终点约束，关节插值与动力学误差不保证全过程朝向严格不变。验收范围为实际位置误差 ≤5 mm、朝向误差 ≤1°，详见 `docs/validation/KINEMATICS_VALIDATION.md`。
 
 例如 +Y 5 mm 可求解，但 J4 需要变化约 5.37°，超出演示范围，因此拒绝运动。这是演示范围限制，不能据此判定目标物理不可达。局部 IK 失败也不能一概作为全局不可达证明。
 
@@ -126,7 +131,7 @@ python -I /home/mr-beaver/Documents/robot/realman_rl_simtoreal/scripts/compare_c
 
 补偿模式通过 `load_model(gravity_compensation=True)` 在编译前给八个运动连杆/相机 Body 设置 `gravcomp=1`，并给六个 joint 设置 `actuatorgravcomp=true`，使 PD 与补偿合成后再受原关节总力矩限制。缺省 `load_model()` 和已有两个 Demo 仍使用原 PD。原始 URDF、生成的基线 MJCF、质量、惯量、重力与增益都不变；重新生成基线模型不会丢失加载时可选的补偿配置。
 
-必须区分 home 稳态偏移、从稳定 home 出发的相对位移误差和最终绝对误差：基线 +X 5 mm 分别约为 2.210 / 0.211 / 2.392 mm。补偿后的绝对误差约为 0.000140 mm，这是补偿使用与仿真对象完全相同模型参数的理想结果，不能直接当作真机精度。对照表、限幅证据和依赖条件见 `CONTROL_VALIDATION.md`。
+必须区分 home 稳态偏移、从稳定 home 出发的相对位移误差和最终绝对误差：基线 +X 5 mm 分别约为 2.210 / 0.211 / 2.392 mm。补偿后的绝对误差约为 0.000140 mm，这是补偿使用与仿真对象完全相同模型参数的理想结果，不能直接当作真机精度。对照表、限幅证据和依赖条件见 `docs/validation/CONTROL_VALIDATION.md`。
 
 `qfrc_bias` 在运动时含重力及速度相关偏置项。诊断程序在独立、零速度的 `MjData` 上计算纯重力力矩；不会把运行中任意 `qfrc_bias` 当作纯重力，也不修改实际 qpos/qvel。补偿的诊断量 `qfrc_gravcomp` 已经路由进总量 `qfrc_actuator`，不能再次相加来计算实际驱动力矩。
 
@@ -134,12 +139,20 @@ python -I /home/mr-beaver/Documents/robot/realman_rl_simtoreal/scripts/compare_c
 
 ## 文件职责
 
+- `src/realman_rl_simtoreal/simulation/model.py`：模型加载、检查、初始化、映射与可选重力补偿配置。
+- `src/realman_rl_simtoreal/simulation/control.py`：原有关节控制段、限位/接触检查与总驱动力审计。
+- `src/realman_rl_simtoreal/simulation/ee_control.py`：原有末端目标检查、碰撞预检、执行和误差。
+- `src/realman_rl_simtoreal/vendor/`：可选的厂家离线FK/IK与配置保护，不自动替换MuJoCo IK。
+- `src/realman_rl_simtoreal/experiments/common.py`：共享实验姿态、默认关节序列、SE(3)与纯文本格式。
+- `src/realman_rl_simtoreal/paths.py`、`viewer.py`：统一源码资源路径，以及仅供CLI使用的惰性Viewer辅助。
+- `pyproject.toml`：src包发现、0.1.0元数据、两份锁定文件动态提供依赖。
+- `tests/test_package.py`：隔离导入、无SDK、元数据、依赖图和CLI/Viewer生命周期兼容。
 - `scripts/inspect_model.py`：校验来源文件、mesh、结构、物理参数，输出 MuJoCo Body/Joint 及 `nq/nv/nu`，执行 `mj_forward()`，错误时返回非零状态。
-- `scripts/view_robot.py`：独立加载模型、静态显示、同步窗口和清理 Viewer 线程。
+- `scripts/view_robot.py`：独立加载模型、静态显示和窗口同步，调用共享线程清理辅助。
 - `scripts/build_dynamics_model.py`：从已有兼容 URDF 可重复生成六轴 MJCF，集中定义仿真控制参数。
 - `scripts/control_joints.py`：位置控制演示、无界面验收、可选 Viewer 及 JSON 统计。
-- `scripts/kinematics.py`：独立数据中的 FK、Jacobian、带限位的全位姿 DLS IK 和结构化求解结果。
-- `scripts/control_ee.py`：笛卡尔目标输入、IK 执行前检查、现有执行器运动和实际末端误差统计。
+- `src/realman_rl_simtoreal/simulation/kinematics.py`：独立数据中的 FK、Jacobian、带限位的全位姿 DLS IK 和结构化求解结果。
+- `scripts/control_ee.py`：笛卡尔目标CLI、调用核心末端控制、Viewer和实际误差展示。
 - `scripts/compare_controllers.py`：匹配条件的 PD/重力补偿对照、独立重力诊断及物理步总驱动力审计。
 - `tests/test_joint_control.py`：结构、物理保持、正负小角度运动、映射/限幅及碰撞反例测试。
 - `tests/test_kinematics.py`：FK/IK、Jacobian、状态隔离、失败不运动及末端动力学验证。
@@ -152,10 +165,10 @@ python -I /home/mr-beaver/Documents/robot/realman_rl_simtoreal/scripts/compare_c
 - `assets/robots/rml63/SHA256SUMS`：原始资产校验值。
 - `requirements.txt`：本阶段实际使用的依赖锁定版本。
 - `.gitignore`：忽略 Python 缓存及临时运行产物，保留模型资产。
-- `VALIDATION.md`：实际测试结果、完整检查输出及未验证事项。
-- `DYNAMICS_VALIDATION.md`：本次动力学诊断、参数依据、控制测试输出与剩余限制。
-- `KINEMATICS_VALIDATION.md`：02-B 的算法、参数、理论与实际误差、完整输出及未解决事项。
-- `CONTROL_VALIDATION.md`：02-B+ 重力补偿原理、统一误差定义、对照表、总力矩证据和局限。
+- `docs/validation/VALIDATION.md`：实际测试结果、完整检查输出及未验证事项。
+- `docs/validation/DYNAMICS_VALIDATION.md`：本次动力学诊断、参数依据、控制测试输出与剩余限制。
+- `docs/validation/KINEMATICS_VALIDATION.md`：02-B 的算法、参数、理论与实际误差、完整输出及未解决事项。
+- `docs/validation/CONTROL_VALIDATION.md`：02-B+ 重力补偿原理、统一误差定义、对照表、总力矩证据和局限。
 
 ## 来源和已知限制
 
@@ -199,9 +212,9 @@ python -I /home/mr-beaver/Documents/robot/realman_rl_simtoreal/scripts/compare_i
 python -I -m unittest discover -s /home/mr-beaver/Documents/robot/realman_rl_simtoreal/tests -v
 ```
 
-主集是 9 个姿态 × 4 个初值，默认预热后每例计时 5 次；另测逐轴上下限附近、全解、连续小变化、不可达目标和独立的模型交叉诊断。`--repeats` 范围 1–20；完整结果默认保存到 `outputs/ik_comparison.json`，可用 `--json PATH` 指定位置。当前共有 75 项自动化测试；缺少 SDK 时新增 17 项厂家 IK 测试跳过。
+主集是 9 个姿态 × 4 个初值，默认预热后每例计时 5 次；另测逐轴上下限附近、全解、连续小变化、不可达目标和独立的模型交叉诊断。`--repeats` 范围 1–20；完整结果默认保存到 `outputs/ik_comparison.json`，可用 `--json PATH` 指定位置。当前共有 85 项自动化测试（保留原75项，新增10项包与入口兼容测试）；缺少 SDK 时新增 17 项厂家 IK 测试跳过。
 
-`scripts/realman_ik.py` 的 `RealManIK(model_limits, model="II", sensor="SF")` 复用 FK 会话，提供 `solve_ik(position_m, initial_q_rad, rotation_3x3)` 和 `solve_all(...)`。内部使用单位 wxyz 四元数、degree 关节输入，并检查返回码、六轴数量、有限值、双方限位和厂家 FK 残差。只有检查通过时才返回弧度 `q`，失败返回 `q=None`；全解仅允许整数 `2*pi` 等价表示转换，不做关节裁剪或模型零偏修正。
+`realman_rl_simtoreal.vendor.realman_ik` 的 `RealManIK(model_limits, model="II", sensor="SF")` 复用 FK 会话，提供 `solve_ik(position_m, initial_q_rad, rotation_3x3)` 和 `solve_all(...)`。内部使用单位 wxyz 四元数、degree 关节输入，并检查返回码、六轴数量、有限值、双方限位和厂家 FK 残差。只有检查通过时才返回弧度 `q`，失败返回 `q=None`；全解仅允许整数 `2*pi` 等价表示转换，不做关节裁剪或模型零偏修正。
 
 厂家 Algo 使用进程全局配置，不支持并发会话；新建另一配置后旧会话会明确失败。全解是独立诊断，不会自动替代单解失败。当前 J5 边界失败和 MuJoCo 远初值局部失败均保留。
 

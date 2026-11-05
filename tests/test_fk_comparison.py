@@ -13,11 +13,12 @@ import mujoco
 import numpy as np
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "scripts"))
-import compare_fk as comparison
-import control_joints as control
-from kinematics import Kinematics
-import realman_fk as adapter
+_spec = importlib.util.spec_from_file_location("_test_compare_fk", ROOT / "scripts/compare_fk.py")
+comparison = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(comparison)
+from realman_rl_simtoreal.simulation import control, model as model_api
+from realman_rl_simtoreal.simulation.kinematics import Kinematics
+from realman_rl_simtoreal.vendor import realman_fk as adapter
 
 
 class FKComparisonMathTests(unittest.TestCase):
@@ -61,12 +62,12 @@ class FKComparisonMathTests(unittest.TestCase):
             with self.assertRaisesRegex(adapter.SDKUnavailable, "requirements-vendor.txt"):
                 adapter.RealManFK()
         # Normal simulation FK remains usable when the optional SDK import fails.
-        model, _, _ = control.load_model()
+        model, _, _ = model_api.load_model()
         kin = Kinematics(model)
         self.assertTrue(np.isfinite(kin.fk(kin.home_q)[0]).all())
 
     def test_samples_are_within_limits_and_not_only_singular(self):
-        model, _, _ = control.load_model()
+        model, _, _ = model_api.load_model()
         kin = Kinematics(model)
         samples = comparison.sample_poses(kin.home_q)
         self.assertEqual(len(samples), 9)
@@ -125,8 +126,8 @@ class VendorFKTests(unittest.TestCase):
 
     def test_wrist_reference_and_joint_zero_differences(self):
         c = self.report["configurations"][2]
-        model, _, _ = control.load_model()
-        data = control.initialize(model)
+        model, _, _ = model_api.load_model()
+        data = model_api.initialize(model)
         kin = Kinematics(model)
         for row in c["rows"]:
             data.qpos[kin.qadr] = np.deg2rad(row["joint_deg"])  # Calculation-only data.
@@ -148,9 +149,9 @@ class VendorFKTests(unittest.TestCase):
 
     def test_comparison_never_connects_steps_or_mutates_model(self):
         from Robotic_Arm import rm_robot_interface as sdk
-        model, _, _ = control.load_model()
+        model, _, _ = model_api.load_model()
         kin = Kinematics(model)
-        live = control.initialize(model)
+        live = model_api.initialize(model)
         before = {key: getattr(live, key).copy() for key in ("qpos", "qvel", "ctrl", "site_xpos")}
         mass, inertia = model.body_mass.copy(), model.body_inertia.copy()
         with (patch.object(sdk, "rm_init", side_effect=AssertionError("No communications initialization")),
@@ -160,7 +161,7 @@ class VendorFKTests(unittest.TestCase):
             baseline = comparison.measure_configuration(kin)
             # A changed world placement must be removed using the known base
             # transform, never fitted from a robot pose. Calculation-only model.
-            shifted, _, _ = control.load_model()
+            shifted, _, _ = model_api.load_model()
             base = shifted.body("base_link").id
             shifted.body_pos[base] = [.2, -.1, .3]
             angle = np.deg2rad(25)
