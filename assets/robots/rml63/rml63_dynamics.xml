@@ -58,6 +58,7 @@
                       <geom pos="0 0 0" quat="1 0 0 0" type="mesh" rgba="0.75294 0.75294 0.75294 1" mesh="camera_link" name="camera_link_collision" />
                     </body>
                   </body>
+                  <site name="ee_site" pos="0 0 0" quat="1 0 0 0" type="sphere" size="0.008" rgba="0.1 0.9 0.2 1" group="3" />
                 </body>
               </body>
             </body>

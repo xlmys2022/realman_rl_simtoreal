@@ -104,3 +104,11 @@ Element name 'camera_link', id 9
 - 没有添加未知电机转子惯量、齿轮参数或摩擦标定。PD 增益和 joint damping 是本项目的仿真调试参数，不是官方实测参数。本次控制脚本只接收六个关节目标，不处理末端位姿或逆运动学。
 
 `scene.xml` 只包含上述机器人、灯光和地面。地面摩擦 `[0.7,0.005,0.0001]` 为通用场景设置；正常测试无地面接触，未作摩擦参数辨识。
+
+## 任务 02-B：末端参考点
+
+在 `scripts/build_dynamics_model.py` 中增加 `ee_site` 的生成逻辑，并重新生成 `rml63_dynamics.xml`。site 直接属于 `link_6`，局部 `pos="0 0 0"`、`quat="1 0 0 0"`；其位置及姿态分别由 `MjData.site_xpos` 和 `site_xmat` 给出，表示世界坐标及 site-to-world 旋转。
+
+这是临时末端坐标系，不使用相机支架，也不是厂家标定的 TCP。绿色球形 site 只是可视化，无质量、惯量或碰撞；没有改变原有 Body、geom、执行器、重力、阻尼、限位或碰撞过滤。重新生成和回归测试均验证 site 保留、物理参数一致。
+
+`control_ee.py` 的半透明红色目标球属于 Viewer `user_scn`，不加入物理模型。FK 与 IK 使用独立 `MjData`；正常运动仍由既有六个 position 执行器通过 `mj_step()` 实现。算法、朝向约束与实际 PD 误差的区别见项目根目录 `KINEMATICS_VALIDATION.md`。

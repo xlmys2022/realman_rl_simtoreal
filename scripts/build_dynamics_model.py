@@ -46,6 +46,10 @@ def build():
             geom.set("name", body.get("name") + ("_visual" if index == 0 else "_collision"))
     camera = root.find(".//body[@name='camera_rolink']")
     camera.remove(camera.find("joint[@name='camera_rojoint']"))
+    # Temporary reference at the sixth link origin; not a calibrated tool TCP.
+    ET.SubElement(root.find(".//body[@name='link_6']"), "site", name="ee_site",
+                  pos="0 0 0", quat="1 0 0 0", type="sphere", size="0.008",
+                  rgba="0.1 0.9 0.2 1", group="3")
     ET.SubElement(ET.SubElement(root, "contact"), "exclude", name="base_joint_assembly",
                   body1="base_link", body2="link_1")
     actuators = ET.SubElement(root, "actuator")

@@ -2,6 +2,8 @@
 
 日期：2026-11-05（Asia/Shanghai）。环境：现有 `realman_rl`，Python 3.11.17、MuJoCo 3.17.0、NumPy 2.4.6。没有新增依赖，没有修改其他 Conda 环境或官方原始资产，没有提交或推送 GitHub。
 
+本文件保留基础关节控制阶段的结果。后续任务 02-B 已增加临时末端 site、FK/IK 及小幅末端控制，记录见 `KINEMATICS_VALIDATION.md`；下文“未实现逆运动学”指本文件原阶段结束时的状态。六关节物理参数与控制器未改变。
+
 ## 模型和控制方式
 
 - `scene.xml` 引用 `rml63_dynamics.xml`，另加入灯光及可碰撞地面。机器人保留九个 Body，含 world 共十个；底座无自由度，两个相机 Body 刚性连接在第六连杆，只有六个机械臂 hinge。
