@@ -2,6 +2,8 @@
 
 验证日期：2026-11-04（Asia/Shanghai）。所有 Python 安装和验证均在现有 Conda `realman_rl` 环境中完成；使用 `python -I` 隔离用户包与继承的 ROS `PYTHONPATH`。未修改其他 Conda 环境、相邻项目或系统 Python，未执行 Git commit/push。
 
+本文件保留第一阶段历史结果。2026-11-05 新增的动力学 MJCF 和关节位置控制验证见 `DYNAMICS_VALIDATION.md`；下文“未实现”描述的是第一阶段完成时的状态。原静态 URDF 与检查脚本仍保持兼容。
+
 ## 环境和依赖
 
 - Python：3.11.17。
