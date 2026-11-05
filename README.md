@@ -108,6 +108,26 @@ python -I -m unittest discover -s /home/mr-beaver/Documents/robot/realman_rl_sim
 
 IK 解和离散预检均不保证连续轨迹无碰撞；动力学过程中继续检查接触、限位、力矩、有限数值和姿态误差。本次没有障碍物规划、末端闭环误差补偿、真机通信或强化学习。
 
+## 重力补偿对照（02-B+）
+
+任务 02-B+ 的重力误差诊断与 A/B 对照可运行：
+
+```bash
+python -I /home/mr-beaver/Documents/robot/realman_rl_simtoreal/scripts/compare_controllers.py
+python -I /home/mr-beaver/Documents/robot/realman_rl_simtoreal/scripts/compare_controllers.py --controller pd
+python -I /home/mr-beaver/Documents/robot/realman_rl_simtoreal/scripts/compare_controllers.py --controller gravity
+```
+
+默认使用相同初态、IK 目标、增益、时间、2 ms 步长和限制运行两组：home 保持、世界 ±X 5 mm / +Z 5 mm，以及原来的 13 段关节运动。`--json /absolute/path/results.json` 指定数据文件；默认保存到项目 `outputs/control_comparison.json`。
+
+补偿模式通过 `load_model(gravity_compensation=True)` 在编译前给八个运动连杆/相机 Body 设置 `gravcomp=1`，并给六个 joint 设置 `actuatorgravcomp=true`，使 PD 与补偿合成后再受原关节总力矩限制。缺省 `load_model()` 和已有两个 Demo 仍使用原 PD。原始 URDF、生成的基线 MJCF、质量、惯量、重力与增益都不变；重新生成基线模型不会丢失加载时可选的补偿配置。
+
+必须区分 home 稳态偏移、从稳定 home 出发的相对位移误差和最终绝对误差：基线 +X 5 mm 分别约为 2.210 / 0.211 / 2.392 mm。补偿后的绝对误差约为 0.000140 mm，这是补偿使用与仿真对象完全相同模型参数的理想结果，不能直接当作真机精度。对照表、限幅证据和依赖条件见 `CONTROL_VALIDATION.md`。
+
+`qfrc_bias` 在运动时含重力及速度相关偏置项。诊断程序在独立、零速度的 `MjData` 上计算纯重力力矩；不会把运行中任意 `qfrc_bias` 当作纯重力，也不修改实际 qpos/qvel。补偿的诊断量 `qfrc_gravcomp` 已经路由进总量 `qfrc_actuator`，不能再次相加来计算实际驱动力矩。
+
+运行新增测试可使用 `python -I /home/mr-beaver/Documents/robot/realman_rl_simtoreal/tests/test_gravity_compensation.py`；上面的全部测试命令会同时运行原测试和新增测试。
+
 ## 文件职责
 
 - `scripts/inspect_model.py`：校验来源文件、mesh、结构、物理参数，输出 MuJoCo Body/Joint 及 `nq/nv/nu`，执行 `mj_forward()`，错误时返回非零状态。
@@ -116,8 +136,10 @@ IK 解和离散预检均不保证连续轨迹无碰撞；动力学过程中继�
 - `scripts/control_joints.py`：位置控制演示、无界面验收、可选 Viewer 及 JSON 统计。
 - `scripts/kinematics.py`：独立数据中的 FK、Jacobian、带限位的全位姿 DLS IK 和结构化求解结果。
 - `scripts/control_ee.py`：笛卡尔目标输入、IK 执行前检查、现有执行器运动和实际末端误差统计。
+- `scripts/compare_controllers.py`：匹配条件的 PD/重力补偿对照、独立重力诊断及物理步总驱动力审计。
 - `tests/test_joint_control.py`：结构、物理保持、正负小角度运动、映射/限幅及碰撞反例测试。
 - `tests/test_kinematics.py`：FK/IK、Jacobian、状态隔离、失败不运动及末端动力学验证。
+- `tests/test_gravity_compensation.py`：力通道、合力限幅、多执行器/被动旁路反例和同条件误差对比。
 - `assets/robots/rml63/upstream/`：未经修改的官方 URDF、9 个 STL、包元数据和许可证。
 - `assets/robots/rml63/rml63_mujoco.urdf`：本地路径及已记录惯量修正的兼容副本，仍直接按 URDF 加载。
 - `assets/robots/rml63/rml63_dynamics.xml`：六轴机器人 MJCF、刚性相机、定向碰撞过滤和位置执行器。
@@ -129,6 +151,7 @@ IK 解和离散预检均不保证连续轨迹无碰撞；动力学过程中继�
 - `VALIDATION.md`：实际测试结果、完整检查输出及未验证事项。
 - `DYNAMICS_VALIDATION.md`：本次动力学诊断、参数依据、控制测试输出与剩余限制。
 - `KINEMATICS_VALIDATION.md`：02-B 的算法、参数、理论与实际误差、完整输出及未解决事项。
+- `CONTROL_VALIDATION.md`：02-B+ 重力补偿原理、统一误差定义、对照表、总力矩证据和局限。
 
 ## 来源和已知限制
 

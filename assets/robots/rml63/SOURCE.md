@@ -112,3 +112,11 @@ Element name 'camera_link', id 9
 这是临时末端坐标系，不使用相机支架，也不是厂家标定的 TCP。绿色球形 site 只是可视化，无质量、惯量或碰撞；没有改变原有 Body、geom、执行器、重力、阻尼、限位或碰撞过滤。重新生成和回归测试均验证 site 保留、物理参数一致。
 
 `control_ee.py` 的半透明红色目标球属于 Viewer `user_scn`，不加入物理模型。FK 与 IK 使用独立 `MjData`；正常运动仍由既有六个 position 执行器通过 `mj_step()` 实现。算法、朝向约束与实际 PD 误差的区别见项目根目录 `KINEMATICS_VALIDATION.md`。
+
+## 任务 02-B+：加载时可选的重力补偿配置
+
+基线 MJCF 及生成脚本不变。`control_joints.load_model(path, gravity_compensation=True)` 读取同一场景到官方 `MjSpec`，编译前只给 `link_1..link_6`、`camera_rolink`、`camera_link` 八个 Body 设置 `gravcomp=1`，并给六个主关节设置 `actuatorgravcomp=true`。底座固定在 world，不补偿；固定相机的重量仍计入上游运动关节。
+
+`actuatorgravcomp` 把补偿计入 `qfrc_actuator`，与 PD 合成后由原 `actuatorfrcrange` 限幅，不能使用默认被动力通道绕过电机总力矩限值。标量执行器还保留各自原始限幅。此配置在编译前应用，避免仅改已编译 Body 数组而未更新重力补偿元数据。补偿模式的 `ngravcomp=8`、六轴路由标志和实际力通道均经过验证；缺省加载仍是 PD，重新加载关闭选项也恢复原模式。
+
+这是确定性的加载配置，不是另一份机器人模型。没有改变任何质量、质心、惯量、几何、关节轴、重力大小、阻尼、执行器增益、时间步或碰撞规则，也不修改实际状态来保持姿态。物理参数一致性与基线重新生成由自动测试验证。完整证据见 `CONTROL_VALIDATION.md`。

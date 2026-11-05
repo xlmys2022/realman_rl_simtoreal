@@ -4,6 +4,8 @@
 
 本文件保留基础关节控制阶段的结果。后续任务 02-B 已增加临时末端 site、FK/IK 及小幅末端控制，记录见 `KINEMATICS_VALIDATION.md`；下文“未实现逆运动学”指本文件原阶段结束时的状态。六关节物理参数与控制器未改变。
 
+任务 02-B+ 的可选重力补偿与同条件 A/B 对照见 `CONTROL_VALIDATION.md`；本文件的原始 PD 结果仍保留为基线。
+
 ## 模型和控制方式
 
 - `scene.xml` 引用 `rml63_dynamics.xml`，另加入灯光及可碰撞地面。机器人保留九个 Body，含 world 共十个；底座无自由度，两个相机 Body 刚性连接在第六连杆，只有六个机械臂 hinge。

@@ -29,8 +29,19 @@ def require(condition, message):
         raise ValueError(message)
 
 
-def load_model(path=SCENE):
-    model = mujoco.MjModel.from_xml_path(str(Path(path).expanduser().resolve()))
+def load_model(path=SCENE, *, gravity_compensation=False):
+    path = str(Path(path).expanduser().resolve())
+    if gravity_compensation:
+        # Configure before compilation: merely editing body_gravcomp on an
+        # already compiled baseline leaves its compiled gravity metadata disabled.
+        spec = mujoco.MjSpec.from_file(path)
+        for name in (*[f"link_{i}" for i in range(1, 7)], "camera_rolink", "camera_link"):
+            spec.body(name).gravcomp = 1
+        for name in JOINTS:
+            spec.joint(name).actgravcomp = True
+        model = spec.compile()
+    else:
+        model = mujoco.MjModel.from_xml_path(path)
     require((model.nq, model.nv, model.nu, model.njnt) == (6, 6, 6, 6), "Expected six arm hinges and six actuators")
     joint_ids = np.array([model.joint(name).id for name in JOINTS])
     actuator_ids = np.array([model.actuator(f"position_{i}").id for i in range(1, 7)])
@@ -41,6 +52,7 @@ def load_model(path=SCENE):
         require(np.array_equal(model.actuator_gear[actuator_id], [1, 0, 0, 0, 0, 0]), "Expected direct-drive gear=1")
         require(model.jnt_limited[joint_id] and model.actuator_ctrllimited[actuator_id]
                 and model.actuator_forcelimited[actuator_id], "Position and force limits are required")
+        require(model.jnt_actfrclimited[joint_id], "Joint total-drive torque limit is required")
         require(np.allclose(model.jnt_range[joint_id], model.actuator_ctrlrange[actuator_id]), "Control/joint limits differ")
     base = model.body("base_link").id
     require(model.body_parentid[base] == 0 and model.body_jntnum[base] == 0
@@ -70,7 +82,7 @@ def validate_target(model, joint_ids, home, target):
     return target
 
 
-def run_segment(model, data, joint_ids, actuator_ids, target, label, ramp=1.0, hold=3.0, tick=None):
+def run_segment(model, data, joint_ids, actuator_ids, target, label, ramp=1.0, hold=3.0, tick=None, step_observer=None):
     """Smooth the control setpoint and measure real integrated state; never reset qpos."""
     qadr = model.jnt_qposadr[joint_ids]
     vadr = model.jnt_dofadr[joint_ids]
@@ -88,6 +100,9 @@ def run_segment(model, data, joint_ids, actuator_ids, target, label, ramp=1.0, h
         alpha = alpha * alpha * (3 - 2 * alpha)
         data.ctrl[actuator_ids] = start + alpha * (target - start)
         mujoco.mj_step(model, data)
+        if step_observer is not None:
+            # Observe forces used by this step before a tick refreshes mjData.
+            step_observer(data)
         expected_time += dt
         require(abs(data.time - expected_time) < 1e-8, "Simulation time reset unexpectedly")
         for name in ("qpos", "qvel", "qacc", "qfrc_actuator", "actuator_force", "ctrl", "xpos"):
@@ -125,7 +140,7 @@ def run_segment(model, data, joint_ids, actuator_ids, target, label, ramp=1.0, h
     require(np.max(tail_speed) <= MAX_TAIL_SPEED_DEG_S, f"{label}: not settled")
     require(np.max(overshoot) <= MAX_ERROR_DEG, f"{label}: excessive overshoot")
     require(other_motion <= MAX_ERROR_DEG, f"{label}: uncommanded joint moved excessively")
-    require(np.all(peak_torque <= np.max(np.abs(model.actuator_forcerange[actuator_ids]), axis=1) + 1e-8),
+    require(np.all(peak_torque <= np.max(np.abs(model.jnt_actfrcrange[joint_ids]), axis=1) + 1e-8),
             f"{label}: torque bound exceeded")
     for i in moving:
         require(np.sign(movement[i]) * (positions[-1, i] - positions[0, i]) > 0.5 * abs(np.rad2deg(movement[i])),
@@ -148,7 +163,7 @@ def print_result(result):
     print("  peak torque [N*m]: " + np.array2string(np.array(result["peak_torque_nm"]), precision=5), flush=True)
 
 
-def run_demo(model, data, joint_ids, actuator_ids, target=None, tick=None):
+def run_demo(model, data, joint_ids, actuator_ids, target=None, tick=None, step_observer=None):
     home = data.ctrl[actuator_ids].copy()
     targets = [("hold home under gravity", home, 0.0, 3.0)]
     if target is None:
@@ -160,7 +175,7 @@ def run_demo(model, data, joint_ids, actuator_ids, target=None, tick=None):
         targets.append(("custom six-joint target", validate_target(model, joint_ids, home, target), 1.0, 3.0))
     results = []
     for label, command, ramp, hold in targets:
-        result = run_segment(model, data, joint_ids, actuator_ids, command, label, ramp, hold, tick)
+        result = run_segment(model, data, joint_ids, actuator_ids, command, label, ramp, hold, tick, step_observer)
         print_result(result)
         results.append(result)
     return results

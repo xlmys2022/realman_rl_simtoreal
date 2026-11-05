@@ -51,7 +51,7 @@ def check_motion(model, data, joint_ids, actuator_ids, kin, result, target):
     return theoretical_position, theoretical_rotation, max_rotation_drift
 
 
-def execute_motion(model, data, joint_ids, actuator_ids, kin, result, target, tick=None):
+def execute_motion(model, data, joint_ids, actuator_ids, kin, result, target, tick=None, step_observer=None):
     """Drive existing position actuators; live qpos is never assigned here."""
     theory_p, theory_r, command_rotation_drift = check_motion(model, data, joint_ids, actuator_ids, kin, result, target)
     mujoco.mj_forward(model, data)
@@ -72,9 +72,9 @@ def execute_motion(model, data, joint_ids, actuator_ids, kin, result, target, ti
         if tick is not None:
             tick()
 
-    hold = control.run_segment(model, data, joint_ids, actuator_ids, kin.home_q, "settle home", ramp=0, hold=3, tick=sample)
+    hold = control.run_segment(model, data, joint_ids, actuator_ids, kin.home_q, "settle home", ramp=0, hold=3, tick=sample, step_observer=step_observer)
     motion_start = data.site_xpos[kin.site_id].copy()
-    motion = control.run_segment(model, data, joint_ids, actuator_ids, result.q, "end-effector target", ramp=2, hold=3, tick=sample)
+    motion = control.run_segment(model, data, joint_ids, actuator_ids, result.q, "end-effector target", ramp=2, hold=3, tick=sample, step_observer=step_observer)
     actual_position = data.site_xpos[kin.site_id].copy()
     actual_rotation = data.site_xmat[kin.site_id].reshape(3, 3).copy()
     position_error = float(np.linalg.norm(np.asarray(target) - actual_position))

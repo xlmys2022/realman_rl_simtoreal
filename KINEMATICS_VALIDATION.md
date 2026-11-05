@@ -2,6 +2,8 @@
 
 日期：2026-11-05（Asia/Shanghai）。全部开发和 Python 测试使用现有 Conda `realman_rl`：Python 3.11.17、MuJoCo 3.17.0、NumPy 2.4.6。没有新增依赖、修改其他环境或提交/推送 GitHub；没有加入强化学习、逆动力学控制器、真机通信或路径规划。
 
+本文件保留任务 02-B 的原始 PD 结果。后续任务 02-B+ 的重力补偿和三种误差分解见 `CONTROL_VALIDATION.md`，没有改写此处的基线数值。
+
 ## 文件与末端坐标定义
 
 - 新增 `scripts/kinematics.py`：FK、世界系 Jacobian、旋转误差和结构化全位姿 DLS IK。
