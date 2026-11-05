@@ -4,6 +4,8 @@
 
 实际模型为官方 **RML63II-6F-V**。它与目标实物 RML63-6F-V 的代际关系尚未核实。静态检查 URDF 保留相机支架转动关节，为 `nq=nv=7, nu=0`；新增动力学 MJCF 将相机刚性固定，为 `nq=nv=nu=6`。
 
+02-C1 已增加厂家 **离线 FK 对照**，结论为当前模型尚不一致：SDK 未提供可确认对应旧版 `6F-V` 的枚举，末端长度与 URDF 近似旋转均有差异。未连接真机，也未据此修改模型、IK 或控制器。完整结果见 [REALMAN_KINEMATICS_VALIDATION.md](REALMAN_KINEMATICS_VALIDATION.md)。
+
 ## 环境
 
 使用已存在的 Conda 环境 `realman_rl`（Python 3.11），不需要新建环境：
@@ -164,3 +166,21 @@ python -I /home/mr-beaver/Documents/robot/realman_rl_simtoreal/scripts/compare_c
 静态 URDF 零位下仍报告 `base_link/link_1` 约 2.73 mm 的装配包络重叠。动力学 MJCF 仅排除该相邻装配对；其他非相邻自碰撞及环境碰撞保留，并有反例测试。相机固定在支架原始零角度，未修改官方原始 URDF 或 STL 尺寸。
 
 后续仍需核实实物版本、零位、惯量、碰撞几何和控制参数。当前只验证小范围关节/末端运动；未实现任务环境、强化学习、夹爪或真机通信，不自动上传 GitHub。
+
+## 厂家离线 FK 对照（02-C1，可选 SDK）
+
+基础仿真不需要厂家 SDK。只在 `realman_rl` 中先预检、再安装独立锁定的可选依赖；本次安装仅新增 `Robotic_Arm==1.1.7`，MuJoCo/NumPy 版本未改：
+
+```bash
+conda activate realman_rl
+python -I -m pip --no-cache-dir install --dry-run -r /home/mr-beaver/Documents/robot/realman_rl_simtoreal/requirements-vendor.txt
+python -I -m pip --no-cache-dir install -r /home/mr-beaver/Documents/robot/realman_rl_simtoreal/requirements-vendor.txt
+python -I -m pip --no-cache-dir check
+python -I /home/mr-beaver/Documents/robot/realman_rl_simtoreal/scripts/compare_fk.py
+python -I /home/mr-beaver/Documents/robot/realman_rl_simtoreal/scripts/compare_fk.py --generation all --sensor all
+python -I -m unittest discover -s /home/mr-beaver/Documents/robot/realman_rl_simtoreal/tests -v
+```
+
+默认 `II + SF` 是依据官方六维力定义选择的**候选**，不是确认的 `6F-V` 配置；`--sensor ISFV` 可查看新版一体化六维力加视觉候选。`--generation II|III|all`、`--sensor B|ZF|SF|ISF|BV|ISFV|all` 支持多配置调查，不会替换 MuJoCo 机器人。没有厂家 IK 或真机接口调用。
+
+脚本计算 home、六轴分别 +3°、组合和另一姿态，共 9 组 FK；只使用独立计算数据，不执行 `mj_step()`。输出位置与 SO(3) 旋转误差；完整 4×4 变换（含 3×3 旋转）、DH、坐标系、原始及相对误差保存在默认 `outputs/fk_comparison.json`，可用 `--json PATH` 覆盖。**退出码 0：数值一致，2：已完成测量但模型不一致，1：运行或 SDK 错误**。数值一致仍不代表实物/TCP 已标定。SDK 缺失时 9 项可选厂家测试跳过，基础仿真不受影响。

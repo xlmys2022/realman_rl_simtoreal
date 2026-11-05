@@ -1,0 +1,3 @@
+# Optional offline manufacturer FK comparison; base simulation does not need it.
+# PyPI wheel SHA256: 4bce22ccaa2863ac44105a692e0f33e7f145e9dc5657de2736b06c6dbf8ebaa8
+Robotic_Arm==1.1.7
