@@ -136,3 +136,100 @@ class ForceMonitor:
                     peak_servo_generated_nm=self.peak_servo.tolist(), peak_raw_gravity_compensation_nm=self.peak_gravity.tolist(),
                     peak_speed_deg_s=np.rad2deg(self.peak_speed).tolist())
 
+
+class ControlCycleError(ValueError):
+    """A fixed cycle stopped early; summary reports the steps actually taken."""
+
+    def __init__(self, reason, message, summary):
+        super().__init__(message)
+        self.reason = reason
+        self.summary = summary
+
+
+def advance_control_cycle(model, data, joint_ids, actuator_ids, target, *,
+                          physics_steps=25, max_joint_delta=np.deg2rad(0.5),
+                          max_joint_speed=np.deg2rad(30)):
+    """Advance one bounded position-servo cycle, without resetting live state.
+
+    Unlike run_segment, this has no settling phase or final convergence test.
+    The *legal* target is rate-limited relative to the previous ctrl, then
+    smoothstep-interpolated over exactly physics_steps (unless safety stops it).
+    Invalid joint solutions are rejected, never clipped into position limits.
+    Torque channels are audited before mj_forward refreshes the force cache.
+    """
+    require(isinstance(physics_steps, (int, np.integer)) and not isinstance(physics_steps, bool)
+            and physics_steps > 0, "physics_steps must be a positive integer")
+    require(np.isfinite(max_joint_delta) and max_joint_delta > 0, "Invalid joint command rate bound")
+    require(np.isfinite(max_joint_speed) and max_joint_speed > 0, "Invalid joint speed bound")
+    qadr, vadr = model.jnt_qposadr[joint_ids], model.jnt_dofadr[joint_ids]
+    limits = model.jnt_range[joint_ids]
+    target = np.asarray(target, dtype=float)
+    valid_target = target.shape == (6,) and np.isfinite(target).all()
+    start = data.ctrl[actuator_ids].copy()
+    monitor = ForceMonitor(model, joint_ids, actuator_ids)
+    taken, contacts, min_distance = 0, 0, 0.0
+    initial_time = float(data.time)
+    command = start.copy()
+
+    def summary():
+        return dict(physics_steps=taken, simulated_elapsed_s=float(data.time)-initial_time,
+                    requested_joint_target_rad=target.tolist() if valid_target else None,
+                    commanded_joint_target_rad=command.tolist(),
+                    command_rate_limited=bool(valid_target and np.any(np.abs(command-target) > 1e-12)),
+                    max_contacts=contacts, min_contact_distance_m=min_distance, forces=monitor.summary())
+
+    def fail(reason, message):
+        raise ControlCycleError(reason, message, summary())
+
+    def check_state():
+        nonlocal contacts, min_distance
+        for name in ("qpos", "qvel", "qacc", "ctrl", "xpos", "site_xpos", "qfrc_actuator", "actuator_force"):
+            if not np.isfinite(getattr(data, name)).all():
+                fail("numerical_failure", f"Non-finite {name}")
+        if not np.isfinite(data.time) or any(warning.number for warning in data.warning):
+            fail("numerical_failure", "MuJoCo numerical warning or invalid simulation time")
+        q = data.qpos[qadr]
+        if np.any(q < limits[:, 0]-1e-4) or np.any(q > limits[:, 1]+1e-4):
+            fail("joint_limit", "Actual joint position exceeded the model limit tolerance")
+        if np.any(np.abs(data.qvel[vadr]) > max_joint_speed):
+            fail("velocity_limit", "Actual joint speed exceeded the experimental speed limit")
+        contacts = max(contacts, data.ncon)
+        for contact in data.contact:
+            if not np.isfinite(contact.dist):
+                fail("numerical_failure", "Non-finite contact distance")
+            min_distance = min(min_distance, float(contact.dist))
+            if contact.dist < -0.0001:
+                names = [model.geom(int(i)).name for i in contact.geom]
+                fail("collision", f"Unexpected collision {names}: distance={contact.dist:.6g} m")
+        if np.any(data.qfrc_applied) or np.any(data.xfrc_applied):
+            fail("drive_failure", "External force injection is not allowed")
+
+    if target.shape != (6,) or not np.isfinite(target).all():
+        fail("joint_limit", "Expected six finite joint target angles")
+    if np.any(target < limits[:, 0]) or np.any(target > limits[:, 1]):
+        fail("joint_limit", "Joint target outside position limits")
+    if not np.isfinite(start).all() or np.any(start < limits[:, 0]) or np.any(start > limits[:, 1]):
+        fail("joint_limit", "Previous control reference is invalid")
+    # This bounds a valid command's rate; it does not repair an illegal IK result.
+    command = start + np.clip(target-start, -max_joint_delta, max_joint_delta)
+    check_state()
+    try:
+        for step in range(physics_steps):
+            alpha = (step+1)/physics_steps
+            alpha = alpha*alpha*(3-2*alpha)
+            data.ctrl[actuator_ids] = start+alpha*(command-start)
+            mujoco.mj_step(model, data)
+            taken += 1
+            check_state()
+            try:
+                monitor.observe(data)
+            except ValueError as exc:
+                fail("drive_failure", str(exc))
+            if abs(data.time-(initial_time+taken*model.opt.timestep)) > 1e-8:
+                fail("numerical_failure", "Simulation time reset unexpectedly")
+            mujoco.mj_forward(model, data)
+            check_state()
+    except mujoco.FatalError as exc:
+        fail("numerical_failure", str(exc))
+    return summary()
+

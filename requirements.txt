@@ -2,6 +2,7 @@
 mujoco==3.17.0
 numpy==2.4.6
 glfw==2.11.0
+gymnasium==1.4.0
 
 # Required runtime dependencies (including etils[epath] dependencies).
 absl-py==2.5.1
@@ -11,3 +12,5 @@ PyOpenGL==3.1.10
 typing_extensions==4.16.0
 websockets==17.4
 zipp==4.1.2
+cloudpickle==3.1.2
+Farama-Notifications==0.0.6

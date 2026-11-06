@@ -1,8 +1,8 @@
-# 工程结构与调用约定（02-D）
+# 工程结构与调用约定（02-D重构，03-A环境扩展）
 
 本项目采用 src 布局：可复用能力通过安装后的 `realman_rl_simtoreal` 包调用；脚本负责命令行、实验流程及窗口展示。这样未来环境不必导入一个演示脚本来获得控制器，也不会顺带执行参数解析、打印或打开 Viewer。
 
-本阶段只是迁移，没有修改模型、DLS、控制增益、限位、重力补偿、碰撞规则或厂家算法。本包版本为 0.1.0，和机器人模型/厂家算法版本没有对应关系。
+02-D只是迁移。03-A在原接口旁增加固定周期推进及最小Gymnasium环境，没有修改模型、DLS、原控制增益、限位、重力补偿、碰撞规则或厂家算法。本包版本为0.1.0，和机器人模型/厂家算法版本没有对应关系。
 
 ## 目录
 
@@ -13,10 +13,13 @@ realman_rl_simtoreal/
 │   ├── __init__.py                  # 轻量包入口，无运行时初始化
 │   ├── paths.py                     # editable 源码仓库中的资源/输出路径
 │   ├── viewer.py                    # 惰性的 CLI Viewer 生命周期与后端辅助
+│   ├── envs/
+│   │   ├── __init__.py              # 轻量标识，不自动注册或创建环境
+│   │   └── reach_env.py             # 固定目标、三维动作、Gymnasium API
 │   ├── simulation/
 │   │   ├── __init__.py
 │   │   ├── model.py                 # 加载、模型检查、映射、初始化、纯重力诊断
-│   │   ├── control.py               # 原有关节控制段与总驱动力审计
+│   │   ├── control.py               # 原控制段/力审计及新增固定周期推进
 │   │   ├── ee_control.py            # 原有末端检查、碰撞预检、执行和误差
 │   │   └── kinematics.py            # 原有 FK、Jacobian、DLS IK
 │   ├── vendor/
@@ -34,11 +37,12 @@ realman_rl_simtoreal/
 │   ├── control_ee.py
 │   ├── compare_controllers.py
 │   ├── compare_fk.py
-│   └── compare_ik.py
-├── tests/                          # 原75项及新增10项包/入口兼容测试
+│   ├── compare_ik.py
+│   └── smoke_reach_env.py           # 新增无界面环境演示
+├── tests/                          # 原85项及新增27项环境测试
 ├── docs/
 │   ├── architecture.md
-│   └── validation/                 # 六份历史报告及本次重构验证
+│   └── validation/                 # 历史实验、重构及环境验证
 ├── outputs/                        # Git忽略；实验和重构对照产物
 ├── pyproject.toml
 ├── requirements.txt
@@ -112,7 +116,11 @@ kin = Kinematics(model)
 
 旧的 `from kinematics ...` 或从 control_joints 导入核心函数不再是支持接口。八个原脚本路径、CLI 参数和退出码继续保留。测试核心时直接导入包；需要测试脚本实验函数时，用标准库 importlib 按文件加载，不修改 sys.path。生产代码不使用这种测试加载方式。
 
-未来 Gymnasium 可从上述模块获取模型、运动学和关节控制能力，但本次没有创建环境。run_segment 仍是带统计和收敛检查的整段执行函数；±5°、10mm、固定home朝向等既有演示边界仍在，不能把它无条件视为未来环境的通用单步控制接口。单步接口、动作范围、reset/step策略和奖励设计属于后续任务。
+03-A的 `envs.reach_env.ReachEnv` 直接从上述模块获取模型、运动学、目标验证和碰撞预检，不依赖脚本、vendor、experiments或Viewer。`run_segment`仍保留原有统计和收敛检查；环境改用新增的 `control.advance_control_cycle`，不会在step内等待稳态或调用旧演示序列。±5°、10mm和固定home目标朝向等局部实验边界继续保留。
+
+环境数据流：归一化世界XYZ动作 → 独立命令位置 → 以最近合法关节命令为初值的原DLS IK → 限位/位姿复核及51点碰撞预检 → 指令变化率限制与平滑 → 固定物理步 → 总力矩/数值/速度/碰撞审计 → 新状态下的观测和奖励。正常step不写实际qpos；reset通过官方keyframe重置状态。每个物理步先审计驱动力，再刷新运动学缓存，顺序与原控制要求相同。
+
+环境支持 `reset(seed=..., options=None)`、`step`、Dict观测、`compute_reward`、文本 `render` 及幂等 `close`。当前不自动注册Gymnasium ID，直接导入类实例化；没有复杂插件框架或训练器。完整形状、失败语义和控制参数见 [03-A验证](validation/REACH_ENV_VALIDATION.md)。
 
 ## 安装与路径边界
 
