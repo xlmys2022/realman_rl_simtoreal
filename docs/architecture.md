@@ -1,4 +1,4 @@
-# 工程结构与调用约定（02-D重构，03-A环境扩展）
+# 工程结构与调用约定（02-D重构，03-A/B环境与任务）
 
 本项目采用 src 布局：可复用能力通过安装后的 `realman_rl_simtoreal` 包调用；脚本负责命令行、实验流程及窗口展示。这样未来环境不必导入一个演示脚本来获得控制器，也不会顺带执行参数解析、打印或打开 Viewer。
 
@@ -15,7 +15,7 @@ realman_rl_simtoreal/
 │   ├── viewer.py                    # 惰性的 CLI Viewer 生命周期与后端辅助
 │   ├── envs/
 │   │   ├── __init__.py              # 轻量标识，不自动注册或创建环境
-│   │   └── reach_env.py             # 固定目标、三维动作、Gymnasium API
+│   │   └── reach_env.py             # 固定/随机目标、三维动作、奖励、Gymnasium API
 │   ├── simulation/
 │   │   ├── __init__.py
 │   │   ├── model.py                 # 加载、模型检查、映射、初始化、纯重力诊断
@@ -38,8 +38,9 @@ realman_rl_simtoreal/
 │   ├── compare_controllers.py
 │   ├── compare_fk.py
 │   ├── compare_ik.py
-│   └── smoke_reach_env.py           # 新增无界面环境演示
-├── tests/                          # 原85项及新增27项环境测试
+│   ├── smoke_reach_env.py           # 无界面固定目标演示
+│   └── evaluate_reach_baselines.py  # 随机/规则策略、奖励反例及独立性能剖析
+├── tests/                          # 原112项及新增22项任务测试
 ├── docs/
 │   ├── architecture.md
 │   └── validation/                 # 历史实验、重构及环境验证
@@ -121,6 +122,12 @@ kin = Kinematics(model)
 环境数据流：归一化世界XYZ动作 → 独立命令位置 → 以最近合法关节命令为初值的原DLS IK → 限位/位姿复核及51点碰撞预检 → 指令变化率限制与平滑 → 固定物理步 → 总力矩/数值/速度/碰撞审计 → 新状态下的观测和奖励。正常step不写实际qpos；reset通过官方keyframe重置状态。每个物理步先审计驱动力，再刷新运动学缓存，顺序与原控制要求相同。
 
 环境支持 `reset(seed=..., options=None)`、`step`、Dict观测、`compute_reward`、文本 `render` 及幂等 `close`。当前不自动注册Gymnasium ID，直接导入类实例化；没有复杂插件框架或训练器。完整形状、失败语义和控制参数见 [03-A验证](validation/REACH_ENV_VALIDATION.md)。
+
+03-B仅扩展envs与实验脚本，没有修改simulation核心或vendor。`target_mode="fixed"`和原米制`distance`奖励继续兼容；`target_mode="random"`在reset中通过np_random采样候选，用原IK、限位和路径预检接受目标，最多尝试64次，失败关闭当前episode并报错。默认候选球壳为home周围3–5mm；实际分布是通过检查后的条件分布，不代表完整工作空间。
+
+随机模式默认`safe_dense`奖励：归一化截断距离成本加独立的安全失败惩罚；step把含`is_safety_failure`的info传给compute_reward。可标量或批量重算，不读取原目标的成功标记。固定目标也可显式选safe_dense用于训练实验。命令边界仍终止，模型及物理安全阈值不变。
+
+规则策略留在评估脚本，只读取27维观测中的位置/目标/命令参考，经env.step驱动；不访问真实关节状态或调用IK绕过环境。评估与独立cProfile记录属于实验层，不向环境info加入非确定性的墙钟计时。任务分布、奖励推导、性能以及未来HER需要重算的字段见 [03-B验证](validation/REACH_TASK_VALIDATION.md)。
 
 ## 安装与路径边界
 
