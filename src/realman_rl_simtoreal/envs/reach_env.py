@@ -1,4 +1,6 @@
-"""Small, fixed-goal Cartesian reaching task in the MuJoCo world frame."""
+"""Local Cartesian reaching with fixed or validated random world-frame goals."""
+
+from collections import Counter
 
 import gymnasium as gym
 from gymnasium import spaces
@@ -12,7 +14,7 @@ from ..simulation.model import load_model, initialize
 
 
 class ReachEnv(gym.Env):
-    """Fixed home+X5mm goal, full-pose IK and existing position actuators.
+    """Fixed home+X5mm or seeded random goal, using existing IK and actuators.
 
     action: float32 XYZ in [-1,1], each component scaled to metres in world.
     observation: float64 [q(6), qvel(6), ee(3), goal-ee(3), command_xyz(3), ctrl(6)].
@@ -23,7 +25,14 @@ class ReachEnv(gym.Env):
 
     def __init__(self, *, action_scale=0.001, control_period=0.05,
                  max_episode_steps=200, success_threshold=0.001,
-                 gravity_compensation=True, render_mode=None):
+                 gravity_compensation=True, render_mode=None, target_mode="fixed",
+                 target_radius=0.005, max_target_attempts=64, reward_mode=None):
+        if target_mode not in ("fixed", "random"):
+            raise ValueError("target_mode must be 'fixed' or 'random'")
+        if reward_mode is None:
+            reward_mode = "distance" if target_mode == "fixed" else "safe_dense"
+        if reward_mode not in ("distance", "safe_dense"):
+            raise ValueError("reward_mode must be 'distance' or 'safe_dense'")
         if render_mode not in (None, "ansi"):
             raise ValueError("render_mode must be None or 'ansi'")
         if not np.isfinite(action_scale) or not 0 < action_scale <= MAX_TRANSLATION:
@@ -33,6 +42,17 @@ class ReachEnv(gym.Env):
         if (not isinstance(max_episode_steps, (int, np.integer))
                 or isinstance(max_episode_steps, bool) or max_episode_steps < 1):
             raise ValueError("max_episode_steps must be a positive integer")
+        if not np.isfinite(target_radius) or not success_threshold < target_radius <= MAX_TRANSLATION:
+            raise ValueError("target_radius must exceed success_threshold and be at most 10 mm")
+        if (not isinstance(max_target_attempts, (int, np.integer))
+                or isinstance(max_target_attempts, bool) or not 1 <= max_target_attempts <= 1000):
+            raise ValueError("max_target_attempts must be an integer in [1, 1000]")
+        self.target_mode = target_mode
+        self.target_radius = float(target_radius)
+        self.max_target_attempts = int(max_target_attempts)
+        self.reward_mode = reward_mode
+        self.reward_distance_scale = 2*MAX_TRANSLATION
+        self._goal_sampling = dict(attempts=0, rejections={})
         self.model, self.joint_ids, self.actuator_ids = load_model(gravity_compensation=gravity_compensation)
         dt = float(self.model.opt.timestep)
         if not np.isfinite(control_period) or control_period < dt:
@@ -84,6 +104,10 @@ class ReachEnv(gym.Env):
         orientation_error = (float(np.linalg.norm(rotation_vector(self.kinematics.home_rotation, rotation)))
                              if np.isfinite(rotation).all() else None)
         return dict(distance_m=distance, is_success=reason == "success",
+                    is_safety_failure=reason not in (None, "success", "time_limit"),
+                    target_mode=self.target_mode, reward_mode=self.reward_mode,
+                    goal_sampling=dict(attempts=self._goal_sampling['attempts'],
+                                       rejections=self._goal_sampling['rejections'].copy()),
                     orientation_error_rad=orientation_error,
                     termination_reason=reason, elapsed_steps=self._elapsed_steps,
                     simulation_time_s=float(self.data.time), physics_steps=0,
@@ -95,24 +119,89 @@ class ReachEnv(gym.Env):
         if self._closed:
             raise RuntimeError("Environment is closed")
         if options:
-            raise ValueError("This fixed-goal environment has no reset options")
+            raise ValueError("This environment has no reset options")
+        self._episode_done = True  # Sampling failure must leave the environment unsteppable.
         mujoco.mj_resetDataKeyframe(self.model, self.data, self.model.key("home").id)
         mujoco.mj_forward(self.model, self.data)
         self._command_position = self.kinematics.home_position.copy()
         self._joint_reference = self.kinematics.home_q.copy()
         self._elapsed_steps = 0
-        self._episode_done = False
+        if self.target_mode == "random":
+            self._goal, self._goal_sampling = self._sample_goal()
+        else:
+            self._goal = self.kinematics.home_position+np.array([0.005, 0, 0])
+            self._goal_sampling = dict(attempts=0, rejections={})
         obs = self._observation()
         self._last_observation = {k: v.copy() for k, v in obs.items()}
+        self._episode_done = False
         return obs, self._info(obs)
 
+    def _sample_goal(self):
+        """Uniform-volume spherical shell, conditioned on the original checks.
+
+        Only np_random is consumed; all FK/IK and path probes use private data.
+        With defaults the shell is 3..5 mm from home, outside the success ball.
+        """
+        minimum = (self.success_threshold+self.target_radius)/2
+        rejected = Counter()
+        for attempt in range(1, self.max_target_attempts+1):
+            direction = self.np_random.normal(size=3)
+            length = float(np.linalg.norm(direction))
+            if not np.isfinite(length) or length == 0:
+                rejected['invalid_direction'] += 1
+                continue
+            radius = np.cbrt(self.np_random.uniform(minimum**3, self.target_radius**3))
+            target = self.kinematics.home_position+direction*(radius/length)
+            result = self.kinematics.solve_ik(target, self.kinematics.home_q,
+                                            self.kinematics.home_rotation)
+            if not result.success or result.q is None:
+                rejected['ik_failure'] += 1
+                continue
+            try:
+                validate_target(self.model, self.joint_ids, self.kinematics.home_q, result.q)
+            except ValueError:
+                rejected['joint_limit'] += 1
+                continue
+            try:
+                check_motion(self.model, self.data, self.joint_ids, self.actuator_ids,
+                             self.kinematics, result, target)
+            except ValueError as exc:
+                rejected['collision' if 'collision' in str(exc).lower() else 'pose_check'] += 1
+                continue
+            return target, dict(attempts=attempt, rejections=dict(rejected))
+        raise RuntimeError(f"No validated random goal after {self.max_target_attempts} attempts; "
+                           f"rejections={dict(rejected)}")
+
     def compute_reward(self, achieved_goal, desired_goal, info=None):
-        """Dense reward in metres: -||achieved-desired||; also supports batches."""
+        """Goal-recomputable reward; safety flags are independent of desired_goal.
+
+        distance preserves 03-A units/behavior. safe_dense is dimensionless:
+        -min(distance / 20mm, 1) - (horizon+1)*is_safety_failure.
+        With undiscounted returns any safe episode is in [-horizon,0], while
+        any safety-failed episode is <=-(horizon+1). No success flag is reused
+        under goal relabeling. safe_dense requires info, also for batch calls.
+        """
         achieved, desired = np.asarray(achieved_goal), np.asarray(desired_goal)
         if (achieved.shape[-1:] != (3,) or desired.shape[-1:] != (3,)
                 or not np.isfinite(achieved).all() or not np.isfinite(desired).all()):
             raise ValueError("Expected finite XYZ goal arrays")
-        reward = -np.linalg.norm(achieved-desired, axis=-1)
+        distance = np.linalg.norm(achieved-desired, axis=-1)
+        if self.reward_mode == "distance":
+            reward = -distance
+        else:
+            if isinstance(info, dict):
+                flags = np.asarray(info.get('is_safety_failure', None))
+            elif info is not None:
+                records = np.asarray(info, dtype=object)
+                if not all(isinstance(record, dict) and 'is_safety_failure' in record for record in records.flat):
+                    raise ValueError("safe_dense requires is_safety_failure in every info record")
+                flags = np.array([record['is_safety_failure'] for record in records.flat]).reshape(records.shape)
+            else:
+                raise ValueError("safe_dense requires info with is_safety_failure")
+            if flags.dtype != np.bool_:
+                raise ValueError("is_safety_failure must contain boolean values")
+            flags = np.broadcast_to(flags, distance.shape)
+            reward = -np.minimum(distance/self.reward_distance_scale, 1)-(self.max_episode_steps+1)*flags
         return float(reward) if reward.ndim == 0 else reward
 
     def step(self, action):
@@ -198,7 +287,7 @@ class ReachEnv(gym.Env):
         if not valid_observation:
             info["orientation_error_rad"] = None
         info["physics_steps"] = 0 if cycle is None else cycle["physics_steps"]
-        return obs, self.compute_reward(obs["achieved_goal"], obs["desired_goal"]), terminated, truncated, info
+        return obs, self.compute_reward(obs["achieved_goal"], obs["desired_goal"], info), terminated, truncated, info
 
     def render(self):
         if self.render_mode is None:
@@ -207,7 +296,7 @@ class ReachEnv(gym.Env):
             raise RuntimeError("Environment is closed")
         obs = self._observation()
         return (f"t={self.data.time:.3f}s ee_world_m={obs['achieved_goal']} "
-                f"goal_world_m={obs['desired_goal']} distance_m={-self.compute_reward(obs['achieved_goal'], self._goal):.6f}")
+                f"goal_world_m={obs['desired_goal']} distance_m={np.linalg.norm(obs['achieved_goal']-self._goal):.6f}")
 
     def close(self):
         self._closed = True

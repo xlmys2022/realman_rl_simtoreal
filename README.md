@@ -1,6 +1,6 @@
 # realman_rl_simtoreal
 
-基于 MuJoCo 的睿尔曼机械臂仿真项目。长期目标是强化学习控制、抓取及 sim-to-real；当前已完成模型、控制、离线运动学验证，以及固定目标的最小 Gymnasium reaching 环境。尚未实现强化学习算法或训练。
+基于 MuJoCo 的睿尔曼机械臂仿真项目。长期目标是强化学习控制、抓取及 sim-to-real；当前已完成模型、控制、离线运动学验证，以及固定/随机局部目标的 Gymnasium reaching 环境和训练前基线评估。尚未实现强化学习算法或训练。
 
 实际模型为官方 **RML63II-6F-V**。它与目标实物 RML63-6F-V 的代际关系尚未核实。静态检查 URDF 保留相机支架转动关节，为 `nq=nv=7, nu=0`；新增动力学 MJCF 将相机刚性固定，为 `nq=nv=nu=6`。
 
@@ -139,9 +139,11 @@ python -I /home/mr-beaver/Documents/robot/realman_rl_simtoreal/scripts/compare_c
 
 ## 文件职责
 
-- `src/realman_rl_simtoreal/envs/reach_env.py`：固定目标、世界坐标增量动作、Gymnasium API及终止原因；不依赖厂家SDK或脚本。
+- `src/realman_rl_simtoreal/envs/reach_env.py`：固定/随机目标、世界坐标增量动作、奖励、Gymnasium API及终止原因；不依赖厂家SDK或脚本。
 - `scripts/smoke_reach_env.py`：无界面的固定动作演示及官方环境检查入口。
 - `tests/test_reach_env.py`：27项环境、执行器运动、固定周期、安全失败及无SDK验证。
+- `scripts/evaluate_reach_baselines.py`：配对目标种子的随机/规则策略、奖励反例及独立性能剖析。
+- `tests/test_reach_task.py`：22项随机目标、奖励一致性、失败处理、策略和API回归验证。
 - `src/realman_rl_simtoreal/simulation/model.py`：模型加载、检查、初始化、映射与可选重力补偿配置。
 - `src/realman_rl_simtoreal/simulation/control.py`：原有关节控制段、限位/接触检查与总驱动力审计。
 - `src/realman_rl_simtoreal/simulation/ee_control.py`：原有末端目标检查、碰撞预检、执行和误差。
@@ -183,7 +185,7 @@ python -I /home/mr-beaver/Documents/robot/realman_rl_simtoreal/scripts/compare_c
 
 静态 URDF 零位下仍报告 `base_link/link_1` 约 2.73 mm 的装配包络重叠。动力学 MJCF 仅排除该相邻装配对；其他非相邻自碰撞及环境碰撞保留，并有反例测试。相机固定在支架原始零角度，未修改官方原始 URDF 或 STL 尺寸。
 
-后续仍需核实实物版本、零位、惯量、碰撞几何和控制参数。当前只验证小范围关节/末端运动及固定目标环境；未实现强化学习、夹爪或真机通信，不自动上传 GitHub。
+后续仍需核实实物版本、零位、惯量、碰撞几何和控制参数。当前只验证小范围关节/末端运动及局部目标环境；未实现强化学习、夹爪或真机通信，不自动上传 GitHub。
 
 ## 最小 Gymnasium 环境（03-A）
 
@@ -213,7 +215,33 @@ with ReachEnv(render_mode="ansi") as env:
 
 复用原IK、51点路径预检和位置执行器；新增 `advance_control_cycle` 替代演示用整段控制，不等待稳态、不重置home。关节指令平均变化率上限10°/s并进行平滑插值，实际速度限制30°/s；仍保留home ±5°和10mm命令区域。正常step不改写实际qpos。
 
-当前仅支持无渲染和`ansi`文本render，没有环境内Viewer/RGB图像、目标随机化或正式训练。官方checker通过，保留无限观测边界及直接构造实例缺少注册spec的提示；文本render、重复close另有测试。完整API、安全原因和实测结果见 [REACH_ENV_VALIDATION.md](docs/validation/REACH_ENV_VALIDATION.md)。当前完整测试为112项（原85项＋新增27项）。
+当前仅支持无渲染和`ansi`文本render，没有环境内Viewer/RGB图像或正式训练。官方checker通过，保留无限观测边界及直接构造实例缺少注册spec的提示；文本render、重复close另有测试。03-A固定目标的完整API与历史结果见 [REACH_ENV_VALIDATION.md](docs/validation/REACH_ENV_VALIDATION.md)。03-B后的完整测试为134项（原112项＋新增22项）。
+
+## 随机目标与训练前验证（03-B）
+
+```python
+from realman_rl_simtoreal.envs.reach_env import ReachEnv
+
+with ReachEnv(target_mode="random") as env:
+    obs, info = env.reset(seed=42)
+    # 同一seed可复现；之后reset()不传seed可继续同一随机目标序列。
+```
+
+`target_mode="fixed"`是原默认模式，目标、动力学和米制距离奖励保持兼容。`target_mode="random"`默认使用`safe_dense`奖励；固定目标训练实验也应显式选择`reward_mode="safe_dense"`。旧`distance`奖励保留用于回归与诊断，不推荐用于训练，因为提前安全失败可能获得更高累计回报。
+
+默认随机候选是home周围3–5mm的体积均匀球壳，经过原全位姿IK、home ±5°、模型限位及51点路径碰撞检查后接受；仍保持home朝向。只使用Gymnasium的np_random，每次最多64次尝试，耗尽则明确报错。`target_radius`最多10mm，未扩大原控制实验区域。
+
+安全奖励为 `-min(distance / 0.020, 1) - (max_episode_steps + 1) * is_safety_failure`，无量纲。每步普通成本在[-1,0]；未折扣安全Episode总回报≥-H，安全失败总回报≤-(H+1)，避免提前失败的回报捷径。`compute_reward`在此模式下必须收到含布尔`is_safety_failure`的info，支持批量调用；不能复用旧目标的成功标记计算新目标奖励。
+
+```bash
+python -I /home/mr-beaver/Documents/robot/realman_rl_simtoreal/scripts/evaluate_reach_baselines.py --episodes 100 --profile
+```
+
+默认JSON输出到仓库`outputs/reach_baselines.json`，可用`--json PATH`指定；`--profile`另跑10个规则Episode，仅剖析step，不污染主要计时。两策略使用相同目标种子0–99。随机策略均匀采样整个动作Box；规则策略根据目标误差减去待执行命令量，并将动作向量范数限制为0.25，避免动态滞后造成命令过度累积。两者都只通过env.step运动，动作幅度分布不同是策略设计的一部分。
+
+本次成功率为随机11/100、规则100/100；平均Episode长度53.66/14.54步，平均回报-192.60246/-1.88148。两组无碰撞和数值失败。实测step均值约15ms，含reset和策略检查的交互速度约65–67步/秒，不按50ms仿真周期推算。命令边界、关节限制、IK和物理安全失败仍终止，超时截断；没有投影非法IK解或放宽安全阈值。
+
+可开始受限局部任务的小规模训练实验，但尚未训练或实现HER。未来HER需同步重算27维观测的目标相对字段、距离和成功终止条件，并保存独立安全标记。完整目标分布、失败统计、奖励推导、性能与限制见 [REACH_TASK_VALIDATION.md](docs/validation/REACH_TASK_VALIDATION.md)。
 
 ## 厂家离线 FK 对照（02-C1，可选 SDK）
 
