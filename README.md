@@ -1,6 +1,6 @@
 # realman_rl_simtoreal
 
-基于 MuJoCo 的睿尔曼机械臂仿真项目。长期目标是强化学习控制、抓取及 sim-to-real；当前已完成模型导入、静态检查、基础六关节位置控制，以及固定末端朝向的数值逆运动学和小幅末端控制。
+基于 MuJoCo 的睿尔曼机械臂仿真项目。长期目标是强化学习控制、抓取及 sim-to-real；当前已完成模型、控制、离线运动学验证，以及固定目标的最小 Gymnasium reaching 环境。尚未实现强化学习算法或训练。
 
 实际模型为官方 **RML63II-6F-V**。它与目标实物 RML63-6F-V 的代际关系尚未核实。静态检查 URDF 保留相机支架转动关节，为 `nq=nv=7, nu=0`；新增动力学 MJCF 将相机刚性固定，为 `nq=nv=nu=6`。
 
@@ -139,6 +139,9 @@ python -I /home/mr-beaver/Documents/robot/realman_rl_simtoreal/scripts/compare_c
 
 ## 文件职责
 
+- `src/realman_rl_simtoreal/envs/reach_env.py`：固定目标、世界坐标增量动作、Gymnasium API及终止原因；不依赖厂家SDK或脚本。
+- `scripts/smoke_reach_env.py`：无界面的固定动作演示及官方环境检查入口。
+- `tests/test_reach_env.py`：27项环境、执行器运动、固定周期、安全失败及无SDK验证。
 - `src/realman_rl_simtoreal/simulation/model.py`：模型加载、检查、初始化、映射与可选重力补偿配置。
 - `src/realman_rl_simtoreal/simulation/control.py`：原有关节控制段、限位/接触检查与总驱动力审计。
 - `src/realman_rl_simtoreal/simulation/ee_control.py`：原有末端目标检查、碰撞预检、执行和误差。
@@ -180,7 +183,37 @@ python -I /home/mr-beaver/Documents/robot/realman_rl_simtoreal/scripts/compare_c
 
 静态 URDF 零位下仍报告 `base_link/link_1` 约 2.73 mm 的装配包络重叠。动力学 MJCF 仅排除该相邻装配对；其他非相邻自碰撞及环境碰撞保留，并有反例测试。相机固定在支架原始零角度，未修改官方原始 URDF 或 STL 尺寸。
 
-后续仍需核实实物版本、零位、惯量、碰撞几何和控制参数。当前只验证小范围关节/末端运动；未实现任务环境、强化学习、夹爪或真机通信，不自动上传 GitHub。
+后续仍需核实实物版本、零位、惯量、碰撞几何和控制参数。当前只验证小范围关节/末端运动及固定目标环境；未实现强化学习、夹爪或真机通信，不自动上传 GitHub。
+
+## 最小 Gymnasium 环境（03-A）
+
+现有 editable 安装需要更新新增依赖（仅在 `realman_rl` 中执行）：
+
+```bash
+python -I -m pip install --no-build-isolation -e /home/mr-beaver/Documents/robot/realman_rl_simtoreal
+python -I /home/mr-beaver/Documents/robot/realman_rl_simtoreal/scripts/smoke_reach_env.py --check
+python -I /home/mr-beaver/Documents/robot/realman_rl_simtoreal/scripts/smoke_reach_env.py --action 0 0 0 --steps 10
+```
+
+使用 Gymnasium 1.4.0，无需训练框架。默认演示发出5次世界 +X 动作，再保持，目标是名义home位置 +X 5mm。`--json PATH` 保存完整结果；`--action DX DY DZ` 指定恒定归一化动作。
+
+```python
+import numpy as np
+from realman_rl_simtoreal.envs.reach_env import ReachEnv
+
+with ReachEnv(render_mode="ansi") as env:
+    obs, info = env.reset(seed=0)
+    obs, reward, terminated, truncated, info = env.step(np.array([1, 0, 0], dtype=np.float32))
+    print(env.render())
+```
+
+动作是 `Box(-1,1,(3,),float32)`，每轴默认缩放为1mm世界平移。动作累积到独立的命令参考，末端目标朝向固定为home。默认启用已有、受总关节力矩限制的重力补偿，可用 `gravity_compensation=False` 做基线实验。每个正常step为50ms，即25个2ms物理步；IK拒绝和安全故障可提前停止，info记录实际步数。
+
+观测为float64的Dict：`observation(27,)`包含q(6)、qvel(6)、实际末端(3)、目标减实际(3)、命令位置(3)、实际ctrl(6)；`achieved_goal(3,)`与`desired_goal(3,)`均为世界坐标米。奖励为负的实际目标距离（m），默认距离≤1mm成功。最多200步；成功或明确安全失败返回terminated，只有超时返回truncated。
+
+复用原IK、51点路径预检和位置执行器；新增 `advance_control_cycle` 替代演示用整段控制，不等待稳态、不重置home。关节指令平均变化率上限10°/s并进行平滑插值，实际速度限制30°/s；仍保留home ±5°和10mm命令区域。正常step不改写实际qpos。
+
+当前仅支持无渲染和`ansi`文本render，没有环境内Viewer/RGB图像、目标随机化或正式训练。官方checker通过，保留无限观测边界及直接构造实例缺少注册spec的提示；文本render、重复close另有测试。完整API、安全原因和实测结果见 [REACH_ENV_VALIDATION.md](docs/validation/REACH_ENV_VALIDATION.md)。当前完整测试为112项（原85项＋新增27项）。
 
 ## 厂家离线 FK 对照（02-C1，可选 SDK）
 
@@ -212,7 +245,7 @@ python -I /home/mr-beaver/Documents/robot/realman_rl_simtoreal/scripts/compare_i
 python -I -m unittest discover -s /home/mr-beaver/Documents/robot/realman_rl_simtoreal/tests -v
 ```
 
-主集是 9 个姿态 × 4 个初值，默认预热后每例计时 5 次；另测逐轴上下限附近、全解、连续小变化、不可达目标和独立的模型交叉诊断。`--repeats` 范围 1–20；完整结果默认保存到 `outputs/ik_comparison.json`，可用 `--json PATH` 指定位置。当前共有 85 项自动化测试（保留原75项，新增10项包与入口兼容测试）；缺少 SDK 时新增 17 项厂家 IK 测试跳过。
+主集是 9 个姿态 × 4 个初值，默认预热后每例计时 5 次；另测逐轴上下限附近、全解、连续小变化、不可达目标和独立的模型交叉诊断。`--repeats` 范围 1–20；完整结果默认保存到 `outputs/ik_comparison.json`，可用 `--json PATH` 指定位置。02-D时为85项测试，03-A新增27项后为112项；缺少SDK时17项厂家IK测试及9项厂家FK测试跳过。
 
 `realman_rl_simtoreal.vendor.realman_ik` 的 `RealManIK(model_limits, model="II", sensor="SF")` 复用 FK 会话，提供 `solve_ik(position_m, initial_q_rad, rotation_3x3)` 和 `solve_all(...)`。内部使用单位 wxyz 四元数、degree 关节输入，并检查返回码、六轴数量、有限值、双方限位和厂家 FK 残差。只有检查通过时才返回弧度 `q`，失败返回 `q=None`；全解仅允许整数 `2*pi` 等价表示转换，不做关节裁剪或模型零偏修正。
 
