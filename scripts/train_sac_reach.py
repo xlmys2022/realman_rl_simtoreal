@@ -17,23 +17,27 @@ from realman_rl_simtoreal.experiments.sac_reach import (
     save_checkpoint, asset_hashes, versions, write_json)
 
 
-def train(folder, *, timesteps=5000, seed=2026, eval_every=5000, eval_episodes=10, label='pilot'):
+def train(folder, *, timesteps=5000, seed=2026, eval_every=5000, eval_episodes=10, label='pilot',
+          environment=None, eval_seed_start=10000):
     folder = Path(folder).resolve()
     if folder.exists() and any(folder.iterdir()):
         raise ValueError('Run directory must be empty; never overwrite a previous experiment')
-    if min(timesteps, eval_every, eval_episodes) < 1 or seed < 0:
+    if min(timesteps, eval_every, eval_episodes) < 1 or min(seed,eval_seed_start) < 0:
         raise ValueError('Positive step/evaluation counts and nonnegative seed required')
     folder.mkdir(parents=True, exist_ok=True)
     torch.set_num_threads(1)
     torch.use_deterministic_algorithms(True)
-    env, transform = training_env(ENV_CONFIG, folder/'train.monitor.csv')
+    env_config = dict(ENV_CONFIG)
+    if environment is not None:
+        env_config.update(environment)
+    env, transform = training_env(env_config, folder/'train.monitor.csv')
     model = make_model(env, seed)
     model.set_logger(configure(str(folder/'sb3'), ['csv', 'json']))
     config = dict(schema=1, label=label, independent_from_scratch=True, seed=seed,
-                  policy='MultiInputPolicy', environment=ENV_CONFIG, sac=SAC_CONFIG,
+                  policy='MultiInputPolicy', environment=env_config, sac=SAC_CONFIG,
                   requested_timesteps=timesteps, torch_num_threads=1, deterministic_algorithms=True,
                   observation_transform=transform.config, reward_transform='none',
-                  validation_seeds=list(range(10_000, 10_000+eval_episodes)),
+                  validation_seeds=list(range(eval_seed_start, eval_seed_start+eval_episodes)),
                   evaluation_every_steps=eval_every, assets=asset_hashes(),
                   experiment_sources={str(p): hashlib.sha256(p.read_bytes()).hexdigest() for p in
                                       (Path(__file__).resolve(), Path(inspect.getfile(TrainingAudit)).resolve())},
@@ -69,7 +73,7 @@ def train(folder, *, timesteps=5000, seed=2026, eval_every=5000, eval_episodes=1
                 break
             started = perf_counter()
             evaluation = evaluate('sac', config['validation_seeds'], model=model, transform=transform,
-                                  config=ENV_CONFIG, gamma=model.gamma)
+                                  config=env_config, gamma=model.gamma)
             evaluation_wall += perf_counter()-started
             write_json(checkpoint/'evaluation.json', evaluation)
             row = dict(step=int(model.num_timesteps), training=audit.summary(),
@@ -114,12 +118,19 @@ def main():
     parser.add_argument('--eval-every', type=int, default=5000)
     parser.add_argument('--eval-episodes', type=int, default=10)
     parser.add_argument('--label', default='pilot')
+    parser.add_argument('--boundary-mode', choices=['terminate','reject_and_hold'], default='terminate')
+    parser.add_argument('--rejection-penalty',type=float,default=1.)
+    parser.add_argument('--eval-seed-start',type=int,default=10000)
     args = parser.parse_args()
-    if min(args.timesteps, args.eval_every, args.eval_episodes) <= 0 or args.seed < 0:
+    if (min(args.timesteps, args.eval_every, args.eval_episodes) <= 0 or min(args.seed,args.eval_seed_start) < 0
+            or not np.isfinite(args.rejection_penalty) or args.rejection_penalty<=0):
         parser.error('Positive counts and nonnegative seed required')
     try:
         result = train(args.run_dir, timesteps=args.timesteps, seed=args.seed, eval_every=args.eval_every,
-                       eval_episodes=args.eval_episodes, label=args.label)
+                       eval_episodes=args.eval_episodes, label=args.label,
+                       environment=None if args.boundary_mode=='terminate' else
+                       dict(boundary_mode=args.boundary_mode,rejection_penalty=args.rejection_penalty),
+                       eval_seed_start=args.eval_seed_start)
         print(f"status={result['status']} steps={result['total_timesteps']} error={result['error']}", flush=True)
         return 0 if result['status'] == 'completed' else 1
     except (ValueError, RuntimeError) as exc:

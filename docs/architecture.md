@@ -1,4 +1,4 @@
-# 工程结构与调用约定（02-D、03-A/B任务、03-C1/C2夹爪、04-A SAC）
+# 工程结构与调用约定（02-D、03-A/B任务、03-C1/C2夹爪、04-A/B SAC）
 
 本项目采用 src 布局：可复用能力通过安装后的 `realman_rl_simtoreal` 包调用；脚本负责命令行、实验流程及窗口展示。这样未来环境不必导入一个演示脚本来获得控制器，也不会顺带执行参数解析、打印或打开 Viewer。
 
@@ -33,7 +33,8 @@ realman_rl_simtoreal/
 │   └── experiments/
 │       ├── __init__.py
 │       ├── common.py                # 共享姿态、SE(3)、默认序列、规则策略、纯文本格式化
-│       └── sac_reach.py             # 可选SB3实验封装、固定缩放及只读审计
+│       ├── sac_reach.py             # 可选SB3实验封装、固定缩放及只读审计
+│       └── sac_diagnostics.py       # 冻结策略轨迹、命令/实际误差及soft TD诊断
 ├── scripts/
 │   ├── inspect_model.py
 │   ├── view_robot.py
@@ -50,8 +51,10 @@ realman_rl_simtoreal/
 │   ├── build_grasp_scene.py         # 从原齿面生成代理和动态方块场景
 │   ├── test_grasp_contact.py        # 接触、抬升、释放及失败对照/Viewer
 │   ├── train_sac_reach.py           # CPU SAC训练、5k分段及独立验证
-│   └── evaluate_sac_reach.py        # 加载模型、独立100目标和三策略对照
-├── tests/                          # 原177项及新增12项SAC集成测试
+│   ├── evaluate_sac_reach.py        # 加载模型、独立100目标和三策略对照
+│   ├── diagnose_sac_reach.py        # 冻结30k策略/规则对照、奖励反例、全Replay诊断
+│   └── compare_sac_boundary.py      # 单因素10k边界实验及冻结模型最终评估
+├── tests/                          # 207项；含默认行为fixture和18项04-B验证
 ├── docs/
 │   ├── architecture.md
 │   └── validation/                 # 历史实验、重构及环境验证
@@ -137,7 +140,7 @@ kin = Kinematics(model)
 
 03-B仅扩展envs与实验脚本，没有修改simulation核心或vendor。`target_mode="fixed"`和原米制`distance`奖励继续兼容；`target_mode="random"`在reset中通过np_random采样候选，用原IK、限位和路径预检接受目标，最多尝试64次，失败关闭当前episode并报错。默认候选球壳为home周围3–5mm；实际分布是通过检查后的条件分布，不代表完整工作空间。
 
-随机模式默认`safe_dense`奖励：归一化截断距离成本加独立的安全失败惩罚；step把含`is_safety_failure`的info传给compute_reward。可标量或批量重算，不读取原目标的成功标记。固定目标也可显式选safe_dense用于训练实验。命令边界仍终止，模型及物理安全阈值不变。
+随机模式默认`safe_dense`奖励：归一化截断距离成本加独立的安全失败惩罚；step把含`is_safety_failure`的info传给compute_reward。可标量或批量重算，不读取原目标的成功标记。固定目标也可显式选safe_dense用于训练实验。命令边界默认仍终止，04-B增加下述显式拒绝模式；模型及物理安全阈值不变。
 
 规则策略留在评估脚本，只读取27维观测中的位置/目标/命令参考，经env.step驱动；不访问真实关节状态或调用IK绕过环境。评估与独立cProfile记录属于实验层，不向环境info加入非确定性的墙钟计时。任务分布、奖励推导、性能以及未来HER需要重算的字段见 [03-B验证](validation/REACH_TASK_VALIDATION.md)。
 
@@ -198,3 +201,13 @@ TrainingAudit只读取原info、奖励、官方logger和网络；分开记录成
 scripts/train_sac_reach.py每5,000步返回一次learn、检查并独立评估，随后同一进程reset_num_timesteps=False继续；最终存储完整网络、官方Replay Buffer压缩文件、配置、原始日志及版本快照。每次CLI调用从头开始，Pilot与正式实验不合并计数，不实现不完整的跨进程续训。
 
 scripts/evaluate_sac_reach.py独立加载模型和保存的transform；原SI环境只接收合法动作。固定种子100–199在各策略下重置，验证物理目标逐项一致，输出逐Episode和汇总指标，绝不把API通过或训练回报上升当作策略成功。
+
+## 04-B 可选边界模式与冻结诊断
+
+`ReachEnv(boundary_mode="terminate")`保留原默认step/info/reward；改动前的fixture逐值验证。`reject_and_hold`仅将任务级10mm命令越界、模型限位内但超home ±5°的候选关节命令转为拒绝。保留Cartesian命令和最近已发出的合法joint ctrl，复用同一个`advance_control_cycle`推进25步；不修改simulation、IK或模型，也不裁剪候选解。实际关节越限、碰撞、数值、速度、力矩及姿态保护保持终止。拒绝本身不等于物理故障，两者可同时记录。
+
+此模式新增info字段`is_action_rejected`、`rejection_reason`和`boundary_mode`，普通safe_dense基底不变，额外扣`rejection_penalty * is_action_rejected`（默认1）。`compute_reward`要求提供拒绝布尔标记，支持标量和批量；旧distance模式的相同成本单位为0.020m。拒绝计入Episode步数、真实物理时间和超时，不存在无限免费尝试。HER尚未实现，不能仅替换goal就假定整个观测、奖励和终止逻辑已支持重标记。
+
+`experiments.sac_diagnostics`依赖可选SB3，不被envs/simulation导入。轨迹区分`desired_goal-achieved_goal`和`desired_goal-command_position`；使用独立FK读取ctrl对应位置。soft TD按安装版本计算`reward + gamma*(1-done*(1-timeout))*(min(target_Q)-alpha*log_pi)`，用Replay存储动作查询当前Critic。诊断在no_grad与隔离Torch RNG内运行，核验参数/训练计数不变，不把无熵任务回报当作soft Q的精确监督。记录完整数组，成功/物理故障/拒绝/timeout分别统计。
+
+`compare_sac_boundary.py`复用原train入口，从空buffer和原初始化seed训练B；冻结A的10kcheckpoint及未环回buffer前缀只用于评估/诊断。预先保存开发集、预算与复验规则，核验SAC参数、固定观测变换和目标逐项一致。`--final --b ...`只评估已保存模型，不训练。所有新输出写入独立空目录，04-A保持不变。当前开发集未改善成功率，未启动第二seed；最终0%/1%仍不构成可用策略，证据与假设见[04-B验证](validation/SAC_DIAGNOSTICS_VALIDATION.md)。

@@ -139,6 +139,7 @@ def summarize_episodes(episodes):
                 mean_success_steps=float(np.mean([e['length'] for e in successful])) if successful else None,
                 mean_final_distance_m=float(np.mean([e['final_distance_m'] for e in episodes])) if episodes else None,
                 safety_failures=sum(e['safety_failure'] for e in episodes),
+                rejected_actions=sum(e.get('rejected_actions',0) for e in episodes),
                 termination_counts={k: counts[k] for k in dict.fromkeys((*REASONS, *counts))})
 
 
@@ -160,6 +161,7 @@ def evaluate(name, seeds, *, model=None, transform=None, config=None, action_see
             goal, initial = obs['desired_goal'].copy(), obs['achieved_goal'].copy()
             rng = np.random.default_rng([action_seed, int(seed)])
             rewards, actions = [], []
+            rejected_actions, rejection_reasons = 0, Counter()
             physics_steps = 0
             for _ in range(env.max_episode_steps):
                 if name == 'sac':
@@ -180,6 +182,9 @@ def evaluate(name, seeds, *, model=None, transform=None, config=None, action_see
                 physics_steps += info['physics_steps']
                 rewards.append(float(reward))
                 actions.append(action.tolist())
+                rejected_actions += int(info.get('is_action_rejected', False))
+                if info.get('is_action_rejected', False):
+                    rejection_reasons[info['rejection_reason']] += 1
                 if terminated or truncated:
                     break
             episodes.append(dict(seed=int(seed), target_position_m=goal.tolist(), initial_position_m=initial.tolist(),
@@ -190,6 +195,7 @@ def evaluate(name, seeds, *, model=None, transform=None, config=None, action_see
                                  terminated=bool(terminated), truncated=bool(truncated),
                                  final_position_m=obs['achieved_goal'].tolist(), final_distance_m=info['distance_m'],
                                  min_reward=min(rewards), mean_action_norm=float(np.linalg.norm(actions, axis=1).mean()),
+                                 rejected_actions=rejected_actions, rejection_reasons=dict(rejection_reasons),
                                  near_zero_action_fraction=float(np.mean(np.linalg.norm(actions, axis=1) < .01)),
                                  physics_steps=physics_steps, episode_wall_s=perf_counter()-started, actions=actions))
     elapsed = perf_counter()-start_total
@@ -236,6 +242,9 @@ class TrainingAudit(BaseCallback):
         self.partial_rewards = []
         self.partial_actions = []
         self.abort_reason = None
+        self.rejected_actions = 0
+        self.rejection_reasons = Counter()
+        self.partial_rejections = 0
         self.wall_start = perf_counter()
 
     def _on_step(self):
@@ -247,6 +256,13 @@ class TrainingAudit(BaseCallback):
         self.partial_rewards.append(float(rewards[0]))
         self.partial_actions.append(float(np.linalg.norm(actions[0])))
         info = self.locals['infos'][0]
+        if info.get('is_action_rejected', False):
+            self.rejected_actions += 1
+            self.partial_rejections += 1
+            self.rejection_reasons[info['rejection_reason']] += 1
+            append_json(self.folder/'rejected_actions.jsonl',
+                        dict(step=int(self.num_timesteps), reason=info['rejection_reason'],
+                             reward=float(rewards[0]), physics_steps=int(info['physics_steps'])))
         for key in ('train/actor_loss', 'train/critic_loss', 'train/ent_coef'):
             value = self.model.logger.name_to_value.get(key)
             if value is not None and not np.isfinite(value):
@@ -263,9 +279,11 @@ class TrainingAudit(BaseCallback):
                        success=bool(info['is_success']), safety_failure=bool(info['is_safety_failure']),
                        final_distance_m=float(info['distance_m']), reason=info['termination_reason'],
                        min_reward=min(rewards), mean_action_norm=float(np.mean(self.partial_actions)))
+            row['rejected_actions'] = self.partial_rejections
             self.episodes.append(row)
             append_json(self.folder/'training_episodes.jsonl', row)
             self.partial_rewards, self.partial_actions = [], []
+            self.partial_rejections = 0
             tail = self.episodes[-100:]
             if len(tail) == 100 and all(e['safety_failure'] for e in tail) and np.mean([e['length'] for e in tail]) <= 2:
                 self.abort_reason = '100 consecutive safety-failed episodes of mean length <=2'
@@ -287,7 +305,9 @@ class TrainingAudit(BaseCallback):
 
     def summary(self):
         values = np.asarray(self.rewards)
-        return dict(**summarize_episodes(self.episodes), abort_reason=self.abort_reason,
+        summary = summarize_episodes(self.episodes)
+        summary.update(rejected_actions=self.rejected_actions,rejection_reasons=dict(self.rejection_reasons))
+        return dict(**summary, abort_reason=self.abort_reason,
                     transitions=len(values), partial_episode_steps=len(self.partial_rewards),
                     reward_distribution=dict(min=float(values.min()), median=float(np.median(values)),
                                              p01=float(np.percentile(values, 1)), p99=float(np.percentile(values, 99)),

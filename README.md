@@ -1,6 +1,6 @@
 # realman_rl_simtoreal
 
-基于 MuJoCo 的睿尔曼机械臂仿真项目。长期目标是强化学习控制、抓取及 sim-to-real；当前已完成模型、控制、离线运动学验证，以及固定/随机局部目标的 Gymnasium Reach 环境、夹爪接触实验和首次SB3 SAC训练。训练流程与策略表现分开验证，结果见下文04-A记录。
+基于 MuJoCo 的睿尔曼机械臂仿真项目。长期目标是强化学习控制、抓取及 sim-to-real；当前已完成模型、控制、离线运动学验证，以及固定/随机局部目标的 Gymnasium Reach 环境、夹爪接触实验和SB3 SAC训练/失败诊断。训练流程与策略表现分开验证，结果见下文04-A、04-B记录。
 
 实际模型为官方 **RML63II-6F-V**。它与目标实物 RML63-6F-V 的代际关系尚未核实。静态检查 URDF 保留相机支架转动关节，为 `nq=nv=7, nu=0`；新增动力学 MJCF 将相机刚性固定，为 `nq=nv=nu=6`。
 
@@ -362,3 +362,24 @@ python -I scripts/evaluate_sac_reach.py --model outputs/rl/sac_reach/my_formal/f
 本次实验结果、失败分类、奖励尺度与Critic/Q值分析见 [SAC_REACH_VALIDATION.md](docs/validation/SAC_REACH_VALIDATION.md)。少量步数测试只验接口和更新，不要求策略成功；训练回报和任务成功率分别报告。
 
 本次固定seed首次正式训练30,000步（独立于5k Pilot），实际29,900次更新，CPU约37.17步/秒。独立种子100–199：随机4/100、规则100/100、未训练SAC2/100、最终SAC1/100。最终SAC99次超时、无安全失败，平均末端误差6.713mm，**尚未学得可靠Reach策略**；回报改善主要伴随失败减少。保留了Critic乐观偏差和指令往复的证据，未加步数或修改奖励制造成功。原177加新增12项测试共189项通过；详细结果见上述验证报告。已保存产物为`outputs/rl/sac_reach/formal_seed2026/final/model.zip`及相邻配置。
+
+## SAC诊断与边界对照（04-B）
+
+原04-A模型、Replay Buffer、配置和失败报告全部保留。默认`boundary_mode="terminate"`与原行为一致；显式选择`reject_and_hold`时，仅拒绝超出10mm命令区域或home ±5°的候选命令，保持最近合法命令并继续一个50ms物理周期。非法模型限位/IK解、实际碰撞、速度、总驱动力、姿态及数值异常仍终止。拒绝不裁剪IK解、不修改实际qpos；默认增加1个普通距离成本单位，`compute_reward`通过info中的`is_action_rejected`标量/批量重算。
+
+只读重跑原30k诊断，或复现独立10k边界实验（输出目录必须为空，后者会从头训练）：
+
+```bash
+conda activate realman_rl
+python -I scripts/diagnose_sac_reach.py --out outputs/rl/sac_boundary/new_diagnosis
+python -I scripts/compare_sac_boundary.py --out outputs/rl/sac_boundary/new_seed2026
+```
+
+已有B模型的最终100目标评估无需训练：
+
+```bash
+python -I scripts/compare_sac_boundary.py --final --b outputs/rl/sac_boundary/controlled_seed2026/training/final/model.zip --out outputs/rl/sac_boundary/new_final_evaluation
+python -I -m unittest discover -s tests -v
+```
+
+原30k在20个开发目标上，动作朝实际目标的比例仅50.5%，相邻反向41.0%；全Replay中安全/成功终止样本的soft TD残差很大，未发现SB3接错终止观测或错误屏蔽timeout。新B从头训练10k、CPU约37.96步/秒；同预算A/B最终100目标成功率0%/1%，平均距离7.458/3.229mm，均无安全失败或拒绝。B降低了误差和往复，但仍不能可靠Reach；开发集均0/20，按预定标准没有追加第二seed或更多步数。原189加新增18项测试共207项通过。完整轨迹、TD公式/数组、奖励反例、限制及运行命令见 [SAC_DIAGNOSTICS_VALIDATION.md](docs/validation/SAC_DIAGNOSTICS_VALIDATION.md)。
