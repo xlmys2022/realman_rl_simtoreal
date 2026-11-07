@@ -42,8 +42,11 @@ class Gripper:
     open and close only select a target; normal motion never assigns qpos.
     """
 
-    def __init__(self, model, data):
+    def __init__(self, model, data, *, contact_policy=None):
         self.model, self.data = model, data
+        # Opt-in, scene-specific contact classification; the empty-gripper
+        # default retains its original strict 0.1mm collision check.
+        self.contact_policy = contact_policy
         self.joint_ids = np.array([model.joint(name).id for name in SIGNS])
         self.qadr = model.jnt_qposadr[self.joint_ids]
         self.vadr = model.jnt_dofadr[self.joint_ids]
@@ -132,15 +135,50 @@ class Gripper:
         ranges = m.jnt_range[self.joint_ids]
         require(np.all(q >= ranges[:, 0]-1e-4) and np.all(q <= ranges[:, 1]+1e-4), 'Gripper position limit exceeded')
         speed = float(np.max(np.abs(d.qvel[self.vadr])))
-        require(speed <= 1.001, 'Gripper speed exceeds the upstream 1 rad/s bound')
         self.peak_speed = max(self.peak_speed, speed)
+        require(speed <= 1.001, 'Gripper speed exceeds the upstream 1 rad/s bound')
         error = float(np.max(np.abs(q-self.signs*q[0])))
         self.max_mimic_error = max(self.max_mimic_error, error)
         require(error <= .001, 'Gripper mimic constraint drift exceeds .001 rad')
         for contact in d.contact:
             self.min_contact_distance = min(self.min_contact_distance, float(contact.dist))
-            require(np.isfinite(contact.dist) and contact.dist >= -.0001,
-                    f'Unexpected collision: {tuple(m.geom(int(i)).name for i in contact.geom)}, {contact.dist:.6g}m')
+            if self.contact_policy is None:
+                require(np.isfinite(contact.dist) and contact.dist >= -.0001,
+                        f'Unexpected collision: {tuple(m.geom(int(i)).name for i in contact.geom)}, {contact.dist:.6g}m')
+        if self.contact_policy is not None:
+            self.contact_policy.check(d)
+
+    def update_control(self):
+        """Update only the gripper reference; do not integrate physical time."""
+        m, d, aid = self.model, self.data, self.actuator_id
+        current = float(d.ctrl[aid])
+        require(np.isfinite(current) and 0 <= current <= MAX_ANGLE, 'Invalid gripper control reference')
+        d.ctrl[aid] = current+np.clip(self._target_angle-current, -.5*m.opt.timestep, .5*m.opt.timestep)
+
+    def observe_step(self):
+        """Audit one completed mj_step BEFORE anyone refreshes its force cache."""
+        m, d, aid = self.model, self.data, self.actuator_id
+        if self.arm_monitor is not None:
+            self.arm_monitor.observe(d)
+        else:
+            require(np.allclose(d.qfrc_passive, d.qfrc_damper+d.qfrc_spring+d.qfrc_fluid, rtol=0, atol=1e-9),
+                    'Unexpected passive force bypass')
+        self._check_state()
+        total = d.qfrc_actuator[m.jnt_dofadr[self.primary]]
+        limits = m.jnt_actfrcrange[self.primary]
+        gravity = d.qfrc_gravcomp[m.jnt_dofadr[self.primary]] if m.jnt_actgravcomp[self.primary] else 0
+        expected = np.clip(d.actuator_force[aid]+gravity, *limits)
+        require(limits[0]-1e-9 <= total <= limits[1]+1e-9 and abs(total-expected) < 1e-9,
+                'Gripper total drive composition/limit failure')
+        followers = self.joint_ids[self.joint_ids != self.primary]
+        vadr = m.jnt_dofadr[followers]
+        routed = np.where(m.jnt_actgravcomp[followers], d.qfrc_gravcomp[vadr], 0)
+        require(np.all(m.jnt_actfrclimited[followers]) and
+                np.allclose(d.qfrc_actuator[vadr],
+                            np.clip(routed, m.jnt_actfrcrange[followers, 0], m.jnt_actfrcrange[followers, 1]),
+                            rtol=0, atol=1e-9), 'Gripper follower total drive composition/limit failure')
+        self.peak_drive = max(self.peak_drive, abs(float(total)))
+        self.steps += 1
 
     def step(self, physics_steps=1):
         require(isinstance(physics_steps, (int, np.integer)) and not isinstance(physics_steps, bool)
@@ -149,27 +187,12 @@ class Gripper:
         self._check_state()
         expected_time = float(d.time)
         for _ in range(physics_steps):
-            current = float(d.ctrl[aid])
-            require(np.isfinite(current) and 0 <= current <= MAX_ANGLE, 'Invalid gripper control reference')
             # Conservative .5rad/s reference slew, below the URDF 1rad/s field.
-            d.ctrl[aid] = current+np.clip(self._target_angle-current, -.5*m.opt.timestep, .5*m.opt.timestep)
+            self.update_control()
             mujoco.mj_step(m, d)
             expected_time += m.opt.timestep
             require(abs(d.time-expected_time) < 1e-8, 'Simulation time reset unexpectedly')
-            if self.arm_monitor is not None:
-                self.arm_monitor.observe(d)
-            else:
-                require(np.allclose(d.qfrc_passive, d.qfrc_damper+d.qfrc_spring+d.qfrc_fluid, rtol=0, atol=1e-9),
-                        'Unexpected passive force bypass')
-            self._check_state()
-            total = d.qfrc_actuator[m.jnt_dofadr[self.primary]]
-            limits = m.jnt_actfrcrange[self.primary]
-            gravity = d.qfrc_gravcomp[m.jnt_dofadr[self.primary]] if m.jnt_actgravcomp[self.primary] else 0
-            expected = np.clip(d.actuator_force[aid]+gravity, *limits)
-            require(limits[0]-1e-9 <= total <= limits[1]+1e-9 and abs(total-expected) < 1e-9,
-                    'Gripper total drive composition/limit failure')
-            self.peak_drive = max(self.peak_drive, abs(float(total)))
-            self.steps += 1
+            self.observe_step()
             mujoco.mj_forward(m, d)
             self._check_state()
         return self.get_width()

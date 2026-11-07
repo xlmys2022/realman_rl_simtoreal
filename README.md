@@ -188,7 +188,7 @@ python -I /home/mr-beaver/Documents/robot/realman_rl_simtoreal/scripts/compare_c
 
 静态 URDF 零位下仍报告 `base_link/link_1` 约 2.73 mm 的装配包络重叠。动力学 MJCF 仅排除该相邻装配对；其他非相邻自碰撞及环境碰撞保留，并有反例测试。相机固定在支架原始零角度，未修改官方原始 URDF 或 STL 尺寸。
 
-后续仍需核实实物版本、零位、惯量、碰撞几何和控制参数。当前只验证小范围关节/末端运动及局部目标环境；未实现强化学习、夹爪或真机通信，不自动上传 GitHub。
+后续仍需核实实物版本、零位、惯量、碰撞几何和控制参数。当前只验证小范围关节/末端运动及局部目标环境；已增加独立夹爪接触实验，未实现强化学习或真机通信，不自动上传 GitHub。
 
 ## 最小 Gymnasium 环境（03-A）
 
@@ -274,7 +274,7 @@ print(gripper.get_width())
 gripper.close()           # 之后继续step才产生运动；open()选择最大模型开口
 ```
 
-独立`eg2_4c2.xml`默认带受限幅的重力补偿；组合模型用上面的load_model选项开启。低增益位置伺服不代表厂家20N夹持力，当前未验证不补偿夹爪的跟踪精度。Gripper.step和原关节控制函数都会推进共享物理时间，未来同步控制需选择统一推进流程，不能把两者顺序调用当作一次物理步。
+独立`eg2_4c2.xml`默认带受限幅的重力补偿；组合模型用上面的load_model选项开启。低增益位置伺服不代表厂家20N夹持力，当前未验证不补偿夹爪的跟踪精度。Gripper.step和原关节控制函数都会推进共享物理时间，03-C2同步控制请使用下文的advance_synchronized_cycle，不能把两者顺序调用当作一次物理步。
 
 ReachEnv的模型、动作、奖励及默认资源保持不变；本次未加入物体抓取、Pick环境、力控、真机通信或训练。
 
@@ -315,3 +315,22 @@ python -I -m unittest discover -s /home/mr-beaver/Documents/robot/realman_rl_sim
 厂家 Algo 使用进程全局配置，不支持并发会话；新建另一配置后旧会话会明确失败。全解是独立诊断，不会自动替代单解失败。当前 J5 边界失败和 MuJoCo 远初值局部失败均保留。
 
 退出码 0 表示实验完成且数值/失败处理审计通过，**不表示所有案例求解成功或两模型一致**；1 表示运行错误，2 表示重复性、成功解复核等审计异常。本程序不调用执行器或 `mj_step()`，不连接真机。IK 成功不保证运动路径无碰撞，厂家关节解不能作为当前 MuJoCo 控制器的可直接替换输入。
+
+## 动态方块接触与夹持（03-C2）
+
+独立场景 `assets/scenes/grasp_contact.xml` 增加20mm、10g的freejoint方块及倾斜支撑台，原机械臂/夹爪资产不变。指垫与目标的碰撞使用从原STL齿顶和凹槽底面提取的薄层代理，保留视觉网格及机器人/支撑台碰撞。组合场景nq=19、nv=18、nu=7；物体不补偿重力，也没有固定到夹爪。
+
+```bash
+conda activate realman_rl
+python -I /home/mr-beaver/Documents/robot/realman_rl_simtoreal/scripts/build_grasp_scene.py
+python -I /home/mr-beaver/Documents/robot/realman_rl_simtoreal/scripts/test_grasp_contact.py --case normal
+python -I /home/mr-beaver/Documents/robot/realman_rl_simtoreal/scripts/test_grasp_contact.py --case release --viewer
+python -I /home/mr-beaver/Documents/robot/realman_rl_simtoreal/scripts/test_grasp_contact.py --case all
+python -I -m unittest discover -s /home/mr-beaver/Documents/robot/realman_rl_simtoreal/tests -v
+```
+
+`--case`还支持`no_close`、`low_friction`、`heavy`、`hull`；`--no-lift`仅检查台面接触。`--json PATH`输出逐2ms标量及20Hz详细接触记录，默认写入Git忽略的`outputs/grasp_contact/results.json`。Viewer可用`--duration SECONDS`提前停止，结果会标记未完成。正常完成返回0；安全保护触发返回1。因此包含已知低摩擦/30g失败案例的`--case all`当前预期返回1，不能当作全案例成功。
+
+10g、指垫摩擦系数0.7时已验证真实接触、5mm法向抬升、2秒离台保持及降近台面后释放；不闭合时方块仍由台面支撑。低摩擦0.05和30g案例触发原mimic/速度保护，未放宽限制。当前177项测试通过，其中负例测试验证安全停止，**不代表所有物理案例夹持成功**。质量、安装、传动和控制均未实物标定，结果不代表真实EG2-4C2性能。
+
+同步控制使用`simulation.control.advance_synchronized_cycle`：同一周期更新机械臂和夹爪ctrl，再推进25个2ms物理步，总计50ms；不能顺序调用两个各推进25步的接口来替代。ReachEnv保持原接口。完整参数、接触力、失败过程、Viewer及局限见 [GRASP_CONTACT_VALIDATION.md](docs/validation/GRASP_CONTACT_VALIDATION.md)。

@@ -1,4 +1,4 @@
-# 工程结构与调用约定（02-D、03-A/B任务、03-C1夹爪）
+# 工程结构与调用约定（02-D、03-A/B任务、03-C1/C2夹爪）
 
 本项目采用 src 布局：可复用能力通过安装后的 `realman_rl_simtoreal` 包调用；脚本负责命令行、实验流程及窗口展示。这样未来环境不必导入一个演示脚本来获得控制器，也不会顺带执行参数解析、打印或打开 Viewer。
 
@@ -10,6 +10,7 @@
 realman_rl_simtoreal/
 ├── assets/robots/rml63/             # 原始及派生模型、mesh、来源、校验与许可证
 ├── assets/grippers/eg2_4c2/         # 官方EG2-4C2、独立模型与实验组合模型
+├── assets/scenes/grasp_contact.xml  # 独立动态方块/支撑台实验，不改变原资源
 ├── src/realman_rl_simtoreal/
 │   ├── __init__.py                  # 轻量包入口，无运行时初始化
 │   ├── paths.py                     # editable 源码仓库中的资源/输出路径
@@ -22,6 +23,7 @@ realman_rl_simtoreal/
 │   │   ├── model.py                 # 加载、模型检查、映射、初始化、纯重力诊断
 │   │   ├── control.py               # 原控制段/力审计及新增固定周期推进
 │   │   ├── gripper.py               # 米制宽度、mimic约束、独立执行器与物理推进
+│   │   ├── grasp_contact.py         # 独立实验的接触分类、力记录及载荷配置
 │   │   ├── ee_control.py            # 原有末端检查、碰撞预检、执行和误差
 │   │   └── kinematics.py            # 原有 FK、Jacobian、DLS IK
 │   ├── vendor/
@@ -43,8 +45,10 @@ realman_rl_simtoreal/
 │   ├── smoke_reach_env.py           # 无界面固定目标演示
 │   ├── evaluate_reach_baselines.py  # 随机/规则策略、奖励反例及独立性能剖析
 │   ├── build_gripper_model.py       # 校验并生成独立/组合模型
-│   └── demo_gripper.py              # 空载开合、带载保持与Viewer
-├── tests/                          # 原134项及新增19项夹爪测试
+│   ├── demo_gripper.py              # 空载开合、带载保持与Viewer
+│   ├── build_grasp_scene.py         # 从原齿面生成代理和动态方块场景
+│   └── test_grasp_contact.py        # 接触、抬升、释放及失败对照/Viewer
+├── tests/                          # 原153项及新增24项接触/同步控制测试
 ├── docs/
 │   ├── architecture.md
 │   └── validation/                 # 历史实验、重构及环境验证
@@ -137,7 +141,7 @@ kin = Kinematics(model)
 
 03-C1保持ReachEnv默认6轴场景不变，新增独立资源路径GRIPPER_SCENE。model.load_model按六个命名hinge和执行器建立映射，允许附件坐标；initialize仍使用模型home keyframe。编译前重力补偿遍历link_1后代（包括新载荷），只路由机器人joint，不影响无关场景body。Kinematics仍接收/返回六个机械臂角，Jacobian按六个dof列切片，使用独立MjData；碰撞预检保留输入数据中的附件qpos。没有把夹爪关节加入Reach动作。
 
-Gripper校验6个夹爪hinge、5条激活mimic和一个eg2_position，set_width/open/close只选目标，step只改该执行器ctrl并推进共享物理。实际开口由独立数据中的pad sites读取，不改实时状态/力缓存。机械臂控制仍只写原6个ctrl；两种推进函数各自都会过物理时间，未来并行运动需要统一调度，本次不新增Pick或完整控制抽象。
+Gripper校验6个夹爪hinge、5条激活mimic和一个eg2_position，set_width/open/close只选目标，step只改该执行器ctrl并推进共享物理。实际开口由独立数据中的pad sites读取，不改实时状态/力缓存。机械臂控制仍只写原6个ctrl；两种独立推进函数各自都会过物理时间；03-C2新增的同步周期见下文，仍不新增Pick或完整控制抽象。
 
 ee_site是原link_6原点；实验gripper_mount位于其+Z8mm；grasp_site是mount+Z147.530235mm的固定名义参考，真实指垫中心随开口运动。该装配与真实六维力/相机板栈、TCP和传动动力学尚未校准。转换、接触和限制见 [03-C1验证](validation/GRIPPER_VALIDATION.md)。
 
@@ -161,3 +165,16 @@ Viewer 的 X11 默认选择在 CLI 导入 MuJoCo/GLFW 前执行，显式 PYGLFW_
 | 力矩、质量、惯量、时间 | N·m、kg、kg·m²、s；报告字段标注角度/速度单位 |
 
 ee_site 仍是 link_6 原点，不是标定TCP。型号代际、传感器对应、原始惯量异常和模型差异继续保留。厂家IK边界失败及MuJoCo远初值失败没有被修复或隐藏。历史报告原文移动到 validation，历史代码路径描述当时的结构，当前入口以本文和README为准。
+
+
+## 03-C2 接触实验与同步物理周期
+
+`paths.GRASP_CONTACT_SCENE`只供独立接触实验使用。原ReachEnv、GRIPPER_SCENE及厂家模块保持原模型和接口。新增freejoint的7个qpos/6个qvel不能被六轴控制覆盖；模型加载/补偿仍按命名关节和link_1子树识别机器人，目标物体不在补偿子树。
+
+`Gripper.update_control()`只更新夹爪ctrl，`observe_step()`只审计刚完成的物理步；原`Gripper.step()`组合两者继续独立运行。`control.advance_synchronized_cycle(m,d,jids,aids,target,gripper,physics_steps=25)`验证共享model/data、原映射、±5°目标与每周期0.5°指令变化上限。循环顺序为：平滑更新六轴ctrl → 更新夹爪ctrl（原0.5rad/s上限）→ **一次mj_step** → 原ForceMonitor及夹爪总驱动力/状态审计 → 可选接触记录器 → mj_forward → 再次状态检查。没有live qpos赋值，没有多跑一个夹爪积分周期。
+
+`Gripper(contact_policy=None)`保留空载默认0.1mm碰撞阈值。独立场景显式传入`grasp_contact.ContactPolicy`，只对按geom/body识别的目标—左右指垫、目标—支撑台设置各自允许数值穿透；其余接触保持原阈值。机械臂/夹爪限位、速度、mimic、总驱动力及外力注入检查均保留。夹爪五个无伺服从动joint也检查补偿路由和总驱动力限幅。
+
+`ContactRecorder`在刷新实时力缓存前调用mj_contactForce，每2ms记录标量，20Hz及新接触类别首次出现时保存接触位置/坐标系力/世界系物体受力。姿态及当前指垫位置使用独立MjData；几何凹槽反例也只是独立初始化的forward诊断。该模块不导入脚本、厂家SDK或环境。
+
+实验脚本负责时序与Viewer：稳定→6秒慢闭合→台面保持→沿支撑法向5mm抬升→2秒离台保持；释放案例先降到名义1mm高度再慢开。运动仍由现有执行器产生。所有案例、负对照和失败原因详见validation/GRASP_CONTACT_VALIDATION.md，未引入抓取环境或训练逻辑。
