@@ -1,0 +1,110 @@
+{
+  "repository": "https://github.com/RealManRobot/rm_models",
+  "commit": "776c1a7dd668ba67bfb03636015c59c8ef6e1b43",
+  "files": [
+    {
+      "upstream_path": "thirdparty/Two-finger Electric Gripper.urdf/urdf/EG2-4C2.urdf",
+      "local_path": "EG2-4C2.urdf",
+      "size": 9001,
+      "sha256": "3202654541035fcaf438677366adffea6247ecb542e7d8bcbb643494ffb0aa43",
+      "git_blob_sha1": "62f3268ab2eb1df2d05b68eabba1f58c6b3b6e53",
+      "url": "https://raw.githubusercontent.com/RealManRobot/rm_models/776c1a7dd668ba67bfb03636015c59c8ef6e1b43/thirdparty/Two-finger%20Electric%20Gripper.urdf/urdf/EG2-4C2.urdf"
+    },
+    {
+      "upstream_path": "thirdparty/Two-finger Electric Gripper.urdf/urdf/EG2-4C2.csv",
+      "local_path": "EG2-4C2.csv",
+      "size": 3365,
+      "sha256": "23aaa2dbfd265a546315bc5ec671070d22f84f92a6ca1243c4190ec09ef0e5db",
+      "git_blob_sha1": "40d1fc1f909cabad9c9cc437c361e05a58c0b1fa",
+      "url": "https://raw.githubusercontent.com/RealManRobot/rm_models/776c1a7dd668ba67bfb03636015c59c8ef6e1b43/thirdparty/Two-finger%20Electric%20Gripper.urdf/urdf/EG2-4C2.csv"
+    },
+    {
+      "upstream_path": "thirdparty/Two-finger Electric Gripper.urdf/package.xml",
+      "local_path": "package.xml",
+      "size": 616,
+      "sha256": "19a5a81f73b22cb520ddddd5237942e1bc3dcb84d2eb2217709f9dfbafcbe3ac",
+      "git_blob_sha1": "f7eb83ab91b662071134ffe468875991b02c27f6",
+      "url": "https://raw.githubusercontent.com/RealManRobot/rm_models/776c1a7dd668ba67bfb03636015c59c8ef6e1b43/thirdparty/Two-finger%20Electric%20Gripper.urdf/package.xml"
+    },
+    {
+      "upstream_path": "LICENSE",
+      "local_path": "LICENSE",
+      "size": 556,
+      "sha256": "3b90eff737214780f85c57b20a69ae29abe05fc0b7053125c938367732776116",
+      "git_blob_sha1": "473abff121607d030875c08486a3c51dce8f7496",
+      "url": "https://raw.githubusercontent.com/RealManRobot/rm_models/776c1a7dd668ba67bfb03636015c59c8ef6e1b43/LICENSE"
+    },
+    {
+      "upstream_path": "thirdparty/Two-finger Electric Gripper.urdf/meshes/4C2_baselink.STL",
+      "local_path": "meshes/4C2_baselink.STL",
+      "size": 907184,
+      "sha256": "7043a98a1c6bc26c43329427b7e20231fd8da27a20a1e939a6f206f869c93a61",
+      "git_blob_sha1": "579ad79f32cd530792ebfbe0062ce7b44d78f1e6",
+      "url": "https://raw.githubusercontent.com/RealManRobot/rm_models/776c1a7dd668ba67bfb03636015c59c8ef6e1b43/thirdparty/Two-finger%20Electric%20Gripper.urdf/meshes/4C2_baselink.STL"
+    },
+    {
+      "upstream_path": "thirdparty/Two-finger Electric Gripper.urdf/meshes/4C2_Link1.STL",
+      "local_path": "meshes/4C2_Link1.STL",
+      "size": 30284,
+      "sha256": "d626d57cad00ce45637fc770c24659c10e1697c68869229fa3427802bc83fa56",
+      "git_blob_sha1": "e1297bb958e774c6f11464ee9b97ad9f5f8bd134",
+      "url": "https://raw.githubusercontent.com/RealManRobot/rm_models/776c1a7dd668ba67bfb03636015c59c8ef6e1b43/thirdparty/Two-finger%20Electric%20Gripper.urdf/meshes/4C2_Link1.STL"
+    },
+    {
+      "upstream_path": "thirdparty/Two-finger Electric Gripper.urdf/meshes/4C2_Link2.STL",
+      "local_path": "meshes/4C2_Link2.STL",
+      "size": 29884,
+      "sha256": "a908071c33672578474038897eb8268a8ca534858a6b2e9fd682e22e40cbd6d4",
+      "git_blob_sha1": "ad2238b800375ead81979ce1c8130574e34f2d6c",
+      "url": "https://raw.githubusercontent.com/RealManRobot/rm_models/776c1a7dd668ba67bfb03636015c59c8ef6e1b43/thirdparty/Two-finger%20Electric%20Gripper.urdf/meshes/4C2_Link2.STL"
+    },
+    {
+      "upstream_path": "thirdparty/Two-finger Electric Gripper.urdf/meshes/4C2_Link3.STL",
+      "local_path": "meshes/4C2_Link3.STL",
+      "size": 29884,
+      "sha256": "7fc3d839c23b4f845d4edf5d5704d81b4052b01805e70b3b11676c16a05a65ef",
+      "git_blob_sha1": "82e3221ab3cc99b765b70dac4af1ee2094c0a67d",
+      "url": "https://raw.githubusercontent.com/RealManRobot/rm_models/776c1a7dd668ba67bfb03636015c59c8ef6e1b43/thirdparty/Two-finger%20Electric%20Gripper.urdf/meshes/4C2_Link3.STL"
+    },
+    {
+      "upstream_path": "thirdparty/Two-finger Electric Gripper.urdf/meshes/4C2_Link4.STL",
+      "local_path": "meshes/4C2_Link4.STL",
+      "size": 30284,
+      "sha256": "e9248937221d905666ffd4cd5e8df97c9e1e96e5fcc10d438a427c1c06974c41",
+      "git_blob_sha1": "78eefb9e914a23762f945f565e2856c15096d53c",
+      "url": "https://raw.githubusercontent.com/RealManRobot/rm_models/776c1a7dd668ba67bfb03636015c59c8ef6e1b43/thirdparty/Two-finger%20Electric%20Gripper.urdf/meshes/4C2_Link4.STL"
+    },
+    {
+      "upstream_path": "thirdparty/Two-finger Electric Gripper.urdf/meshes/4C2_Link5.STL",
+      "local_path": "meshes/4C2_Link5.STL",
+      "size": 52484,
+      "sha256": "dc32d21cceffdd18eba238a6be09c89649eef3efc9e18ab4ba0b0ccdfdce6fb5",
+      "git_blob_sha1": "7cf9e3592ad15f591a40ea67f4794c91d21df4d8",
+      "url": "https://raw.githubusercontent.com/RealManRobot/rm_models/776c1a7dd668ba67bfb03636015c59c8ef6e1b43/thirdparty/Two-finger%20Electric%20Gripper.urdf/meshes/4C2_Link5.STL"
+    },
+    {
+      "upstream_path": "thirdparty/Two-finger Electric Gripper.urdf/meshes/4C2_Link6.STL",
+      "local_path": "meshes/4C2_Link6.STL",
+      "size": 52484,
+      "sha256": "f41c4aab68f158b8574766f0a111473e162259deff0cea2958c43664dea3bc1e",
+      "git_blob_sha1": "19047483fd77304f637babba27ab18402fb8464b",
+      "url": "https://raw.githubusercontent.com/RealManRobot/rm_models/776c1a7dd668ba67bfb03636015c59c8ef6e1b43/thirdparty/Two-finger%20Electric%20Gripper.urdf/meshes/4C2_Link6.STL"
+    },
+    {
+      "upstream_path": "thirdparty/北京因时INSPIRE-ROBOTS/Readme.txt",
+      "local_path": "Readme.txt",
+      "size": 523,
+      "sha256": "a6d971904ce485897cbbe8165c4682147f72bf9154f276d18cd7a6b71ee462cb",
+      "git_blob_sha1": "37959aa5e07ae07dcc1d13cbc6341c163fe094cc",
+      "url": "https://raw.githubusercontent.com/RealManRobot/rm_models/776c1a7dd668ba67bfb03636015c59c8ef6e1b43/thirdparty/%E5%8C%97%E4%BA%AC%E5%9B%A0%E6%97%B6INSPIRE-ROBOTS/Readme.txt"
+    },
+    {
+      "upstream_path": "thirdparty/北京因时INSPIRE-ROBOTS/RMU01020 V1.0.0 End Effector Adapter Plate EG2-4C2.pdf",
+      "local_path": "RMU01020 V1.0.0 End Effector Adapter Plate EG2-4C2.pdf",
+      "size": 116246,
+      "sha256": "b593687a5d48b2e3007fe57e5cd998ad7be6debe155a24a3b14dd3b4e8dbe6bb",
+      "git_blob_sha1": "56dcdba01a80ee018806ac63ffb29e8f58fc8e85",
+      "url": "https://raw.githubusercontent.com/RealManRobot/rm_models/776c1a7dd668ba67bfb03636015c59c8ef6e1b43/thirdparty/%E5%8C%97%E4%BA%AC%E5%9B%A0%E6%97%B6INSPIRE-ROBOTS/RMU01020%20V1.0.0%20End%20Effector%20Adapter%20Plate%20EG2-4C2.pdf"
+    }
+  ]
+}

@@ -25,6 +25,7 @@ def check_motion(model, data, joint_ids, actuator_ids, kin, result, target):
     # Discrete collision screening in calculation-only data. This is not a
     # continuous collision guarantee and does not account for tracking error.
     probe = mujoco.MjData(model)
+    probe.qpos[:] = data.qpos  # Preserve accessory configuration in combined models.
     start = data.qpos[kin.qadr].copy()
     max_rotation_drift = 0.0
     for alpha in np.linspace(0, 1, 51):

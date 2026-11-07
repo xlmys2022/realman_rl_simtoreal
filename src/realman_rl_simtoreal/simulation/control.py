@@ -146,6 +146,44 @@ class ControlCycleError(ValueError):
         self.summary = summary
 
 
+def advance_synchronized_cycle(model, data, joint_ids, actuator_ids, target, gripper, *,
+                               physics_steps=25, step_observer=None):
+    """Arm + gripper references, ONE integration per tick, shared safety audit.
+
+    Gripper owns its existing force/state checks and optional contact policy.
+    No segment settling, no reset, no extra integration by either controller.
+    Observers read the actual step's force cache before mj_forward.
+    """
+    require(gripper.model is model and gripper.data is data, 'Controllers must share model/data')
+    require(gripper.arm_monitor is not None
+            and np.array_equal(joint_ids, gripper.arm_monitor.jids)
+            and np.array_equal(actuator_ids, gripper.arm_monitor.aids), 'Wrong arm mapping')
+    require(isinstance(physics_steps, (int, np.integer)) and not isinstance(physics_steps, bool)
+            and physics_steps > 0, 'physics_steps must be a positive integer')
+    home = model.key_qpos[model.key('home').id, model.jnt_qposadr[joint_ids]]
+    target = validate_target(model, joint_ids, home, target)
+    start = data.ctrl[actuator_ids].copy()
+    validate_target(model, joint_ids, home, start)
+    command = start+np.clip(target-start, -np.deg2rad(.5), np.deg2rad(.5))
+    initial_time = float(data.time)
+    gripper._check_state()
+    for index in range(physics_steps):
+        alpha = (index+1)/physics_steps
+        alpha = alpha*alpha*(3-2*alpha)
+        data.ctrl[actuator_ids] = start+alpha*(command-start)
+        gripper.update_control()
+        mujoco.mj_step(model, data)
+        gripper.observe_step()
+        require(abs(data.time-(initial_time+(index+1)*model.opt.timestep)) < 1e-8,
+                'Simulation time reset unexpectedly')
+        if step_observer is not None:
+            step_observer(data)
+        mujoco.mj_forward(model, data)
+        gripper._check_state()
+    return dict(physics_steps=physics_steps, simulated_elapsed_s=float(data.time)-initial_time,
+                commanded_joint_target_rad=command.tolist())
+
+
 def advance_control_cycle(model, data, joint_ids, actuator_ids, target, *,
                           physics_steps=25, max_joint_delta=np.deg2rad(0.5),
                           max_joint_speed=np.deg2rad(30)):

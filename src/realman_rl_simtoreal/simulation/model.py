@@ -20,14 +20,24 @@ def load_model(path=SCENE, *, gravity_compensation=False):
         # Configure before compilation: merely editing body_gravcomp on an
         # already compiled baseline leaves its compiled gravity metadata disabled.
         spec = mujoco.MjSpec.from_file(path)
-        for name in (*[f"link_{i}" for i in range(1, 7)], "camera_rolink", "camera_link"):
-            spec.body(name).gravcomp = 1
-        for name in JOINTS:
-            spec.joint(name).actgravcomp = True
+        def on_arm(body):
+            while body is not None:
+                if body.name == "link_1":
+                    return True
+                body = body.parent
+            return False
+        # Include attached payloads, but never compensate unrelated scene bodies.
+        for body in spec.bodies:
+            if on_arm(body):
+                body.gravcomp = 1
+        for joint in spec.joints:
+            if on_arm(joint.parent):
+                joint.actgravcomp = True
         model = spec.compile()
     else:
         model = mujoco.MjModel.from_xml_path(path)
-    require((model.nq, model.nv, model.nu, model.njnt) == (6, 6, 6, 6), "Expected six arm hinges and six actuators")
+    require(model.nq >= 6 and model.nv >= 6 and model.nu >= 6 and model.njnt >= 6,
+            "Expected six named arm hinges and their actuators")
     joint_ids = np.array([model.joint(name).id for name in JOINTS])
     actuator_ids = np.array([model.actuator(f"position_{i}").id for i in range(1, 7)])
     for joint_id, actuator_id in zip(joint_ids, actuator_ids):

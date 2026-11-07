@@ -1,0 +1,162 @@
+<?xml version='1.0' encoding='utf-8'?>
+<mujoco model="RML63II-6F-V + EG2-4C2 experimental aligned 8mm adapter">
+  <!--Experimental assembly, not a verified 6F-V stack; see gripper SOURCE.md.-->
+  <compiler angle="radian" inertiafromgeom="false" fusestatic="false" />
+  <asset>
+    <mesh name="base_link" content_type="model/stl" file="../../robots/rml63/upstream/meshes/base_link.STL" />
+    <mesh name="link_1" content_type="model/stl" file="../../robots/rml63/upstream/meshes/link_1.STL" />
+    <mesh name="link_2" content_type="model/stl" file="../../robots/rml63/upstream/meshes/link_2.STL" />
+    <mesh name="link_3" content_type="model/stl" file="../../robots/rml63/upstream/meshes/link_3.STL" />
+    <mesh name="link_4" content_type="model/stl" file="../../robots/rml63/upstream/meshes/link_4.STL" />
+    <mesh name="link_5" content_type="model/stl" file="../../robots/rml63/upstream/meshes/link_5.STL" />
+    <mesh name="link_6" content_type="model/stl" file="../../robots/rml63/upstream/meshes/link_6.STL" />
+    <mesh name="camera_rolink" content_type="model/stl" file="../../robots/rml63/upstream/meshes/camera_rolink.STL" />
+    <mesh name="camera_link" content_type="model/stl" file="../../robots/rml63/upstream/meshes/camera_link.STL" />
+    <mesh name="4C2_baselink" content_type="model/stl" file="upstream/meshes/4C2_baselink.STL" />
+    <mesh name="4C2_Link1" content_type="model/stl" file="upstream/meshes/4C2_Link1.STL" />
+    <mesh name="4C2_Link5" content_type="model/stl" file="upstream/meshes/4C2_Link5.STL" />
+    <mesh name="4C2_Link2" content_type="model/stl" file="upstream/meshes/4C2_Link2.STL" />
+    <mesh name="4C2_Link3" content_type="model/stl" file="upstream/meshes/4C2_Link3.STL" />
+    <mesh name="4C2_Link4" content_type="model/stl" file="upstream/meshes/4C2_Link4.STL" />
+    <mesh name="4C2_Link6" content_type="model/stl" file="upstream/meshes/4C2_Link6.STL" />
+  </asset>
+  <worldbody>
+    <body name="base_link" pos="0 0 0" quat="1 0 0 0">
+      <inertial pos="0.0014212999999999999 -0.00010164 0.050087" quat="0.64722492819260102 -0.013186483155540807 -0.0089008944788390634 0.76213304813893834" mass="1.8620000000000001" diaginertia="0.0010169494122416194 0.00099618314479399438 0.00067901744296438823" />
+      <geom quat="1 0 0 0" type="mesh" contype="0" conaffinity="0" group="1" rgba="1 1 1 1" density="0" mesh="base_link" name="base_link_visual" />
+      <geom quat="1 0 0 0" type="mesh" rgba="1 1 1 1" mesh="base_link" name="base_link_collision" />
+      <body name="link_1" pos="0 0 0.17199999999999999" quat="1 0 0 0">
+        <inertial pos="-0.068442000000000003 -0.023913 -0.0069379999999999997" quat="-0.30171193088010134 0.80877474267000493 -0.16178620614269434 0.4782034607629117" mass="1.837" diaginertia="0.0043138196044419236 0.004190840751815748 0.0016910526437423224" />
+        <joint name="joint_1" range="-3.1059999999999999 3.1059999999999999" actuatorfrcrange="-60 60" axis="0 0 1" pos="0 0 0" damping="1" />
+        <geom quat="1 0 0 0" type="mesh" contype="0" conaffinity="0" group="1" rgba="1 1 1 1" density="0" mesh="link_1" name="link_1_visual" />
+        <geom quat="1 0 0 0" type="mesh" rgba="1 1 1 1" mesh="link_1" name="link_1_collision" />
+        <body name="link_2" pos="-0.085999999999999993 0 0" quat="-0.49960351617505555 0.50039800481790808 0.4996016781071802 0.50039616968185019">
+          <inertial pos="0.16669999999999999 -1.9999999999999999e-06 -0.092590000000000006" quat="3.2248833955417222e-05 0.70516868048536696 6.0512321502947941e-05 0.7090395809549721" mass="2.0059999999999998" diaginertia="0.03097281829247165 0.03061853704133129 0.0014646266661970987" />
+          <joint name="joint_2" range="-3.1059999999999999 3.1059999999999999" actuatorfrcrange="-60 60" axis="0 0 1" pos="0 0 0" damping="1" />
+          <geom pos="0 0 0" quat="1 0 0 0" type="mesh" contype="0" conaffinity="0" group="1" rgba="1 1 1 1" density="0" mesh="link_2" name="link_2_visual" />
+          <geom pos="0 0 0" quat="1 0 0 0" type="mesh" rgba="1 1 1 1" mesh="link_2" name="link_2_collision" />
+          <body name="link_3" pos="0.38 0 0" quat="0.70710548251123628 0 0 0.70710807985947355">
+            <inertial pos="0.033398999999999998 -0.029498 -0.017697000000000001" quat="0.804309559614379 0.4711226765839418 0.2985543615758593 0.2049264480376802" mass="1.9610000000000001" diaginertia="0.0061621609684485226 0.0059645178445751597 0.0016431521869763174" />
+            <joint name="joint_3" range="-3.1059999999999999 2.5306999999999999" actuatorfrcrange="-30 30" axis="0 0 1" pos="0 0 0" damping="0.5" />
+            <geom pos="0 0 0" quat="1 0 0 0" type="mesh" contype="0" conaffinity="0" group="1" rgba="1 1 1 1" density="0" mesh="link_3" name="link_3_visual" />
+            <geom pos="0 0 0" quat="1 0 0 0" type="mesh" rgba="1 1 1 1" mesh="link_3" name="link_3_collision" />
+            <body name="link_4" pos="0.069000000000000006 -0.40500000000000003 0" quat="0.70710548251123628 0.70710807985947355 0 0">
+              <inertial pos="0 -0.035177 -0.18440000000000001" quat="0.70000475061068435 0.09926747660923313 -0.099303234313037725 0.70019867528086643" mass="1.2010000000000001" diaginertia="0.010710430135207918 0.010697086000312307 0.00060801786447977452" />
+              <joint name="joint_4" range="-3.1059999999999999 3.1059999999999999" actuatorfrcrange="-30 30" axis="0 0 1" pos="0 0 0" damping="0.2" />
+              <geom type="mesh" contype="0" conaffinity="0" group="1" rgba="1 1 1 1" density="0" mesh="link_4" name="link_4_visual" />
+              <geom type="mesh" rgba="1 1 1 1" mesh="link_4" name="link_4_collision" />
+              <body name="link_5" quat="-2.5973434669646147e-06 -2.5973530075574148e-06 0.70710807985470325 0.70710548250646599" pos="0 0 0">
+                <inertial pos="-3.1000000000000001e-05 0.030145999999999999 -0.012341" quat="0.55680606023733514 0.83019818683553914 -0.023173054340430717 0.014177143947128358" mass="1.026" diaginertia="0.0016439986490100879 0.0016094078496641177 0.00051602350132579707" />
+                <joint name="joint_5" range="-3.1059999999999999 3.1059999999999999" actuatorfrcrange="-10 10" axis="0 0 1" pos="0 0 0" damping="0.1" />
+                <geom quat="1 0 0 0" type="mesh" contype="0" conaffinity="0" group="1" rgba="1 1 1 1" density="0" mesh="link_5" name="link_5_visual" />
+                <geom quat="1 0 0 0" type="mesh" rgba="1 1 1 1" mesh="link_5" name="link_5_collision" />
+                <body name="link_6" pos="0 0.1666 0" quat="-2.5973434669646147e-06 -2.5973530075574148e-06 0.70710807985470325 0.70710548250646599">
+                  <inertial pos="-0.00048099999999999998 0.00036499999999999998 -0.010605" quat="0.61292988070395105 0.34863437435624828 -0.61480652632800559 0.35324774527512837" mass="0.248" diaginertia="6.4289047921243004e-05 4.3290700170382387e-05 3.6176251908374694e-05" />
+                  <joint name="joint_6" range="-6.2800000000000002 6.2800000000000002" actuatorfrcrange="-10 10" axis="0 0 1" pos="0 0 0" damping="0.05" />
+                  <geom quat="1 0 0 0" type="mesh" contype="0" conaffinity="0" group="1" rgba="1 1 1 1" density="0" mesh="link_6" name="link_6_visual" />
+                  <geom quat="1 0 0 0" type="mesh" rgba="1 1 1 1" mesh="link_6" name="link_6_collision" />
+                  <body name="camera_rolink" pos="0.044999999999999998 -0.002 -0.065299999999999997" quat="-0.50000367319498396 -0.49999632678477729 0.50000183659580544 -0.49999816339070208">
+                    <inertial pos="0.010432 -0.036653999999999999 -0.0024431000000000001" quat="0.99993443400813986 0.004126236708124246 0.00010100604212446535 0.010681369445402053" mass="0.21281" diaginertia="0.00015933788061975744 0.00014208964273480649 3.1687476645436198e-05" />
+                    <geom quat="1 0 0 0" type="mesh" contype="0" conaffinity="0" group="1" rgba="0.89804 0.91765 0.92941 1" density="0" mesh="camera_rolink" name="camera_rolink_visual" />
+                    <geom quat="1 0 0 0" type="mesh" rgba="0.89804 0.91765 0.92941 1" mesh="camera_rolink" name="camera_rolink_collision" />
+                    <body name="camera_link" pos="0.029780000000000001 -0.0395 -0.034500000000000003" quat="0.70710737443015548 -1.1552554146088134e-06 0.70710618794055435 -1.1552554146088134e-06">
+                      <inertial pos="-0.036170000000000001 1.9588e-08 -6.5010000000000003e-05" quat="-1.9147409241471181e-07 0.70710687951657314 1.9146977875417193e-07 0.70710668285645961" mass="9.2946000000000001e-05" diaginertia="4.9796690000003699e-08 4.7494000000013289e-08 2.3026999999830737e-09" />
+                      <geom pos="0 0 0" quat="1 0 0 0" type="mesh" contype="0" conaffinity="0" group="1" rgba="0.75294 0.75294 0.75294 1" density="0" mesh="camera_link" name="camera_link_visual" />
+                      <geom pos="0 0 0" quat="1 0 0 0" type="mesh" rgba="0.75294 0.75294 0.75294 1" mesh="camera_link" name="camera_link_collision" />
+                    </body>
+                  </body>
+                  <site name="ee_site" pos="0 0 0" quat="1 0 0 0" type="sphere" size="0.008" rgba="0.1 0.9 0.2 1" group="3" />
+                  <body name="eg2_experimental_adapter">
+                    <inertial pos="0 0 .004" mass="0.011" diaginertia="2.2923541666666664e-06 2.2923541666666664e-06 4.4673749999999997e-06" />
+                    <geom name="eg2_adapter_proxy" type="cylinder" pos="0 0 .004" size=".0285 .004" rgba=".2 .3 .5 1" />
+                    <body name="4C2_baselink" pos="0 0 .008" quat="1 0 0 0">
+                      <inertial pos="1.5645e-05 -4.1837999999999997e-06 0.037999999999999999" quat="0.70710662651187639 -0.00026497109290642081 -0.00018740253998228385 0.70710686138207102" mass="0.072633000000000003" diaginertia="6.0883000500039402e-05 5.095001294156332e-05 1.9329986558397378e-05" />
+                      <geom quat="1 0 0 0" type="mesh" contype="0" conaffinity="0" group="1" rgba="0.75294 0.75294 0.75294 1" density="0" mesh="4C2_baselink" name="4C2_baselink_visual" />
+                      <geom quat="1 0 0 0" type="mesh" rgba="0.75294 0.75294 0.75294 1" mesh="4C2_baselink" name="4C2_baselink_collision" friction=".7 .005 .0001" />
+                      <body name="4C2_Link1" pos="-0.040000000000000001 -0.0089999999999999993 0.079000000000000001" quat="1 0 0 0">
+                        <inertial pos="0.0087668999999999993 0.0089999999999999993 0.013991999999999999" quat="0.96109411248734977 -1.6914907875449417e-12 0.27622111965263185 4.3409026313878121e-13" mass="0.0024291999999999998" diaginertia="6.6775114957963208e-07 5.7398000000000022e-07 1.1032885042036801e-07" />
+                        <joint name="4C2_Joint1" range="0 0.81999999999999995" actuatorfrcrange="-.2 .2" axis="0 -1 0" pos="0 0 0" damping=".0001" />
+                        <geom type="mesh" contype="0" conaffinity="0" group="1" rgba="0.75294 0.75294 0.75294 1" density="0" mesh="4C2_Link1" name="4C2_Link1_visual" />
+                        <geom type="mesh" rgba="0.75294 0.75294 0.75294 1" mesh="4C2_Link1" name="4C2_Link1_collision" friction=".7 .005 .0001" />
+                        <body name="4C2_Link5" pos="0.0223 0.0030000000000000001 0.035590999999999998" quat="1 0 0 0">
+                          <inertial pos="0.011864 0.0060000000000000001 0.011367" quat="0.9907108924472865 -8.3919447106777217e-07 0.13598502696354323 -5.2269849335215872e-06" mass="0.0045068" diaginertia="5.3937709080178919e-07 5.3202999999919789e-07 1.7440290919901327e-07" />
+                          <joint name="4C2_Joint5" range="0 0.81999999999999995" actuatorfrcrange="-1 1" axis="0 1 0" pos="0 0 0" damping=".0001" />
+                          <geom quat="1 0 0 0" type="mesh" contype="0" conaffinity="0" group="1" rgba="0.75294 0.75294 0.75294 1" density="0" mesh="4C2_Link5" name="4C2_Link5_visual" />
+                          <geom quat="1 0 0 0" type="mesh" rgba="0.75294 0.75294 0.75294 1" mesh="4C2_Link5" name="4C2_Link5_collision" friction=".7 .005 .0001" />
+                          <site name="eg2_left_pad" pos="0.0177 0.0060000000000000001 0.027" size=".0015" group="3" rgba="0 1 1 1" />
+                        </body>
+                      </body>
+                      <body name="4C2_Link2" pos="-0.029999999999999999 -0.0089999999999999993 0.081000000000000003" quat="1 0 0 0">
+                        <inertial pos="0.0087434999999999995 0.0089999999999999993 0.013955" quat="0.96109443691417418 -2.0026890027366084e-12 0.27621999082728654 5.154406999063764e-13" mass="0.0038971000000000001" diaginertia="7.3789726440991226e-07 6.230499999999998e-07 1.402227355900874e-07" />
+                        <joint name="4C2_Joint2" range="0 0.81999999999999995" actuatorfrcrange="-1 1" axis="0 -1 0" pos="0 0 0" damping=".0001" />
+                        <geom quat="1 0 0 0" type="mesh" contype="0" conaffinity="0" group="1" rgba="0.75294 0.75294 0.75294 1" density="0" mesh="4C2_Link2" name="4C2_Link2_visual" />
+                        <geom quat="1 0 0 0" type="mesh" rgba="0.75294 0.75294 0.75294 1" mesh="4C2_Link2" name="4C2_Link2_collision" friction=".7 .005 .0001" />
+                      </body>
+                      <body name="4C2_Link3" pos="0.029999999999999999 -0.0089999999999999993 0.081000000000000003" quat="1 0 0 0">
+                        <inertial pos="-0.0087434999999999995 0.0089999999999999993 0.013955" quat="0.96109443691417418 -2.0211137857436042e-12 -0.27621999082728654 -8.3600255967702446e-13" mass="0.0038971000000000001" diaginertia="7.3789726440991226e-07 6.230499999999998e-07 1.402227355900874e-07" />
+                        <joint name="4C2_Joint3" range="-0.81999999999999995 0" actuatorfrcrange="-1 1" axis="0 -1 0" pos="0 0 0" damping=".0001" />
+                        <geom quat="1 0 0 0" type="mesh" contype="0" conaffinity="0" group="1" rgba="0.75294 0.75294 0.75294 1" density="0" mesh="4C2_Link3" name="4C2_Link3_visual" />
+                        <geom quat="1 0 0 0" type="mesh" rgba="0.75294 0.75294 0.75294 1" mesh="4C2_Link3" name="4C2_Link3_collision" friction=".7 .005 .0001" />
+                      </body>
+                      <body name="4C2_Link4" pos="0.040000000000000001 -0.0089999999999999993 0.079000000000000001" quat="1 0 0 0">
+                        <inertial pos="-0.0087668999999999993 0.0089999999999999993 0.013991999999999999" quat="0.96109411248734977 1.787492974498219e-12 -0.27622111965263185 -1.7015474484549539e-12" mass="0.0024291999999999998" diaginertia="6.6775114957963208e-07 5.7398000000000022e-07 1.1032885042036801e-07" />
+                        <joint name="4C2_Joint4" range="-0.81999999999999995 0" actuatorfrcrange="-1 1" axis="0 -1 0" pos="0 0 0" damping=".0001" />
+                        <geom type="mesh" contype="0" conaffinity="0" group="1" rgba="0.75294 0.75294 0.75294 1" density="0" mesh="4C2_Link4" name="4C2_Link4_visual" />
+                        <geom type="mesh" rgba="0.75294 0.75294 0.75294 1" mesh="4C2_Link4" name="4C2_Link4_collision" friction=".7 .005 .0001" />
+                        <body name="4C2_Link6" pos="-0.0223 0.0030000000000000001 0.035590999999999998" quat="1 0 0 0">
+                          <inertial pos="-0.011864 0.0060000000000000001 0.011367" quat="0.99071089244728627 8.3919563070244069e-07 -0.1359850269635432 -5.2270032830401911e-06" mass="0.0045068" diaginertia="5.3937709080178888e-07 5.3202999999919747e-07 1.7440290919901319e-07" />
+                          <joint name="4C2_Joint6" range="0 0.81999999999999995" actuatorfrcrange="-1 1" axis="0 -1 0" pos="0 0 0" damping=".0001" />
+                          <geom quat="1 0 0 0" type="mesh" contype="0" conaffinity="0" group="1" rgba="0.75294 0.75294 0.75294 1" density="0" mesh="4C2_Link6" name="4C2_Link6_visual" />
+                          <geom quat="1 0 0 0" type="mesh" rgba="0.75294 0.75294 0.75294 1" mesh="4C2_Link6" name="4C2_Link6_collision" friction=".7 .005 .0001" />
+                          <site name="eg2_right_pad" pos="-0.0177 0.0060000000000000001 0.027" size=".0015" group="3" rgba="0 1 1 1" />
+                        </body>
+                      </body>
+                      <site name="gripper_mount" pos="0 0 0" size=".004" group="3" rgba="1 .6 0 1" />
+                      <site name="grasp_site" pos="0 0 0.14753023521891842" size=".003" group="3" rgba="1 0 1 1" />
+                    </body>
+                  </body>
+                </body>
+              </body>
+            </body>
+          </body>
+        </body>
+      </body>
+    </body>
+    <light pos="0 -1 2" dir="0 0 -1" />
+    <geom name="floor" type="plane" size="2 2 0.1" group="2" rgba="0.25 0.3 0.35 1" friction="0.7 0.005 0.0001" />
+  </worldbody>
+  <option timestep="0.002" gravity="0 0 -9.81" integrator="implicitfast" />
+  <contact>
+    <exclude name="base_joint_assembly" body1="base_link" body2="link_1" />
+    <exclude name="eg2_internal_0" body1="4C2_baselink" body2="4C2_Link1" />
+    <exclude name="eg2_internal_1" body1="4C2_baselink" body2="4C2_Link2" />
+    <exclude name="eg2_internal_2" body1="4C2_baselink" body2="4C2_Link3" />
+    <exclude name="eg2_internal_3" body1="4C2_baselink" body2="4C2_Link4" />
+    <exclude name="eg2_internal_4" body1="4C2_Link1" body2="4C2_Link2" />
+    <exclude name="eg2_internal_5" body1="4C2_Link3" body2="4C2_Link4" />
+    <exclude name="eg2_internal_6" body1="4C2_Link2" body2="4C2_Link5" />
+    <exclude name="eg2_internal_7" body1="4C2_Link3" body2="4C2_Link6" />
+  </contact>
+  <actuator>
+    <position name="position_1" joint="joint_1" kp="500" kv="50" ctrllimited="true" ctrlrange="-3.1059999999999999 3.1059999999999999" forcelimited="true" forcerange="-60 60" />
+    <position name="position_2" joint="joint_2" kp="1000" kv="90" ctrllimited="true" ctrlrange="-3.1059999999999999 3.1059999999999999" forcelimited="true" forcerange="-60 60" />
+    <position name="position_3" joint="joint_3" kp="800" kv="70" ctrllimited="true" ctrlrange="-3.1059999999999999 2.5306999999999999" forcelimited="true" forcerange="-30 30" />
+    <position name="position_4" joint="joint_4" kp="200" kv="15" ctrllimited="true" ctrlrange="-3.1059999999999999 3.1059999999999999" forcelimited="true" forcerange="-30 30" />
+    <position name="position_5" joint="joint_5" kp="120" kv="10" ctrllimited="true" ctrlrange="-3.1059999999999999 3.1059999999999999" forcelimited="true" forcerange="-10 10" />
+    <position name="position_6" joint="joint_6" kp="80" kv="5" ctrllimited="true" ctrlrange="-6.2800000000000002 6.2800000000000002" forcelimited="true" forcerange="-10 10" />
+    <position name="eg2_position" joint="4C2_Joint1" kp=".05" kv=".002" ctrllimited="true" ctrlrange="0 .82" forcelimited="true" forcerange="-.2 .2" />
+  </actuator>
+  <keyframe>
+    <key name="home" qpos="0 -0.3490658503988659 0.52359877559829882 0 0.3490658503988659 0 0.81999999999999995 0.81999999999999995 0.81999999999999995 -0.81999999999999995 -0.81999999999999995 0.81999999999999995" ctrl="0 -0.3490658503988659 0.52359877559829882 0 0.3490658503988659 0 .82" />
+  </keyframe>
+  <equality>
+    <joint joint1="4C2_Joint5" joint2="4C2_Joint1" name="eg2_mimic_1" solref=".004 1" solimp=".999 .999 .001" />
+    <joint joint1="4C2_Joint2" joint2="4C2_Joint1" name="eg2_mimic_2" solref=".004 1" solimp=".999 .999 .001" />
+    <joint joint1="4C2_Joint3" joint2="4C2_Joint1" polycoef="0 -1 0 0 0" name="eg2_mimic_3" solref=".004 1" solimp=".999 .999 .001" />
+    <joint joint1="4C2_Joint4" joint2="4C2_Joint1" polycoef="0 -1 0 0 0" name="eg2_mimic_4" solref=".004 1" solimp=".999 .999 .001" />
+    <joint joint1="4C2_Joint6" joint2="4C2_Joint1" name="eg2_mimic_5" solref=".004 1" solimp=".999 .999 .001" />
+  </equality>
+  <visual>
+    <headlight ambient="0.3 0.3 0.3" diffuse="0.7 0.7 0.7" />
+  </visual>
+</mujoco>
