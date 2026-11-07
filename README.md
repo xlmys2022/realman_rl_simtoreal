@@ -143,6 +143,9 @@ python -I /home/mr-beaver/Documents/robot/realman_rl_simtoreal/scripts/compare_c
 - `scripts/smoke_reach_env.py`：无界面的固定动作演示及官方环境检查入口。
 - `tests/test_reach_env.py`：27项环境、执行器运动、固定周期、安全失败及无SDK验证。
 - `scripts/evaluate_reach_baselines.py`：配对目标种子的随机/规则策略、奖励反例及独立性能剖析。
+- `simulation/gripper.py`（位于src包）：米制开口、6个夹爪hinge/5条mimic验证、物理推进及限幅审计。
+- `scripts/build_gripper_model.py`、`scripts/demo_gripper.py`：可重复转换/实验装配，以及无界面或Viewer开合演示。
+- `assets/grippers/eg2_4c2/`：准确型号的官方原文件、清单、兼容模型、组合模型和来源限制。
 - `tests/test_reach_task.py`：22项随机目标、奖励一致性、失败处理、策略和API回归验证。
 - `src/realman_rl_simtoreal/simulation/model.py`：模型加载、检查、初始化、映射与可选重力补偿配置。
 - `src/realman_rl_simtoreal/simulation/control.py`：原有关节控制段、限位/接触检查与总驱动力审计。
@@ -242,6 +245,38 @@ python -I /home/mr-beaver/Documents/robot/realman_rl_simtoreal/scripts/evaluate_
 本次成功率为随机11/100、规则100/100；平均Episode长度53.66/14.54步，平均回报-192.60246/-1.88148。两组无碰撞和数值失败。实测step均值约15ms，含reset和策略检查的交互速度约65–67步/秒，不按50ms仿真周期推算。命令边界、关节限制、IK和物理安全失败仍终止，超时截断；没有投影非法IK解或放宽安全阈值。
 
 可开始受限局部任务的小规模训练实验，但尚未训练或实现HER。未来HER需同步重算27维观测的目标相对字段、距离和成功终止条件，并保存独立安全标记。完整目标分布、失败统计、奖励推导、性能与限制见 [REACH_TASK_VALIDATION.md](docs/validation/REACH_TASK_VALIDATION.md)。
+
+## EG2-4C2夹爪（03-C1）
+
+官方URDF明确名为EG2-4C2，原文件及固定提交、校验值和许可证保存在 [夹爪来源](assets/grippers/eg2_4c2/SOURCE.md)。它包含6个转动关节和5条mimic耦合，使用一个位置执行器真实推进物理开合；原机械臂六个执行器和ee_site不变。组合模型为nq=nv=12、nu=7、neq=5，不能按整个模型只有6自由度处理。
+
+**当前是实验装配和未标定动力学。** 上游质量仅94.2992g（产品参考231g），关节限位对应开口66.217357mm（产品参考70mm）；没有修改尺寸、限位或补齐猜测质量。额外8mm/11g安装板为图纸尺寸的圆柱代理，同轴贴合方向/深度及6F-V附件栈尚未实物核实。相机和原末端几何完整保留。新grasp_site是名义抓取参考，不是标定TCP，实际夹指中点还随开口高度变化。
+
+```bash
+python -I /home/mr-beaver/Documents/robot/realman_rl_simtoreal/scripts/build_gripper_model.py
+python -I /home/mr-beaver/Documents/robot/realman_rl_simtoreal/scripts/demo_gripper.py --cycles 2
+python -I /home/mr-beaver/Documents/robot/realman_rl_simtoreal/scripts/demo_gripper.py --viewer --cycles 1
+```
+
+Viewer用末端近景观察夹指；可用`--duration 5`提前退出，未完成时明确提示。`--json PATH`记录完整验收结果。无界面两轮开合、带载home保持、两夹指与外物接触力反例以及原134项回归均已验证；当前共153项测试。完整记录见 [GRIPPER_VALIDATION.md](docs/validation/GRIPPER_VALIDATION.md)。
+
+```python
+from realman_rl_simtoreal.paths import GRIPPER_SCENE
+from realman_rl_simtoreal.simulation.model import load_model, initialize
+from realman_rl_simtoreal.simulation.gripper import Gripper
+
+model, arm_joint_ids, arm_actuator_ids = load_model(GRIPPER_SCENE, gravity_compensation=True)
+data = initialize(model)
+gripper = Gripper(model, data)
+gripper.set_width(0.030)  # m；仅选择目标，不瞬移也不立即改ctrl
+gripper.step(1500)        # 3秒物理时间，原六轴保持已有ctrl
+print(gripper.get_width())
+gripper.close()           # 之后继续step才产生运动；open()选择最大模型开口
+```
+
+独立`eg2_4c2.xml`默认带受限幅的重力补偿；组合模型用上面的load_model选项开启。低增益位置伺服不代表厂家20N夹持力，当前未验证不补偿夹爪的跟踪精度。Gripper.step和原关节控制函数都会推进共享物理时间，未来同步控制需选择统一推进流程，不能把两者顺序调用当作一次物理步。
+
+ReachEnv的模型、动作、奖励及默认资源保持不变；本次未加入物体抓取、Pick环境、力控、真机通信或训练。
 
 ## 厂家离线 FK 对照（02-C1，可选 SDK）
 

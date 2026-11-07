@@ -1,4 +1,4 @@
-# 工程结构与调用约定（02-D重构，03-A/B环境与任务）
+# 工程结构与调用约定（02-D、03-A/B任务、03-C1夹爪）
 
 本项目采用 src 布局：可复用能力通过安装后的 `realman_rl_simtoreal` 包调用；脚本负责命令行、实验流程及窗口展示。这样未来环境不必导入一个演示脚本来获得控制器，也不会顺带执行参数解析、打印或打开 Viewer。
 
@@ -9,6 +9,7 @@
 ```text
 realman_rl_simtoreal/
 ├── assets/robots/rml63/             # 原始及派生模型、mesh、来源、校验与许可证
+├── assets/grippers/eg2_4c2/         # 官方EG2-4C2、独立模型与实验组合模型
 ├── src/realman_rl_simtoreal/
 │   ├── __init__.py                  # 轻量包入口，无运行时初始化
 │   ├── paths.py                     # editable 源码仓库中的资源/输出路径
@@ -20,6 +21,7 @@ realman_rl_simtoreal/
 │   │   ├── __init__.py
 │   │   ├── model.py                 # 加载、模型检查、映射、初始化、纯重力诊断
 │   │   ├── control.py               # 原控制段/力审计及新增固定周期推进
+│   │   ├── gripper.py               # 米制宽度、mimic约束、独立执行器与物理推进
 │   │   ├── ee_control.py            # 原有末端检查、碰撞预检、执行和误差
 │   │   └── kinematics.py            # 原有 FK、Jacobian、DLS IK
 │   ├── vendor/
@@ -39,8 +41,10 @@ realman_rl_simtoreal/
 │   ├── compare_fk.py
 │   ├── compare_ik.py
 │   ├── smoke_reach_env.py           # 无界面固定目标演示
-│   └── evaluate_reach_baselines.py  # 随机/规则策略、奖励反例及独立性能剖析
-├── tests/                          # 原112项及新增22项任务测试
+│   ├── evaluate_reach_baselines.py  # 随机/规则策略、奖励反例及独立性能剖析
+│   ├── build_gripper_model.py       # 校验并生成独立/组合模型
+│   └── demo_gripper.py              # 空载开合、带载保持与Viewer
+├── tests/                          # 原134项及新增19项夹爪测试
 ├── docs/
 │   ├── architecture.md
 │   └── validation/                 # 历史实验、重构及环境验证
@@ -130,6 +134,12 @@ kin = Kinematics(model)
 规则策略留在评估脚本，只读取27维观测中的位置/目标/命令参考，经env.step驱动；不访问真实关节状态或调用IK绕过环境。评估与独立cProfile记录属于实验层，不向环境info加入非确定性的墙钟计时。任务分布、奖励推导、性能以及未来HER需要重算的字段见 [03-B验证](validation/REACH_TASK_VALIDATION.md)。
 
 ## 安装与路径边界
+
+03-C1保持ReachEnv默认6轴场景不变，新增独立资源路径GRIPPER_SCENE。model.load_model按六个命名hinge和执行器建立映射，允许附件坐标；initialize仍使用模型home keyframe。编译前重力补偿遍历link_1后代（包括新载荷），只路由机器人joint，不影响无关场景body。Kinematics仍接收/返回六个机械臂角，Jacobian按六个dof列切片，使用独立MjData；碰撞预检保留输入数据中的附件qpos。没有把夹爪关节加入Reach动作。
+
+Gripper校验6个夹爪hinge、5条激活mimic和一个eg2_position，set_width/open/close只选目标，step只改该执行器ctrl并推进共享物理。实际开口由独立数据中的pad sites读取，不改实时状态/力缓存。机械臂控制仍只写原6个ctrl；两种推进函数各自都会过物理时间，未来并行运动需要统一调度，本次不新增Pick或完整控制抽象。
+
+ee_site是原link_6原点；实验gripper_mount位于其+Z8mm；grasp_site是mount+Z147.530235mm的固定名义参考，真实指垫中心随开口运动。该装配与真实六维力/相机板栈、TCP和传动动力学尚未校准。转换、接触和限制见 [03-C1验证](validation/GRIPPER_VALIDATION.md)。
 
 pyproject 使用 setuptools 的 src 包发现；基础和 vendor 可选依赖分别动态读取两份原锁定文件。默认安装不要求 Robotic_Arm；任何包初始化都不强制导入它，只有厂家适配器构造时才尝试加载。
 

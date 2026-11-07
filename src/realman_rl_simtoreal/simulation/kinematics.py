@@ -36,10 +36,10 @@ class Kinematics:
     def __init__(self, model):
         self.model = model
         self.joint_ids = np.array([model.joint(f"joint_{i}").id for i in range(1, 7)])
-        if (model.nq != 6 or model.nv != 6
+        if (model.nq < 6 or model.nv < 6
                 or not np.all(model.jnt_type[self.joint_ids] == mujoco.mjtJoint.mjJNT_HINGE)
                 or not np.all(model.jnt_limited[self.joint_ids])):
-            raise ValueError("Kinematics requires the six-hinge dynamics model")
+            raise ValueError("Kinematics requires six named, limited arm hinges")
         self.qadr = model.jnt_qposadr[self.joint_ids].copy()
         self.vadr = model.jnt_dofadr[self.joint_ids].copy()
         self.limits = model.jnt_range[self.joint_ids].copy()
