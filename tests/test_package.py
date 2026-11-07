@@ -94,9 +94,13 @@ for constructor in (lambda:RealManFK(),lambda:RealManIK(kin.limits)):
         self.assertEqual(installed['Requires-Python'], '>=3.11')
         requires = installed.get_all('Requires-Dist')
         self.assertEqual({r for r in requires if ';' not in r}, requirements('requirements.txt'))
-        optional = [r for r in requires if ';' in r]
+        all_optional = [r for r in requires if ';' in r]
+        optional = [r for r in all_optional if 'extra == "vendor"' in r]
         self.assertEqual({r.split(';')[0].strip() for r in optional}, requirements('requirements-vendor.txt'))
         self.assertTrue(all('extra == "vendor"' in r for r in optional))
+        rl_optional = [r for r in all_optional if 'extra == "rl"' in r]
+        self.assertEqual({r.split(';')[0].strip() for r in rl_optional}, requirements('requirements-rl.txt'))
+        self.assertEqual(len(optional)+len(rl_optional), len(all_optional))
         direct = json.loads(metadata.distribution('realman_rl_simtoreal').read_text('direct_url.json'))
         self.assertTrue(direct['dir_info']['editable'])
 

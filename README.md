@@ -1,6 +1,6 @@
 # realman_rl_simtoreal
 
-基于 MuJoCo 的睿尔曼机械臂仿真项目。长期目标是强化学习控制、抓取及 sim-to-real；当前已完成模型、控制、离线运动学验证，以及固定/随机局部目标的 Gymnasium reaching 环境和训练前基线评估。尚未实现强化学习算法或训练。
+基于 MuJoCo 的睿尔曼机械臂仿真项目。长期目标是强化学习控制、抓取及 sim-to-real；当前已完成模型、控制、离线运动学验证，以及固定/随机局部目标的 Gymnasium Reach 环境、夹爪接触实验和首次SB3 SAC训练。训练流程与策略表现分开验证，结果见下文04-A记录。
 
 实际模型为官方 **RML63II-6F-V**。它与目标实物 RML63-6F-V 的代际关系尚未核实。静态检查 URDF 保留相机支架转动关节，为 `nq=nv=7, nu=0`；新增动力学 MJCF 将相机刚性固定，为 `nq=nv=nu=6`。
 
@@ -188,7 +188,7 @@ python -I /home/mr-beaver/Documents/robot/realman_rl_simtoreal/scripts/compare_c
 
 静态 URDF 零位下仍报告 `base_link/link_1` 约 2.73 mm 的装配包络重叠。动力学 MJCF 仅排除该相邻装配对；其他非相邻自碰撞及环境碰撞保留，并有反例测试。相机固定在支架原始零角度，未修改官方原始 URDF 或 STL 尺寸。
 
-后续仍需核实实物版本、零位、惯量、碰撞几何和控制参数。当前只验证小范围关节/末端运动及局部目标环境；已增加独立夹爪接触实验，未实现强化学习或真机通信，不自动上传 GitHub。
+后续仍需核实实物版本、零位、惯量、碰撞几何和控制参数。当前已验证小范围关节/末端运动、局部目标环境及独立夹爪接触，并完成首次SAC训练；真机通信未实现，不自动上传 GitHub。
 
 ## 最小 Gymnasium 环境（03-A）
 
@@ -218,7 +218,7 @@ with ReachEnv(render_mode="ansi") as env:
 
 复用原IK、51点路径预检和位置执行器；新增 `advance_control_cycle` 替代演示用整段控制，不等待稳态、不重置home。关节指令平均变化率上限10°/s并进行平滑插值，实际速度限制30°/s；仍保留home ±5°和10mm命令区域。正常step不改写实际qpos。
 
-当前仅支持无渲染和`ansi`文本render，没有环境内Viewer/RGB图像或正式训练。官方checker通过，保留无限观测边界及直接构造实例缺少注册spec的提示；文本render、重复close另有测试。03-A固定目标的完整API与历史结果见 [REACH_ENV_VALIDATION.md](docs/validation/REACH_ENV_VALIDATION.md)。03-B后的完整测试为134项（原112项＋新增22项）。
+当前仅支持无渲染和`ansi`文本render，没有环境内Viewer/RGB图像；04-A训练由独立脚本实现。官方checker通过，保留无限观测边界及直接构造实例缺少注册spec的提示；文本render、重复close另有测试。03-A固定目标的完整API与历史结果见 [REACH_ENV_VALIDATION.md](docs/validation/REACH_ENV_VALIDATION.md)。03-B后的完整测试为134项（原112项＋新增22项）。
 
 ## 随机目标与训练前验证（03-B）
 
@@ -244,7 +244,7 @@ python -I /home/mr-beaver/Documents/robot/realman_rl_simtoreal/scripts/evaluate_
 
 本次成功率为随机11/100、规则100/100；平均Episode长度53.66/14.54步，平均回报-192.60246/-1.88148。两组无碰撞和数值失败。实测step均值约15ms，含reset和策略检查的交互速度约65–67步/秒，不按50ms仿真周期推算。命令边界、关节限制、IK和物理安全失败仍终止，超时截断；没有投影非法IK解或放宽安全阈值。
 
-可开始受限局部任务的小规模训练实验，但尚未训练或实现HER。未来HER需同步重算27维观测的目标相对字段、距离和成功终止条件，并保存独立安全标记。完整目标分布、失败统计、奖励推导、性能与限制见 [REACH_TASK_VALIDATION.md](docs/validation/REACH_TASK_VALIDATION.md)。
+03-B验证为受限局部训练准备了基线；04-A已进行首次SAC实验（见后文），尚未实现HER。未来HER需同步重算27维观测的目标相对字段、距离和成功终止条件，并保存独立安全标记。完整目标分布、失败统计、奖励推导、性能与限制见 [REACH_TASK_VALIDATION.md](docs/validation/REACH_TASK_VALIDATION.md)。
 
 ## EG2-4C2夹爪（03-C1）
 
@@ -334,3 +334,31 @@ python -I -m unittest discover -s /home/mr-beaver/Documents/robot/realman_rl_sim
 10g、指垫摩擦系数0.7时已验证真实接触、5mm法向抬升、2秒离台保持及降近台面后释放；不闭合时方块仍由台面支撑。低摩擦0.05和30g案例触发原mimic/速度保护，未放宽限制。当前177项测试通过，其中负例测试验证安全停止，**不代表所有物理案例夹持成功**。质量、安装、传动和控制均未实物标定，结果不代表真实EG2-4C2性能。
 
 同步控制使用`simulation.control.advance_synchronized_cycle`：同一周期更新机械臂和夹爪ctrl，再推进25个2ms物理步，总计50ms；不能顺序调用两个各推进25步的接口来替代。ReachEnv保持原接口。完整参数、接触力、失败过程、Viewer及局限见 [GRASP_CONTACT_VALIDATION.md](docs/validation/GRASP_CONTACT_VALIDATION.md)。
+
+## SAC Reach训练（04-A，可选CPU依赖）
+
+训练仅使用原六轴`ReachEnv`，不加载夹爪场景。环境、IK、奖励和安全规则不变。新增SB3/PyTorch独立可选依赖，基础仿真仍无需它们：
+
+```bash
+conda activate realman_rl
+python -I -m pip install --dry-run --extra-index-url https://download.pytorch.org/whl/cpu -c requirements.txt -r requirements-rl.txt
+python -I -m pip install --extra-index-url https://download.pytorch.org/whl/cpu -c requirements.txt -r requirements-rl.txt
+python -I -m pip install --no-deps --no-build-isolation -e .
+python -I -m pip check
+python -I scripts/train_sac_reach.py --run-dir outputs/rl/sac_reach/my_pilot --timesteps 5000 --label pilot
+```
+
+采用官方`SAC("MultiInputPolicy", ...)`、CPU单线程、Actor及双Critic各两层256/ReLU。27维observation按固定home和原实验范围缩放；两个goal字段保留米制以保持compute_reward接口，SB3在网络入口转为float32。原safe_dense奖励不缩放、不修改。所有偏移/尺度及环境/训练参数保存在config.json和observation_transform.json，无在线统计需要恢复。
+
+每5,000步用独立种子10000–10009评估并保存checkpoint，调用间在同一进程保留模型、Replay Buffer和环境状态。每次CLI启动都是独立实验，已有非空目录会拒绝覆盖；本次不提供隐式续训。正式30,000步命令须在Pilot检查后运行：
+
+```bash
+python -I scripts/train_sac_reach.py --run-dir outputs/rl/sac_reach/my_formal --timesteps 30000 --label formal
+python -I scripts/evaluate_sac_reach.py --model outputs/rl/sac_reach/my_formal/final/model.zip --episodes 100 --seed-start 100
+```
+
+最终模型旁必须保留config.json/observation_transform.json；评估脚本会使用保存的同一预处理、deterministic=True和独立环境，按相同100个目标对比随机、原规则及SAC策略。final/replay_buffer.pkl.gz为官方SB3 Replay Buffer的无损压缩存档，独立推理不需要读取它。训练日志、网络、配置和依赖快照全部放在已被Git忽略的outputs/rl/sac_reach下，不上传大文件。
+
+本次实验结果、失败分类、奖励尺度与Critic/Q值分析见 [SAC_REACH_VALIDATION.md](docs/validation/SAC_REACH_VALIDATION.md)。少量步数测试只验接口和更新，不要求策略成功；训练回报和任务成功率分别报告。
+
+本次固定seed首次正式训练30,000步（独立于5k Pilot），实际29,900次更新，CPU约37.17步/秒。独立种子100–199：随机4/100、规则100/100、未训练SAC2/100、最终SAC1/100。最终SAC99次超时、无安全失败，平均末端误差6.713mm，**尚未学得可靠Reach策略**；回报改善主要伴随失败减少。保留了Critic乐观偏差和指令往复的证据，未加步数或修改奖励制造成功。原177加新增12项测试共189项通过；详细结果见上述验证报告。已保存产物为`outputs/rl/sac_reach/formal_seed2026/final/model.zip`及相邻配置。

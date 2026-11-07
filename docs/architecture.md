@@ -1,4 +1,4 @@
-# 工程结构与调用约定（02-D、03-A/B任务、03-C1/C2夹爪）
+# 工程结构与调用约定（02-D、03-A/B任务、03-C1/C2夹爪、04-A SAC）
 
 本项目采用 src 布局：可复用能力通过安装后的 `realman_rl_simtoreal` 包调用；脚本负责命令行、实验流程及窗口展示。这样未来环境不必导入一个演示脚本来获得控制器，也不会顺带执行参数解析、打印或打开 Viewer。
 
@@ -32,7 +32,8 @@ realman_rl_simtoreal/
 │   │   └── realman_ik.py            # 可选离线 Algo IK、全解与复核
 │   └── experiments/
 │       ├── __init__.py
-│       └── common.py                # 共享姿态、SE(3)、默认序列、纯文本格式化
+│       ├── common.py                # 共享姿态、SE(3)、默认序列、规则策略、纯文本格式化
+│       └── sac_reach.py             # 可选SB3实验封装、固定缩放及只读审计
 ├── scripts/
 │   ├── inspect_model.py
 │   ├── view_robot.py
@@ -47,8 +48,10 @@ realman_rl_simtoreal/
 │   ├── build_gripper_model.py       # 校验并生成独立/组合模型
 │   ├── demo_gripper.py              # 空载开合、带载保持与Viewer
 │   ├── build_grasp_scene.py         # 从原齿面生成代理和动态方块场景
-│   └── test_grasp_contact.py        # 接触、抬升、释放及失败对照/Viewer
-├── tests/                          # 原153项及新增24项接触/同步控制测试
+│   ├── test_grasp_contact.py        # 接触、抬升、释放及失败对照/Viewer
+│   ├── train_sac_reach.py           # CPU SAC训练、5k分段及独立验证
+│   └── evaluate_sac_reach.py        # 加载模型、独立100目标和三策略对照
+├── tests/                          # 原177项及新增12项SAC集成测试
 ├── docs/
 │   ├── architecture.md
 │   └── validation/                 # 历史实验、重构及环境验证
@@ -56,6 +59,7 @@ realman_rl_simtoreal/
 ├── pyproject.toml
 ├── requirements.txt
 ├── requirements-vendor.txt
+├── requirements-rl.txt             # 可选CPU训练依赖
 ├── README.md
 └── .gitignore
 ```
@@ -129,7 +133,7 @@ kin = Kinematics(model)
 
 环境数据流：归一化世界XYZ动作 → 独立命令位置 → 以最近合法关节命令为初值的原DLS IK → 限位/位姿复核及51点碰撞预检 → 指令变化率限制与平滑 → 固定物理步 → 总力矩/数值/速度/碰撞审计 → 新状态下的观测和奖励。正常step不写实际qpos；reset通过官方keyframe重置状态。每个物理步先审计驱动力，再刷新运动学缓存，顺序与原控制要求相同。
 
-环境支持 `reset(seed=..., options=None)`、`step`、Dict观测、`compute_reward`、文本 `render` 及幂等 `close`。当前不自动注册Gymnasium ID，直接导入类实例化；没有复杂插件框架或训练器。完整形状、失败语义和控制参数见 [03-A验证](validation/REACH_ENV_VALIDATION.md)。
+环境支持 `reset(seed=..., options=None)`、`step`、Dict观测、`compute_reward`、文本 `render` 及幂等 `close`。当前不自动注册Gymnasium ID，直接导入类实例化；未将训练器嵌入环境；独立04-A训练入口见后文。完整形状、失败语义和控制参数见 [03-A验证](validation/REACH_ENV_VALIDATION.md)。
 
 03-B仅扩展envs与实验脚本，没有修改simulation核心或vendor。`target_mode="fixed"`和原米制`distance`奖励继续兼容；`target_mode="random"`在reset中通过np_random采样候选，用原IK、限位和路径预检接受目标，最多尝试64次，失败关闭当前episode并报错。默认候选球壳为home周围3–5mm；实际分布是通过检查后的条件分布，不代表完整工作空间。
 
@@ -178,3 +182,19 @@ ee_site 仍是 link_6 原点，不是标定TCP。型号代际、传感器对应�
 `ContactRecorder`在刷新实时力缓存前调用mj_contactForce，每2ms记录标量，20Hz及新接触类别首次出现时保存接触位置/坐标系力/世界系物体受力。姿态及当前指垫位置使用独立MjData；几何凹槽反例也只是独立初始化的forward诊断。该模块不导入脚本、厂家SDK或环境。
 
 实验脚本负责时序与Viewer：稳定→6秒慢闭合→台面保持→沿支撑法向5mm抬升→2秒离台保持；释放案例先降到名义1mm高度再慢开。运动仍由现有执行器产生。所有案例、负对照和失败原因详见validation/GRASP_CONTACT_VALIDATION.md，未引入抓取环境或训练逻辑。
+
+## 04-A 可选SAC实验层
+
+新增`experiments.sac_reach`只由训练/评估脚本和对应测试导入，依赖官方SB3/PyTorch，不被envs、simulation、vendor或轻量包入口导入。`pyproject.toml`的rl可选组读取requirements-rl.txt；基础依赖和vendor锁定文件保持原样。CPU轮子通过官方CPU索引安装，不隐式升级现有物理依赖。
+
+`ReachTransform`与`ScaledReachObservation`只对27维observation做固定仿射缩放（home中心、5°/30°每秒/10mm量纲）；两个goal键保留SI米制及float64，wrapper.compute_reward仅将这两个仍为SI的goal传给原环境。SB3 CombinedExtractor把Dict展开为33维float32输入，原奖励完全保留。所有偏移和尺度存入schema=2配置，不拟合评估目标或更新运行统计。未来HER仍需要同步重标记相对目标字段，本次没有实现HER。
+
+原规则策略rule_action原样移入experiments.common，旧evaluate_reach_baselines入口继续导入同一函数，便于与新SAC评估公平复用。没有将实验策略引入控制核心。
+
+训练数据流：原ReachEnv.reset/step → Monitor/固定观测变换/VecCheckNan/DummyVecEnv → 官方SAC MultiInputPolicy → 官方DictReplayBuffer和优化器。动作不变换，所有运动仍经环境IK、原控制及mj_step；没有训练脚本直接写qpos、调用厂家SDK或访问夹爪执行器。
+
+TrainingAudit只读取原info、奖励、官方logger和网络；分开记录成功、安全失败与超时，并检查有限数值/明显发散。Q诊断对官方buffer采样后恢复NumPy RNG，确定性Actor不消耗Torch随机状态；验证环境独立，目标种子10000–10009，不污染训练环境和Replay Buffer。on_rollout_end诊断在当前更新前，checkpoint诊断在learn返回后；日志含更新次数以区分。
+
+scripts/train_sac_reach.py每5,000步返回一次learn、检查并独立评估，随后同一进程reset_num_timesteps=False继续；最终存储完整网络、官方Replay Buffer压缩文件、配置、原始日志及版本快照。每次CLI调用从头开始，Pilot与正式实验不合并计数，不实现不完整的跨进程续训。
+
+scripts/evaluate_sac_reach.py独立加载模型和保存的transform；原SI环境只接收合法动作。固定种子100–199在各策略下重置，验证物理目标逐项一致，输出逐Episode和汇总指标，绝不把API通过或训练回报上升当作策略成功。
