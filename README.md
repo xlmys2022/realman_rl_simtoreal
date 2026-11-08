@@ -1,6 +1,6 @@
 # realman_rl_simtoreal
 
-基于 MuJoCo 的睿尔曼机械臂仿真项目。长期目标是强化学习控制、抓取及 sim-to-real；当前已完成模型、控制、离线运动学验证，以及固定/随机局部目标的 Gymnasium Reach 环境、夹爪接触实验和SB3 SAC训练/失败诊断。训练流程与策略表现分开验证，结果见下文04-A、04-B记录。
+基于 MuJoCo 的睿尔曼机械臂仿真项目。长期目标是强化学习控制、抓取及 sim-to-real；当前已完成模型、控制、离线运动学验证，以及固定/随机局部目标的 Gymnasium Reach 环境、夹爪接触实验、SB3 SAC训练/失败诊断和独立行为克隆实验。训练流程与策略表现分开验证，结果见下文04-A/B/C记录。
 
 实际模型为官方 **RML63II-6F-V**。它与目标实物 RML63-6F-V 的代际关系尚未核实。静态检查 URDF 保留相机支架转动关节，为 `nq=nv=7, nu=0`；新增动力学 MJCF 将相机刚性固定，为 `nq=nv=nu=6`。
 
@@ -383,3 +383,18 @@ python -I -m unittest discover -s tests -v
 ```
 
 原30k在20个开发目标上，动作朝实际目标的比例仅50.5%，相邻反向41.0%；全Replay中安全/成功终止样本的soft TD残差很大，未发现SB3接错终止观测或错误屏蔽timeout。新B从头训练10k、CPU约37.96步/秒；同预算A/B最终100目标成功率0%/1%，平均距离7.458/3.229mm，均无安全失败或拒绝。B降低了误差和往复，但仍不能可靠Reach；开发集均0/20，按预定标准没有追加第二seed或更多步数。原189加新增18项测试共207项通过。完整轨迹、TD公式/数组、奖励反例、限制及运行命令见 [SAC_DIAGNOSTICS_VALIDATION.md](docs/validation/SAC_DIAGNOSTICS_VALIDATION.md)。
+
+## Reach行为克隆（04-C）
+
+独立PyTorch BC网络使用与SAC确定性均值通路相同的33→256/ReLU→256/ReLU→3/tanh容量，拟合原规则策略动作。它没有Critic、Replay或强化学习更新，不是SAC预训练。直接复用04-A固定观测变换，默认terminate环境、奖励和安全检查均不变。
+
+```bash
+conda activate realman_rl
+python -I scripts/collect_reach_demonstrations.py --out outputs/bc_reach/new_demonstrations
+python -I scripts/train_bc_reach.py --data outputs/bc_reach/new_demonstrations/demonstrations.npz --out outputs/bc_reach/new_fit
+python -I scripts/evaluate_bc_reach.py --model outputs/bc_reach/new_fit/best_bc.pt --out outputs/bc_reach/new_evaluation
+```
+
+采集默认300个专家Episode（240训练/60验证），按完整Episode划分；训练300个epoch，按独立监督验证MSE选模型。最终种子20000–20099保留用于规则、未训练和BC三组配对闭环，神经分支只输出网络动作，不调用专家修正。已有非空输出目录拒绝覆盖。
+
+本轮4447个示范样本全部为移动动作，验证动作MSE约3.67e-6、方向余弦.999954。最终100个新目标：BC100/100、规则100/100、未训练1/100；BC平均误差.86449mm、成功平均15.15步，无安全失败或超时。支持当前网络容量能够表示有效的局部Reach策略，但没有近零停止样本，不能宣称已学会停车/持续保持，也不能据此断定SAC失败的唯一原因。模型和数据保存在Git忽略的`outputs/bc_reach/`，加载模型只需`experiments.bc_reach.load_policy`，无需原数据或专家。完整闭环结果、局限及全部222项测试记录见 [BC_REACH_VALIDATION.md](docs/validation/BC_REACH_VALIDATION.md)。未追加SAC训练。

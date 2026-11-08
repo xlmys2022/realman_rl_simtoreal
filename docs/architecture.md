@@ -1,4 +1,4 @@
-# 工程结构与调用约定（02-D、03-A/B任务、03-C1/C2夹爪、04-A/B SAC）
+# 工程结构与调用约定（02-D、03-A/B任务、03-C1/C2夹爪、04-A/B SAC、04-C BC）
 
 本项目采用 src 布局：可复用能力通过安装后的 `realman_rl_simtoreal` 包调用；脚本负责命令行、实验流程及窗口展示。这样未来环境不必导入一个演示脚本来获得控制器，也不会顺带执行参数解析、打印或打开 Viewer。
 
@@ -34,7 +34,8 @@ realman_rl_simtoreal/
 │       ├── __init__.py
 │       ├── common.py                # 共享姿态、SE(3)、默认序列、规则策略、纯文本格式化
 │       ├── sac_reach.py             # 可选SB3实验封装、固定缩放及只读审计
-│       └── sac_diagnostics.py       # 冻结策略轨迹、命令/实际误差及soft TD诊断
+│       ├── sac_diagnostics.py       # 冻结策略轨迹、命令/实际误差及soft TD诊断
+│       └── bc_reach.py              # 专家数据、独立监督网络、预测误差和闭环对照
 ├── scripts/
 │   ├── inspect_model.py
 │   ├── view_robot.py
@@ -53,8 +54,11 @@ realman_rl_simtoreal/
 │   ├── train_sac_reach.py           # CPU SAC训练、5k分段及独立验证
 │   ├── evaluate_sac_reach.py        # 加载模型、独立100目标和三策略对照
 │   ├── diagnose_sac_reach.py        # 冻结30k策略/规则对照、奖励反例、全Replay诊断
-│   └── compare_sac_boundary.py      # 单因素10k边界实验及冻结模型最终评估
-├── tests/                          # 207项；含默认行为fixture和18项04-B验证
+│   ├── compare_sac_boundary.py      # 单因素10k边界实验及冻结模型最终评估
+│   ├── collect_reach_demonstrations.py # 原公开观测规则策略示范
+│   ├── train_bc_reach.py            # 离线MSE/Adam，无物理采样或RL更新
+│   └── evaluate_bc_reach.py         # 规则/未训练/BC保留目标闭环
+├── tests/                          # 222项；含15项BC数据、网络及闭环契约验证
 ├── docs/
 │   ├── architecture.md
 │   └── validation/                 # 历史实验、重构及环境验证
@@ -211,3 +215,11 @@ scripts/evaluate_sac_reach.py独立加载模型和保存的transform；原SI环�
 `experiments.sac_diagnostics`依赖可选SB3，不被envs/simulation导入。轨迹区分`desired_goal-achieved_goal`和`desired_goal-command_position`；使用独立FK读取ctrl对应位置。soft TD按安装版本计算`reward + gamma*(1-done*(1-timeout))*(min(target_Q)-alpha*log_pi)`，用Replay存储动作查询当前Critic。诊断在no_grad与隔离Torch RNG内运行，核验参数/训练计数不变，不把无熵任务回报当作soft Q的精确监督。记录完整数组，成功/物理故障/拒绝/timeout分别统计。
 
 `compare_sac_boundary.py`复用原train入口，从空buffer和原初始化seed训练B；冻结A的10kcheckpoint及未环回buffer前缀只用于评估/诊断。预先保存开发集、预算与复验规则，核验SAC参数、固定观测变换和目标逐项一致。`--final --b ...`只评估已保存模型，不训练。所有新输出写入独立空目录，04-A保持不变。当前开发集未改善成功率，未启动第二seed；最终0%/1%仍不构成可用策略，证据与假设见[04-B验证](validation/SAC_DIAGNOSTICS_VALIDATION.md)。
+
+## 04-C 独立BC实验层
+
+`experiments.bc_reach`只由三个BC脚本及测试导入；不改envs、simulation、vendor、common、sac_reach或历史SAC模型。复用已有可选CPU依赖和`ReachTransform`，不引入第二套预处理。数据流为公开Dict → 原rule_action → env.step → NPZ；每个样本保存步前状态/动作及步后结果，按整个Episode分离监督训练和验证。
+
+网络输入按SB3 CombinedExtractor顺序拼接`achieved_goal(3), desired_goal(3), observation(27)`并转float32。`BCNetwork`的latent_pi和mu对齐SAC确定性均值通路，输出tanh动作；省略log_std及整个RL学习系统。`train_bc`只在NPZ上最小化动作MSE，不构造环境、调用专家、优化Critic或写Replay。模型保存显式BC标识、网络权重、训练参数、环境及固定预处理；推理无需训练数据或专家。
+
+`evaluate_bc_reach.py`加载训练前和最优验证MSE的两个冻结网络，与原规则策略在20000–20099配对目标上分别执行。两个神经分支只调用自己的predict和标准env.step，没有规则兜底、IK标签或实际qpos赋值。15个新测试包含SB3特征/确定性输出逐元素核验、模型更新/加载一致性、无SDK及物理步进检查；成功率作为实验数据，不作为单元测试硬性要求。局部目标分布及无停止样本的覆盖边界见[04-C验证](validation/BC_REACH_VALIDATION.md)。
