@@ -1,4 +1,4 @@
-# 工程结构与调用约定（02-D、03-A/B任务、03-C1/C2夹爪、04-A/B SAC、04-C BC）
+# 工程结构与调用约定（02-D、03-A/B任务、03-C1/C2夹爪、04-A/B SAC、04-C BC、04-D1初始化）
 
 本项目采用 src 布局：可复用能力通过安装后的 `realman_rl_simtoreal` 包调用；脚本负责命令行、实验流程及窗口展示。这样未来环境不必导入一个演示脚本来获得控制器，也不会顺带执行参数解析、打印或打开 Viewer。
 
@@ -35,7 +35,9 @@ realman_rl_simtoreal/
 │       ├── common.py                # 共享姿态、SE(3)、默认序列、规则策略、纯文本格式化
 │       ├── sac_reach.py             # 可选SB3实验封装、固定缩放及只读审计
 │       ├── sac_diagnostics.py       # 冻结策略轨迹、命令/实际误差及soft TD诊断
-│       └── bc_reach.py              # 专家数据、独立监督网络、预测误差和闭环对照
+│       ├── bc_reach.py              # 专家数据、独立监督网络、预测误差和闭环对照
+│       ├── sac_initialization.py    # 严格空间/语义校验，BC仅移植Actor均值通路
+│       └── sac_monitoring.py        # 独立训练/评估标量、冻结BC探针及Q监控
 ├── scripts/
 │   ├── inspect_model.py
 │   ├── view_robot.py
@@ -57,8 +59,9 @@ realman_rl_simtoreal/
 │   ├── compare_sac_boundary.py      # 单因素10k边界实验及冻结模型最终评估
 │   ├── collect_reach_demonstrations.py # 原公开观测规则策略示范
 │   ├── train_bc_reach.py            # 离线MSE/Adam，无物理采样或RL更新
-│   └── evaluate_bc_reach.py         # 规则/未训练/BC保留目标闭环
-├── tests/                          # 222项；含15项BC数据、网络及闭环契约验证
+│   ├── evaluate_bc_reach.py         # 规则/未训练/BC保留目标闭环
+│   └── plot_sac_training.py         # 只读日志导出PNG，不加载模型或环境
+├── tests/                          # 234项；含12项BC→SAC及监控验证
 ├── docs/
 │   ├── architecture.md
 │   └── validation/                 # 历史实验、重构及环境验证
@@ -223,3 +226,13 @@ scripts/evaluate_sac_reach.py独立加载模型和保存的transform；原SI环�
 网络输入按SB3 CombinedExtractor顺序拼接`achieved_goal(3), desired_goal(3), observation(27)`并转float32。`BCNetwork`的latent_pi和mu对齐SAC确定性均值通路，输出tanh动作；省略log_std及整个RL学习系统。`train_bc`只在NPZ上最小化动作MSE，不构造环境、调用专家、优化Critic或写Replay。模型保存显式BC标识、网络权重、训练参数、环境及固定预处理；推理无需训练数据或专家。
 
 `evaluate_bc_reach.py`加载训练前和最优验证MSE的两个冻结网络，与原规则策略在20000–20099配对目标上分别执行。两个神经分支只调用自己的predict和标准env.step，没有规则兜底、IK标签或实际qpos赋值。15个新测试包含SB3特征/确定性输出逐元素核验、模型更新/加载一致性、无SDK及物理步进检查；成功率作为实验数据，不作为单元测试硬性要求。局部目标分布及无停止样本的覆盖边界见[04-C验证](validation/BC_REACH_VALIDATION.md)。
+
+## 04-D1 Actor初始化和监控
+
+`sac_initialization`单向依赖bc_reach/sac_reach，仅用于全新SAC的Actor初始化。校验feature顺序/空间、CombinedExtractor、ReLU/Linear及SquashedGaussian/tanh，不只比shape；复制latent_pi与mu，log_std、双Critic、Target和温度均作指纹保护，Replay及优化器为空。冻结BC对象无梯度、与Actor不共享参数；缺失/不兼容明确失败。默认scratch不加载BC，scratch显式传bc-model时仅加载冻结参照。
+
+训练入口保留官方SAC_CONFIG、采样、优化器和Replay；新增eval/checkpoint两套间隔，按最近事件在同一进程继续learn。bc_actor强制第0步评估/保存；原scratch缺省不加第0步评估，默认完整网络张量已与原入口128步结果精确比较。原evaluate仅追加可选reference_policy，用实际访问状态比较动作但不修正输出。
+
+`MonitoredTrainingAudit`继承原安全审计，记录训练Episode窗口统计、拒绝率和固定探针偏差；阶段评估使用独立环境及固定seed，BC监督种子重叠会拒绝。当前/Target Q和timeout-aware TD诊断只读、隔离RNG，不改变模型学习。TB写入SB3已有logger（显式开关），CSV/JSON继续保留；训练成功率与独立评估成功率分别命名，不互换。
+
+`plot_sac_training`只使用已保存的JSON，不依赖环境/SDK/模型，输出PNG及原始绘图序列；无测量则skip。只在rl可选依赖中增加TensorBoard/Matplotlib；基础模型和包入口仍不依赖它们。04-D1仅短测试，已记录BC经更新后部分目标退化，没有启动正式长训练。命令、模型指纹、监控标签、回归与限制见[04-D1验证](validation/SAC_BC_INIT_VALIDATION.md)。

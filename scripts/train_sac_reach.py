@@ -15,15 +15,28 @@ from realman_rl_simtoreal.paths import OUTPUTS
 from realman_rl_simtoreal.experiments.sac_reach import (
     ENV_CONFIG, SAC_CONFIG, training_env, make_model, TrainingAudit, evaluate,
     save_checkpoint, asset_hashes, versions, write_json)
+from realman_rl_simtoreal.experiments.sac_initialization import (
+    initialize_actor_from_bc, load_reference, make_probe, action_deviation)
+from realman_rl_simtoreal.experiments.sac_monitoring import (
+    MonitoredTrainingAudit, probe_q, record_evaluation)
+from realman_rl_simtoreal.experiments.sac_diagnostics import td_diagnostic
 
 
 def train(folder, *, timesteps=5000, seed=2026, eval_every=5000, eval_episodes=10, label='pilot',
-          environment=None, eval_seed_start=10000):
+          environment=None, eval_seed_start=10000, init_mode='scratch', bc_model=None,
+          tensorboard=False, checkpoint_every=None, eval_at_start=False):
     folder = Path(folder).resolve()
     if folder.exists() and any(folder.iterdir()):
         raise ValueError('Run directory must be empty; never overwrite a previous experiment')
     if min(timesteps, eval_every, eval_episodes) < 1 or min(seed,eval_seed_start) < 0:
         raise ValueError('Positive step/evaluation counts and nonnegative seed required')
+    checkpoint_every = eval_every if checkpoint_every is None else checkpoint_every
+    if checkpoint_every < 1 or init_mode not in ('scratch','bc_actor'):
+        raise ValueError('Positive checkpoint interval and scratch/bc_actor initialization required')
+    if init_mode == 'bc_actor' and bc_model is None:
+        raise ValueError('bc_actor requires --bc-model; no random fallback')
+    if tensorboard:
+        from torch.utils.tensorboard import SummaryWriter  # fail clearly before creating the run
     folder.mkdir(parents=True, exist_ok=True)
     torch.set_num_threads(1)
     torch.use_deterministic_algorithms(True)
@@ -32,60 +45,127 @@ def train(folder, *, timesteps=5000, seed=2026, eval_every=5000, eval_episodes=1
         env_config.update(environment)
     env, transform = training_env(env_config, folder/'train.monitor.csv')
     model = make_model(env, seed)
-    model.set_logger(configure(str(folder/'sb3'), ['csv', 'json']))
-    config = dict(schema=1, label=label, independent_from_scratch=True, seed=seed,
+    model.set_logger(configure(str(folder/'sb3'), ['csv', 'json']+(['tensorboard'] if tensorboard else [])))
+    reference, initialization = None, dict(mode='scratch')
+    evaluation_seeds=list(range(eval_seed_start, eval_seed_start+eval_episodes))
+    try:
+        probe, probe_transform=make_probe(env_config,evaluation_seeds)
+        if probe_transform.config != transform.config:
+            raise ValueError('Probe preprocessing differs from training')
+        if bc_model is not None:
+            if init_mode == 'bc_actor':
+                reference,initialization=initialize_actor_from_bc(model,bc_model,transform,probe)
+                initialization['mode']='bc_actor'
+            else:
+                reference,reference_metadata=load_reference(model,bc_model,transform)
+                initialization.update(reference_only=reference_metadata)
+            bc_train=set(reference_metadata['bc_train_seeds']+reference_metadata['bc_validation_seeds']) if init_mode=='scratch' else set(initialization['bc_train_seeds']+initialization['bc_validation_seeds'])
+            if bc_train & set(evaluation_seeds):
+                raise ValueError('Independent evaluation seeds overlap BC training/validation targets')
+    except Exception:
+        env.close();model.logger.close()
+        raise
+    np.savez_compressed(folder/'fixed_probe.npz',**probe)
+    write_json(folder/'initialization.json',initialization)
+    config = dict(schema=1, label=label, independent_from_scratch=init_mode=='scratch', seed=seed,
+                  init_mode=init_mode, bc_model=str(Path(bc_model).resolve()) if bc_model is not None else None,
+                  initialization=initialization,tensorboard=tensorboard,
                   policy='MultiInputPolicy', environment=env_config, sac=SAC_CONFIG,
                   requested_timesteps=timesteps, torch_num_threads=1, deterministic_algorithms=True,
                   observation_transform=transform.config, reward_transform='none',
-                  validation_seeds=list(range(eval_seed_start, eval_seed_start+eval_episodes)),
-                  evaluation_every_steps=eval_every, assets=asset_hashes(),
+                  validation_seeds=evaluation_seeds,
+                  evaluation_every_steps=eval_every,checkpoint_every_steps=checkpoint_every,
+                  evaluate_at_start=bool(eval_at_start or init_mode=='bc_actor'), assets=asset_hashes(),
                   experiment_sources={str(p): hashlib.sha256(p.read_bytes()).hexdigest() for p in
                                       (Path(__file__).resolve(), Path(inspect.getfile(TrainingAudit)).resolve())},
                   checkpoint_note='Chunks continue in the same process with the same replay/env/transform. '
-                                  'Each CLI invocation starts an independent experiment; no implicit resume.')
+                                  'Each CLI invocation starts with empty replay/optimizer; no implicit resume. '
+                                  'BC copies only the explicitly selected Actor mean path.')
     write_json(folder/'config.json', config)
     write_json(folder/'observation_transform.json', transform.config)
     write_json(folder/'dependencies.json', versions())
     model.save(folder/'initial_model.zip')
+    save_checkpoint(model,folder/'initial')
+    write_json(folder/'initial/config.json',config)
+    write_json(folder/'initial/observation_transform.json',transform.config)
     initial_actor = [p.detach().clone() for p in model.actor.parameters()]
     initial_critic = [p.detach().clone() for p in model.critic.parameters()]
-    audit = TrainingAudit(folder)
-    checkpoints, training_wall, evaluation_wall = [], 0., 0.
+    audit = MonitoredTrainingAudit(folder,reference=reference,transform=transform,probe=probe)
+    audit.init_callback(model)  # step-0 diagnostics before the first learn()
+    checkpoints, evaluations, training_wall, evaluation_wall = [], [], 0., 0.
     begin = perf_counter()
     status, error = 'completed', None
+    def snapshot(evaluate_now, save_now):
+        nonlocal evaluation_wall
+        diagnostic=audit.record_diagnostic(scope='after_learn_checkpoint')
+        diagnostic['fixed_probe_q']=probe_q(model,transform,probe)
+        diagnostic['entropy_coefficient']=(float(model.log_ent_coef.detach().exp())
+                                           if model.log_ent_coef is not None else float(model.ent_coef_tensor))
+        model.logger.record('monitor/entropy_coefficient',diagnostic['entropy_coefficient'])
+        for key,value in diagnostic['fixed_probe_q'].items():
+            model.logger.record('diagnostic/'+key,value)
+        if model.replay_buffer.size():
+            # Indexed storage sample, RNG isolated; this is not historical minibatch loss.
+            count=min(256,model.replay_buffer.size())
+            td,_=td_diagnostic(model,indices=np.arange(count))
+            diagnostic['soft_td_sample']=dict(transitions=count,alpha=td['alpha'],
+                residual_rmse=td['categories']['all']['residual_rmse'],
+                stored_dones=td['stored_dones'],timeouts=td['timeouts'],
+                effective_terminations=td['effective_terminations'],sampling='first <=256 storage slots, frozen next-action draw')
+            model.logger.record('diagnostic/soft_td_residual_rmse',diagnostic['soft_td_sample']['residual_rmse'])
+        checkpoint=folder/'checkpoints'/f'step_{model.num_timesteps:06d}'
+        if save_now:
+            save_checkpoint(model,checkpoint)
+            write_json(checkpoint/'config.json',config)
+            write_json(checkpoint/'observation_transform.json',transform.config)
+        evaluation=None
+        if evaluate_now:
+            started=perf_counter()
+            measured=evaluate('sac',evaluation_seeds,model=model,transform=transform,
+                             config=env_config,gamma=model.gamma,reference_policy=reference)
+            evaluation_wall+=perf_counter()-started
+            evaluation=measured['summary']
+            if init_mode=='bc_actor' and model.num_timesteps==0 and measured['bc_action_deviation']['max_abs']>1e-7:
+                raise ValueError('Step-0 closed-loop BC/SAC action mismatch')
+            destination=checkpoint if save_now else folder/'evaluations'/f'step_{model.num_timesteps:06d}'
+            write_json(destination/'evaluation.json',measured)
+            record_evaluation(model.logger,measured)
+            evaluations.append(dict(step=int(model.num_timesteps),summary=evaluation,
+                                    bc_action_deviation=measured.get('bc_action_deviation')))
+            write_json(folder/'evaluations.json',evaluations)
+        row=dict(step=int(model.num_timesteps),training=audit.summary(),evaluation=evaluation,
+                 diagnostic=diagnostic,checkpoint_saved=save_now,
+                 training_wall_s=training_wall,
+                 training_steps_per_s=model.num_timesteps/training_wall if training_wall else None)
+        checkpoints.append(row)
+        write_json(folder/'checkpoints.json',checkpoints)
+        model.logger.dump(step=int(model.num_timesteps))
+        print(f"[{label}] step={model.num_timesteps}/{timesteps} updates={model._n_updates} "
+              f"train_success={row['training']['success_rate']} "
+              f"eval_success={evaluation['success_rate'] if evaluation else None} "
+              f"bc_MAE={diagnostic.get('bc_fixed_probe_deviation',{}).get('mae')} "
+              f"critic_loss={diagnostic.get('train/critic_loss')}",flush=True)
     try:
+        if config['evaluate_at_start']:
+            snapshot(True,True)
         while model.num_timesteps < timesteps:
-            count = min(eval_every, timesteps-model.num_timesteps)
+            current=int(model.num_timesteps)
+            next_eval=(current//eval_every+1)*eval_every
+            next_checkpoint=(current//checkpoint_every+1)*checkpoint_every
+            count=min(next_eval,next_checkpoint,timesteps)-current
             started = perf_counter()
             try:
                 model.learn(total_timesteps=count, reset_num_timesteps=model.num_timesteps == 0,
                             callback=audit, log_interval=10)
             finally:
                 training_wall += perf_counter()-started
-            diagnostic = audit.record_diagnostic(scope='after_learn_checkpoint')
-            checkpoint = folder/'checkpoints'/f'step_{model.num_timesteps:06d}'
-            save_checkpoint(model, checkpoint)
-            # Every checkpoint carries its own inference preprocessing/config.
-            write_json(checkpoint/'config.json', config)
-            write_json(checkpoint/'observation_transform.json', transform.config)
             if audit.abort_reason is not None:
                 status, error = 'safety_aborted', audit.abort_reason
+                snapshot(False,True)
                 break
-            started = perf_counter()
-            evaluation = evaluate('sac', config['validation_seeds'], model=model, transform=transform,
-                                  config=env_config, gamma=model.gamma)
-            evaluation_wall += perf_counter()-started
-            write_json(checkpoint/'evaluation.json', evaluation)
-            row = dict(step=int(model.num_timesteps), training=audit.summary(),
-                       evaluation=evaluation['summary'], diagnostic=diagnostic,
-                       training_wall_s=training_wall, training_steps_per_s=model.num_timesteps/training_wall)
-            checkpoints.append(row)
-            write_json(folder/'checkpoints.json', checkpoints)
-            print(f"[{label}] step={model.num_timesteps}/{timesteps} updates={model._n_updates} "
-                  f"train_fps={model.num_timesteps/training_wall:.2f} "
-                  f"train_success={row['training']['success_rate']} eval_success={evaluation['summary']['success_rate']} "
-                  f"Q=[{diagnostic.get('q_min')},{diagnostic.get('q_max')}] "
-                  f"critic_loss={diagnostic.get('train/critic_loss')}", flush=True)
+            final_step=model.num_timesteps>=timesteps
+            snapshot(model.num_timesteps%eval_every==0 or final_step,
+                     model.num_timesteps%checkpoint_every==0 or final_step)
     except (ValueError, RuntimeError, FloatingPointError) as exc:
         status, error = 'error', f'{type(exc).__name__}: {exc}'
     except KeyboardInterrupt:
@@ -106,6 +186,7 @@ def train(folder, *, timesteps=5000, seed=2026, eval_every=5000, eval_episodes=1
                        checkpoints=checkpoints)
         write_json(folder/'summary.json', summary)
         env.close()
+        model.logger.close()
     return summary
 
 
@@ -121,6 +202,11 @@ def main():
     parser.add_argument('--boundary-mode', choices=['terminate','reject_and_hold'], default='terminate')
     parser.add_argument('--rejection-penalty',type=float,default=1.)
     parser.add_argument('--eval-seed-start',type=int,default=10000)
+    parser.add_argument('--init-mode',choices=['scratch','bc_actor'],default='scratch')
+    parser.add_argument('--bc-model',type=Path,help='Required for bc_actor; optional frozen reference in scratch mode')
+    parser.add_argument('--tensorboard',action='store_true',help='Add SB3 TensorBoard event writer under run-dir/sb3')
+    parser.add_argument('--checkpoint-every',type=int,help='Defaults to --eval-every')
+    parser.add_argument('--eval-at-start',action='store_true',help='Also evaluate step 0 (always enabled for bc_actor)')
     args = parser.parse_args()
     if (min(args.timesteps, args.eval_every, args.eval_episodes) <= 0 or min(args.seed,args.eval_seed_start) < 0
             or not np.isfinite(args.rejection_penalty) or args.rejection_penalty<=0):
@@ -130,10 +216,11 @@ def main():
                        eval_episodes=args.eval_episodes, label=args.label,
                        environment=None if args.boundary_mode=='terminate' else
                        dict(boundary_mode=args.boundary_mode,rejection_penalty=args.rejection_penalty),
-                       eval_seed_start=args.eval_seed_start)
+                       eval_seed_start=args.eval_seed_start,init_mode=args.init_mode,bc_model=args.bc_model,
+                       tensorboard=args.tensorboard,checkpoint_every=args.checkpoint_every,eval_at_start=args.eval_at_start)
         print(f"status={result['status']} steps={result['total_timesteps']} error={result['error']}", flush=True)
         return 0 if result['status'] == 'completed' else 1
-    except (ValueError, RuntimeError) as exc:
+    except (ValueError, RuntimeError, OSError, ImportError) as exc:
         print(f'[FAIL] {exc}', flush=True)
         return 1
 

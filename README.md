@@ -398,3 +398,21 @@ python -I scripts/evaluate_bc_reach.py --model outputs/bc_reach/new_fit/best_bc.
 采集默认300个专家Episode（240训练/60验证），按完整Episode划分；训练300个epoch，按独立监督验证MSE选模型。最终种子20000–20099保留用于规则、未训练和BC三组配对闭环，神经分支只输出网络动作，不调用专家修正。已有非空输出目录拒绝覆盖。
 
 本轮4447个示范样本全部为移动动作，验证动作MSE约3.67e-6、方向余弦.999954。最终100个新目标：BC100/100、规则100/100、未训练1/100；BC平均误差.86449mm、成功平均15.15步，无安全失败或超时。支持当前网络容量能够表示有效的局部Reach策略，但没有近零停止样本，不能宣称已学会停车/持续保持，也不能据此断定SAC失败的唯一原因。模型和数据保存在Git忽略的`outputs/bc_reach/`，加载模型只需`experiments.bc_reach.load_policy`，无需原数据或专家。完整闭环结果、局限及全部222项测试记录见 [BC_REACH_VALIDATION.md](docs/validation/BC_REACH_VALIDATION.md)。未追加SAC训练。
+
+## BC初始化SAC与监控（04-D1）
+
+训练入口默认仍为scratch；显式`--init-mode bc_actor --bc-model PATH`严格校验原33维特征、预处理、激活与动作映射，只复制latent_pi和mu，保留原log_std、随机双Critic和空Replay。缺失/不兼容BC模型报错，不回退。`--bc-model`也可在scratch模式中仅作冻结监控参照。
+
+新增`--tensorboard`、`--checkpoint-every`、`--eval-at-start`；bc_actor自动保存/评估第0步。评估与checkpoint可独立调度，输出独立评估成功率/距离/步数/故障、训练Episode统计、Actor/Critic loss、温度、拒绝率、BC动作偏差及Q/TD摘要。TensorBoard2.21.0、Matplotlib3.11.2和新增运行依赖已锁在可选requirements-rl.txt，既有物理依赖版本不变。
+
+仅已运行128步Smoke Test和必要测试。第0步新20目标20/20、.879mm，动作最大差5.96e-8；另3个配对目标在128步后从3/3退为1/3，记录2次关节命令保护失败，没有继续训练或添加补救机制。全部234项测试通过；这不是正式SAC训练成功结果。
+
+用户手动A/B的完整10k命令、TensorBoard、JSON查看、独立加载评估及PNG导出命令见 [SAC_BC_INIT_VALIDATION.md](docs/validation/SAC_BC_INIT_VALIDATION.md)。本次未执行这些正式训练命令。已有Smoke可只读检查：
+
+```bash
+python -I -m tensorboard.main --inspect --logdir outputs/rl/sac_bc_init_validation/smoke_bc_seed2026/sb3
+python -I -m json.tool outputs/rl/sac_bc_init_validation/smoke_bc_seed2026/evaluations.json
+python -I scripts/plot_sac_training.py --run-dir outputs/rl/sac_bc_init_validation/smoke_bc_seed2026 --out outputs/rl/sac_bc_init_validation/new_smoke_plots
+```
+
+绘图仅读JSON，输出成功率、距离、Actor/Critic分图及温度四个PNG；缺评估时不造曲线。模型/配置/日志位于独立新run，原04-A/B/C产物不覆盖。日志可供长期训练监控，但不提供跨进程完整续训；若BC明显退化，先停止并分析保存的更新证据。

@@ -143,13 +143,14 @@ def summarize_episodes(episodes):
                 termination_counts={k: counts[k] for k in dict.fromkeys((*REASONS, *counts))})
 
 
-def evaluate(name, seeds, *, model=None, transform=None, config=None, action_seed=2026, gamma=.99):
+def evaluate(name, seeds, *, model=None, transform=None, config=None, action_seed=2026, gamma=.99,
+             reference_policy=None):
     """Raw SI environment for every policy; transform only the SAC network input."""
     if name not in ('random', 'rule', 'sac') or not seeds:
         raise ValueError('Expected policy name and nonempty seeds')
     if name == 'sac' and (model is None or transform is None):
         raise ValueError('SAC requires model AND its saved observation transform')
-    episodes, step_times = [], []
+    episodes, step_times, reference_errors = [], [], []
     start_total = perf_counter()
     with ReachEnv(**(ENV_CONFIG if config is None else config)) as env:
         expected_transform = ReachTransform.from_env(env).config
@@ -166,6 +167,8 @@ def evaluate(name, seeds, *, model=None, transform=None, config=None, action_see
             for _ in range(env.max_episode_steps):
                 if name == 'sac':
                     action, _ = model.predict(transform.encode(obs), deterministic=True)
+                    if reference_policy is not None:
+                        reference_errors.append(action.astype(float)-reference_policy.predict(obs))
                 elif name == 'rule':
                     action = rule_action(obs, env.action_scale)
                 else:
@@ -199,10 +202,16 @@ def evaluate(name, seeds, *, model=None, transform=None, config=None, action_see
                                  near_zero_action_fraction=float(np.mean(np.linalg.norm(actions, axis=1) < .01)),
                                  physics_steps=physics_steps, episode_wall_s=perf_counter()-started, actions=actions))
     elapsed = perf_counter()-start_total
-    return dict(policy=name, deterministic=name == 'sac', summary=summarize_episodes(episodes), episodes=episodes,
+    result = dict(policy=name, deterministic=name == 'sac', summary=summarize_episodes(episodes), episodes=episodes,
                 timing=dict(wall_s=elapsed, interaction_steps_per_s=len(step_times)/elapsed,
                             mean_step_s=float(np.mean(step_times)), median_step_s=float(np.median(step_times)),
                             p95_step_s=float(np.percentile(step_times, 95))))
+    if reference_policy is not None:
+        errors=np.asarray(reference_errors)
+        result['bc_action_deviation']=(dict(samples=len(errors),mse=float(np.mean(errors**2)),
+                                          mae=float(np.abs(errors).mean()),max_abs=float(np.abs(errors).max()))
+                                       if errors.size else None)
+    return result
 
 
 def q_diagnostic(model):
