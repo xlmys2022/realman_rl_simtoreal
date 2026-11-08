@@ -228,7 +228,7 @@ KL在所有更新中的范围为0.005398–0.022966；value_loss曾升至3.51195
 
 ### 日志与本次验证范围
 
-TensorBoard事件、CSV和JSON对应关系已逐项核验：33行更新阶段、9次独立评估及全部policy/value/KL/clip/EV指标一致。已在`pilot_review_20261108/plots/`导出11张PNG及`plot_data.json`，检查了Episode长度、价值拟合及动作裁剪图；没有覆盖原日志或伪造缺失数据。`audit.json`保存机器可读汇总、失败列表、指标范围和完整性核验，前后哈希在`training_files_before.json`及`training_files_after.json`。
+TensorBoard事件、CSV和JSON对应关系已逐项核验：33行阶段指标（含第0步）、9次独立评估及全部policy/value/KL/clip/EV指标一致。已在`pilot_review_20261108/plots/`导出11张PNG及`plot_data.json`，检查了Episode长度、价值拟合及动作裁剪图；没有覆盖原日志或伪造缺失数据。`audit.json`保存机器可读汇总、失败列表、指标范围和完整性核验，前后哈希在`training_files_before.json`及`training_files_after.json`。
 
 本次只读复核和文档更新没有重新运行完整266项测试；266/266是前文开发验收的回归结果。实际新增验证是模型离线加载推理、两次保护轨迹复放、数值/配置/计数/日志/资产及哈希审计、TensorBoard读取和PNG导出，全部通过，没有执行PPO更新。
 
