@@ -161,7 +161,7 @@ def trace_summary(rows, episodes):
                 safety_failures=sum(e['safety_failure'] for e in episodes), timeouts=sum(e['reason']=='time_limit' for e in episodes))
 
 
-def td_diagnostic(model, *, seed=2026, batch_size=512, indices=None, rejected_indices=()):
+def td_diagnostic(model, *, seed=2026, batch_size=512, indices=None, rejected_indices=(),terminal_labels=None):
     """Same one-step soft target as installed SB3 SAC.train, never an update.
 
     Replay actions for current Q; one stochastic next action for target Q.
@@ -215,6 +215,13 @@ def td_diagnostic(model, *, seed=2026, batch_size=512, indices=None, rejected_in
     labels[(arrays['stored_done']==1)&(arrays['timeout']==1)]='timeout'
     labels[(arrays['effective_done']==1)&(arrays['reward'] < -200)]='safety_terminal'
     labels[(arrays['effective_done']==1)&(arrays['reward'] >= -200)]='success_terminal'
+    if terminal_labels is not None:
+        for row,index in enumerate(inds):
+            if arrays['stored_done'][row]:
+                category=terminal_labels.get(int(index))
+                if category not in ('timeout','safety_terminal','success_terminal'):
+                    raise ValueError('Explicit terminal label missing for stored transition')
+                labels[row]=category
     arrays['category']=labels
     summaries={}
     for category in ('all','normal','rejected','timeout','safety_terminal','success_terminal'):

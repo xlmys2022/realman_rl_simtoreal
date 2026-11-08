@@ -113,6 +113,15 @@ class ScaledReachObservation(gym.ObservationWrapper):
         return self.env.unwrapped.compute_reward(achieved_goal, desired_goal, info)
 
 
+def make_probe(environment, seeds):
+    """Public reset observations only; no BC, experts, actions or training time."""
+    with ReachEnv(**environment) as env:
+        observations=[env.reset(seed=int(s))[0] for s in seeds]
+        transform=ReachTransform.from_env(env)
+    return {key:np.stack([obs[key] for obs in observations])
+            for key in ('achieved_goal','desired_goal','observation')},transform
+
+
 def training_env(config, monitor_file=None):
     raw = ReachEnv(**config)
     wrapped = ScaledReachObservation(raw)
@@ -144,13 +153,15 @@ def summarize_episodes(episodes):
 
 
 def evaluate(name, seeds, *, model=None, transform=None, config=None, action_seed=2026, gamma=.99,
-             reference_policy=None):
+             reference_policy=None,collect_motion=False):
     """Raw SI environment for every policy; transform only the SAC network input."""
     if name not in ('random', 'rule', 'sac') or not seeds:
         raise ValueError('Expected policy name and nonempty seeds')
     if name == 'sac' and (model is None or transform is None):
         raise ValueError('SAC requires model AND its saved observation transform')
     episodes, step_times, reference_errors = [], [], []
+    from .reach_tasks import MotionStats
+    motion=MotionStats() if collect_motion else None
     start_total = perf_counter()
     with ReachEnv(**(ENV_CONFIG if config is None else config)) as env:
         expected_transform = ReachTransform.from_env(env).config
@@ -176,7 +187,11 @@ def evaluate(name, seeds, *, model=None, transform=None, config=None, action_see
                 if not env.action_space.contains(action) or not np.isfinite(action).all():
                     raise ValueError('Policy output outside finite action space')
                 step_start = perf_counter()
+                before_obs=obs
                 obs, reward, terminated, truncated, info = env.step(action)
+                if motion is not None:
+                    motion.observe(before_obs['achieved_goal'],obs['achieved_goal'],before_obs['desired_goal'],
+                        before_obs['observation'][18:21],info['command_position_m'],action,terminated or truncated)
                 step_times.append(perf_counter()-step_start)
                 if not env.observation_space.contains(obs) or not all(np.isfinite(x).all() for x in obs.values()):
                     raise ValueError('Invalid physical observation')
@@ -211,6 +226,7 @@ def evaluate(name, seeds, *, model=None, transform=None, config=None, action_see
         result['bc_action_deviation']=(dict(samples=len(errors),mse=float(np.mean(errors**2)),
                                           mae=float(np.abs(errors).mean()),max_abs=float(np.abs(errors).max()))
                                        if errors.size else None)
+    if motion is not None:result['motion']=motion.summary()
     return result
 
 

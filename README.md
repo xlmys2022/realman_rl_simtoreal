@@ -1,6 +1,6 @@
 # realman_rl_simtoreal
 
-基于 MuJoCo 的睿尔曼机械臂仿真项目。长期目标是强化学习控制、抓取及 sim-to-real；当前已完成模型、控制、离线运动学验证，以及固定/随机局部目标的 Gymnasium Reach 环境、夹爪接触实验、SB3 SAC训练/失败诊断和独立行为克隆实验。训练流程与策略表现分开验证，结果见下文04-A/B/C记录。
+基于 MuJoCo 的睿尔曼机械臂仿真项目。长期目标是强化学习控制、抓取及 sim-to-real；当前主动研究纯SAC Reach的奖励、动作尺度与目标难度。模型、控制、离线运动学、夹爪接触、历史SAC及BC研究全部保留；暂停BC与SAC融合。训练流程与策略表现分开验证，最新入口见下文04-E1。
 
 实际模型为官方 **RML63II-6F-V**。它与目标实物 RML63-6F-V 的代际关系尚未核实。静态检查 URDF 保留相机支架转动关节，为 `nq=nv=7, nu=0`；新增动力学 MJCF 将相机刚性固定，为 `nq=nv=nu=6`。
 
@@ -399,7 +399,7 @@ python -I scripts/evaluate_bc_reach.py --model outputs/bc_reach/new_fit/best_bc.
 
 本轮4447个示范样本全部为移动动作，验证动作MSE约3.67e-6、方向余弦.999954。最终100个新目标：BC100/100、规则100/100、未训练1/100；BC平均误差.86449mm、成功平均15.15步，无安全失败或超时。支持当前网络容量能够表示有效的局部Reach策略，但没有近零停止样本，不能宣称已学会停车/持续保持，也不能据此断定SAC失败的唯一原因。模型和数据保存在Git忽略的`outputs/bc_reach/`，加载模型只需`experiments.bc_reach.load_policy`，无需原数据或专家。完整闭环结果、局限及全部222项测试记录见 [BC_REACH_VALIDATION.md](docs/validation/BC_REACH_VALIDATION.md)。未追加SAC训练。
 
-## BC初始化SAC与监控（04-D1）
+## BC初始化SAC与监控（04-D1，历史复现；当前暂停）
 
 训练入口默认仍为scratch；显式`--init-mode bc_actor --bc-model PATH`严格校验原33维特征、预处理、激活与动作映射，只复制latent_pi和mu，保留原log_std、随机双Critic和空Replay。缺失/不兼容BC模型报错，不回退。`--bc-model`也可在scratch模式中仅作冻结监控参照。
 
@@ -416,3 +416,22 @@ python -I scripts/plot_sac_training.py --run-dir outputs/rl/sac_bc_init_validati
 ```
 
 绘图仅读JSON，输出成功率、距离、Actor/Critic分图及温度四个PNG；缺评估时不造曲线。模型/配置/日志位于独立新run，原04-A/B/C产物不覆盖。日志可供长期训练监控，但不提供跨进程完整续训；若BC明显退化，先停止并分析保存的更新证据。
+
+## 纯SAC Reach与渐进任务（04-E1，当前方向）
+
+复用同一个ReachEnv，显式`--task fixed_reach|easy_random_reach|random_reach`分别选择原+X5mm固定目标、2–3mm三维可达球壳、原3–5mm三维可达球壳。新任务强制随机scratch、空Replay，拒绝BC初始化和BC参照；不改变物理模型、IK、执行器、安全规则或33维预处理。
+
+`--reward-mode safe_dense`保留旧奖励；新可选`reach_shaped_v1`使用指数距离势的折扣差，配合推导出的成功/失败终值及有限拒绝成本，保持compute_reward与step一致。它不是默认奖励，也不是训练效果已验证的方案。真实轨迹已通过“成功>静止超时>反复拒绝>故意失败”的折扣排序，并保留直接负指数+小失败惩罚的反例。
+
+先由用户手动进行固定目标奖励对照，各自从头5000步；两条命令只改变奖励及输出目录，当前1mm尺度保持一致：
+
+```bash
+conda activate realman_rl
+cd /home/mr-beaver/Documents/robot/realman_rl_simtoreal
+python -I scripts/train_sac_reach.py --task fixed_reach --reward-mode safe_dense --action-scale 0.001 --run-dir outputs/rl/pure_reach/fixed_safe_seed2026_pilot --timesteps 5000 --seed 2026 --init-mode scratch --eval-at-start --eval-every 1000 --checkpoint-every 1000 --eval-episodes 1 --eval-seed-start 85000 --tensorboard
+python -I scripts/train_sac_reach.py --task fixed_reach --reward-mode reach_shaped_v1 --action-scale 0.001 --run-dir outputs/rl/pure_reach/fixed_shaped_seed2026_pilot --timesteps 5000 --seed 2026 --init-mode scratch --eval-at-start --eval-every 1000 --checkpoint-every 1000 --eval-episodes 1 --eval-seed-start 85000 --tensorboard
+```
+
+固定目标评估1集只说明同一固定起点/目标的表现，不冒充随机目标泛化。奖励对照后再单独研究`--action-scale 0.00025`；固定任务未稳定成功时，不继续扩大至随机目标。阶段B/C应保留前阶段选定奖励与尺度，首次均从头训练，不自动迁移参数。
+
+继续使用TensorBoard、独立评估、checkpoint及PNG；新增实际位移、动作相对实际/命令目标的方向比例及路径跟踪统计。纯RL进程测试阻断BC/厂家模块及专家动作调用，训练仍正常执行。本次只运行128步Smoke（28更新、成功率0），正式Pilot未执行。奖励公式、排序证明、动作样本、阶段B/C命令及最终测试记录见 [PURE_REACH_VALIDATION.md](docs/validation/PURE_REACH_VALIDATION.md)。

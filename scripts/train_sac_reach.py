@@ -14,9 +14,8 @@ from stable_baselines3.common.logger import configure
 from realman_rl_simtoreal.paths import OUTPUTS
 from realman_rl_simtoreal.experiments.sac_reach import (
     ENV_CONFIG, SAC_CONFIG, training_env, make_model, TrainingAudit, evaluate,
-    save_checkpoint, asset_hashes, versions, write_json)
-from realman_rl_simtoreal.experiments.sac_initialization import (
-    initialize_actor_from_bc, load_reference, make_probe, action_deviation)
+    save_checkpoint, asset_hashes, versions, write_json, make_probe)
+from realman_rl_simtoreal.experiments.reach_tasks import TASKS, task_environment
 from realman_rl_simtoreal.experiments.sac_monitoring import (
     MonitoredTrainingAudit, probe_q, record_evaluation)
 from realman_rl_simtoreal.experiments.sac_diagnostics import td_diagnostic
@@ -24,7 +23,8 @@ from realman_rl_simtoreal.experiments.sac_diagnostics import td_diagnostic
 
 def train(folder, *, timesteps=5000, seed=2026, eval_every=5000, eval_episodes=10, label='pilot',
           environment=None, eval_seed_start=10000, init_mode='scratch', bc_model=None,
-          tensorboard=False, checkpoint_every=None, eval_at_start=False):
+          tensorboard=False, checkpoint_every=None, eval_at_start=False,
+          task=None, reward_mode=None, action_scale=None):
     folder = Path(folder).resolve()
     if folder.exists() and any(folder.iterdir()):
         raise ValueError('Run directory must be empty; never overwrite a previous experiment')
@@ -35,6 +35,9 @@ def train(folder, *, timesteps=5000, seed=2026, eval_every=5000, eval_episodes=1
         raise ValueError('Positive checkpoint interval and scratch/bc_actor initialization required')
     if init_mode == 'bc_actor' and bc_model is None:
         raise ValueError('bc_actor requires --bc-model; no random fallback')
+    pure_run=task is not None or reward_mode is not None or action_scale is not None
+    if pure_run and (init_mode != 'scratch' or bc_model is not None):
+        raise ValueError('Pure RL tasks require scratch initialization and prohibit any BC reference/data')
     if tensorboard:
         from torch.utils.tensorboard import SummaryWriter  # fail clearly before creating the run
     folder.mkdir(parents=True, exist_ok=True)
@@ -43,6 +46,16 @@ def train(folder, *, timesteps=5000, seed=2026, eval_every=5000, eval_episodes=1
     env_config = dict(ENV_CONFIG)
     if environment is not None:
         env_config.update(environment)
+    if task is not None:
+        env_config=task_environment(task,env_config,reward_mode=reward_mode,action_scale=action_scale)
+    else:
+        if reward_mode is not None:env_config['reward_mode']=reward_mode
+        if action_scale is not None:env_config['action_scale']=action_scale
+    pure_run=pure_run or env_config.get('reward_mode')=='reach_shaped_v1'
+    if pure_run and (init_mode!='scratch' or bc_model is not None):
+        raise ValueError('Pure RL reward/task configuration prohibits BC initialization/reference')
+    if env_config.get('reward_mode')=='reach_shaped_v1' and env_config.get('reward_gamma',.99)!=SAC_CONFIG['gamma']:
+        raise ValueError('Reward shaping gamma must equal SAC gamma')
     env, transform = training_env(env_config, folder/'train.monitor.csv')
     model = make_model(env, seed)
     model.set_logger(configure(str(folder/'sb3'), ['csv', 'json']+(['tensorboard'] if tensorboard else [])))
@@ -53,6 +66,7 @@ def train(folder, *, timesteps=5000, seed=2026, eval_every=5000, eval_episodes=1
         if probe_transform.config != transform.config:
             raise ValueError('Probe preprocessing differs from training')
         if bc_model is not None:
+            from realman_rl_simtoreal.experiments.sac_initialization import initialize_actor_from_bc, load_reference
             if init_mode == 'bc_actor':
                 reference,initialization=initialize_actor_from_bc(model,bc_model,transform,probe)
                 initialization['mode']='bc_actor'
@@ -67,9 +81,15 @@ def train(folder, *, timesteps=5000, seed=2026, eval_every=5000, eval_episodes=1
         raise
     np.savez_compressed(folder/'fixed_probe.npz',**probe)
     write_json(folder/'initialization.json',initialization)
+    raw=env.venv.envs[0].unwrapped
+    reward_parameters=(dict(sigma_m=raw.reward_sigma_m,gamma=raw.reward_gamma,
+                           terminal_value=raw.shaped_terminal_value,rejection_cost=1-raw.reward_gamma)
+                       if raw.reward_mode=='reach_shaped_v1' else None)
     config = dict(schema=1, label=label, independent_from_scratch=init_mode=='scratch', seed=seed,
                   init_mode=init_mode, bc_model=str(Path(bc_model).resolve()) if bc_model is not None else None,
                   initialization=initialization,tensorboard=tensorboard,
+                  training_task=task,pure_rl=pure_run,
+                  reward_parameters=reward_parameters,
                   policy='MultiInputPolicy', environment=env_config, sac=SAC_CONFIG,
                   requested_timesteps=timesteps, torch_num_threads=1, deterministic_algorithms=True,
                   observation_transform=transform.config, reward_transform='none',
@@ -80,7 +100,8 @@ def train(folder, *, timesteps=5000, seed=2026, eval_every=5000, eval_episodes=1
                                       (Path(__file__).resolve(), Path(inspect.getfile(TrainingAudit)).resolve())},
                   checkpoint_note='Chunks continue in the same process with the same replay/env/transform. '
                                   'Each CLI invocation starts with empty replay/optimizer; no implicit resume. '
-                                  'BC copies only the explicitly selected Actor mean path.')
+                                  +('Pure RL: no policy transfer/reference or expert replay.' if pure_run else
+                                    'BC copies only the explicitly selected Actor mean path.'))
     write_json(folder/'config.json', config)
     write_json(folder/'observation_transform.json', transform.config)
     write_json(folder/'dependencies.json', versions())
@@ -90,7 +111,8 @@ def train(folder, *, timesteps=5000, seed=2026, eval_every=5000, eval_episodes=1
     write_json(folder/'initial/observation_transform.json',transform.config)
     initial_actor = [p.detach().clone() for p in model.actor.parameters()]
     initial_critic = [p.detach().clone() for p in model.critic.parameters()]
-    audit = MonitoredTrainingAudit(folder,reference=reference,transform=transform,probe=probe)
+    audit = MonitoredTrainingAudit(folder,reference=reference,transform=transform,probe=probe,
+                                   collect_motion=pure_run,action_scale=raw.action_scale)
     audit.init_callback(model)  # step-0 diagnostics before the first learn()
     checkpoints, evaluations, training_wall, evaluation_wall = [], [], 0., 0.
     begin = perf_counter()
@@ -107,11 +129,18 @@ def train(folder, *, timesteps=5000, seed=2026, eval_every=5000, eval_episodes=1
         if model.replay_buffer.size():
             # Indexed storage sample, RNG isolated; this is not historical minibatch loss.
             count=min(256,model.replay_buffer.size())
-            td,_=td_diagnostic(model,indices=np.arange(count))
+            terminal_labels=None
+            if pure_run:
+                oldest=model.num_timesteps-model.replay_buffer.size()
+                terminal_labels={(e['end_step']-1)%model.replay_buffer.buffer_size:
+                    ('timeout' if e['reason']=='time_limit' else 'safety_terminal' if e['safety_failure'] else 'success_terminal')
+                    for e in audit.episodes if e['end_step']>oldest}
+            td,_=td_diagnostic(model,indices=np.arange(count),terminal_labels=terminal_labels)
             diagnostic['soft_td_sample']=dict(transitions=count,alpha=td['alpha'],
                 residual_rmse=td['categories']['all']['residual_rmse'],
                 stored_dones=td['stored_dones'],timeouts=td['timeouts'],
-                effective_terminations=td['effective_terminations'],sampling='first <=256 storage slots, frozen next-action draw')
+                effective_terminations=td['effective_terminations'],sampling='first <=256 storage slots, frozen next-action draw',
+                terminal_label_source='episode flags' if pure_run else 'legacy reward threshold')
             model.logger.record('diagnostic/soft_td_residual_rmse',diagnostic['soft_td_sample']['residual_rmse'])
         checkpoint=folder/'checkpoints'/f'step_{model.num_timesteps:06d}'
         if save_now:
@@ -122,7 +151,7 @@ def train(folder, *, timesteps=5000, seed=2026, eval_every=5000, eval_episodes=1
         if evaluate_now:
             started=perf_counter()
             measured=evaluate('sac',evaluation_seeds,model=model,transform=transform,
-                             config=env_config,gamma=model.gamma,reference_policy=reference)
+                             config=env_config,gamma=model.gamma,reference_policy=reference,collect_motion=pure_run)
             evaluation_wall+=perf_counter()-started
             evaluation=measured['summary']
             if init_mode=='bc_actor' and model.num_timesteps==0 and measured['bc_action_deviation']['max_abs']>1e-7:
@@ -131,7 +160,7 @@ def train(folder, *, timesteps=5000, seed=2026, eval_every=5000, eval_episodes=1
             write_json(destination/'evaluation.json',measured)
             record_evaluation(model.logger,measured)
             evaluations.append(dict(step=int(model.num_timesteps),summary=evaluation,
-                                    bc_action_deviation=measured.get('bc_action_deviation')))
+                                    bc_action_deviation=measured.get('bc_action_deviation'),motion=measured.get('motion')))
             write_json(folder/'evaluations.json',evaluations)
         row=dict(step=int(model.num_timesteps),training=audit.summary(),evaluation=evaluation,
                  diagnostic=diagnostic,checkpoint_saved=save_now,
@@ -140,10 +169,11 @@ def train(folder, *, timesteps=5000, seed=2026, eval_every=5000, eval_episodes=1
         checkpoints.append(row)
         write_json(folder/'checkpoints.json',checkpoints)
         model.logger.dump(step=int(model.num_timesteps))
+        bc_text='' if pure_run else f"bc_MAE={diagnostic.get('bc_fixed_probe_deviation',{}).get('mae')} "
         print(f"[{label}] step={model.num_timesteps}/{timesteps} updates={model._n_updates} "
               f"train_success={row['training']['success_rate']} "
               f"eval_success={evaluation['success_rate'] if evaluation else None} "
-              f"bc_MAE={diagnostic.get('bc_fixed_probe_deviation',{}).get('mae')} "
+              +bc_text+
               f"critic_loss={diagnostic.get('train/critic_loss')}",flush=True)
     try:
         if config['evaluate_at_start']:
@@ -207,6 +237,9 @@ def main():
     parser.add_argument('--tensorboard',action='store_true',help='Add SB3 TensorBoard event writer under run-dir/sb3')
     parser.add_argument('--checkpoint-every',type=int,help='Defaults to --eval-every')
     parser.add_argument('--eval-at-start',action='store_true',help='Also evaluate step 0 (always enabled for bc_actor)')
+    parser.add_argument('--task',choices=list(TASKS),help='Explicit pure RL task; prohibits BC initialization/reference')
+    parser.add_argument('--reward-mode',choices=['distance','safe_dense','reach_shaped_v1'])
+    parser.add_argument('--action-scale',type=float,help='Metres per normalized action component; original default .001')
     args = parser.parse_args()
     if (min(args.timesteps, args.eval_every, args.eval_episodes) <= 0 or min(args.seed,args.eval_seed_start) < 0
             or not np.isfinite(args.rejection_penalty) or args.rejection_penalty<=0):
@@ -217,7 +250,8 @@ def main():
                        environment=None if args.boundary_mode=='terminate' else
                        dict(boundary_mode=args.boundary_mode,rejection_penalty=args.rejection_penalty),
                        eval_seed_start=args.eval_seed_start,init_mode=args.init_mode,bc_model=args.bc_model,
-                       tensorboard=args.tensorboard,checkpoint_every=args.checkpoint_every,eval_at_start=args.eval_at_start)
+                       tensorboard=args.tensorboard,checkpoint_every=args.checkpoint_every,eval_at_start=args.eval_at_start,
+                       task=args.task,reward_mode=args.reward_mode,action_scale=args.action_scale)
         print(f"status={result['status']} steps={result['total_timesteps']} error={result['error']}", flush=True)
         return 0 if result['status'] == 'completed' else 1
     except (ValueError, RuntimeError, OSError, ImportError) as exc:

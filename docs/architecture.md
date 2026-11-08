@@ -1,4 +1,4 @@
-# 工程结构与调用约定（02-D、03-A/B任务、03-C1/C2夹爪、04-A/B SAC、04-C BC、04-D1初始化）
+# 工程结构与调用约定（02-D至04-E1纯SAC）
 
 本项目采用 src 布局：可复用能力通过安装后的 `realman_rl_simtoreal` 包调用；脚本负责命令行、实验流程及窗口展示。这样未来环境不必导入一个演示脚本来获得控制器，也不会顺带执行参数解析、打印或打开 Viewer。
 
@@ -37,7 +37,8 @@ realman_rl_simtoreal/
 │       ├── sac_diagnostics.py       # 冻结策略轨迹、命令/实际误差及soft TD诊断
 │       ├── bc_reach.py              # 专家数据、独立监督网络、预测误差和闭环对照
 │       ├── sac_initialization.py    # 严格空间/语义校验，BC仅移植Actor均值通路
-│       └── sac_monitoring.py        # 独立训练/评估标量、冻结BC探针及Q监控
+│       ├── sac_monitoring.py        # 独立标量、运动及Q监控；BC仅历史惰性分支
+│       └── reach_tasks.py           # 纯RL任务配置和只读MotionStats，不生成动作
 ├── scripts/
 │   ├── inspect_model.py
 │   ├── view_robot.py
@@ -60,8 +61,9 @@ realman_rl_simtoreal/
 │   ├── collect_reach_demonstrations.py # 原公开观测规则策略示范
 │   ├── train_bc_reach.py            # 离线MSE/Adam，无物理采样或RL更新
 │   ├── evaluate_bc_reach.py         # 规则/未训练/BC保留目标闭环
-│   └── plot_sac_training.py         # 只读日志导出PNG，不加载模型或环境
-├── tests/                          # 234项；含12项BC→SAC及监控验证
+│   ├── plot_sac_training.py         # 只读日志导出PNG，不加载模型或环境
+│   └── validate_reach_training.py   # 真实奖励/随机探索/目标采样探针，无学习器
+├── tests/                          # 原234项及18项纯RL任务/奖励验证
 ├── docs/
 │   ├── architecture.md
 │   └── validation/                 # 历史实验、重构及环境验证
@@ -236,3 +238,15 @@ scripts/evaluate_sac_reach.py独立加载模型和保存的transform；原SI环�
 `MonitoredTrainingAudit`继承原安全审计，记录训练Episode窗口统计、拒绝率和固定探针偏差；阶段评估使用独立环境及固定seed，BC监督种子重叠会拒绝。当前/Target Q和timeout-aware TD诊断只读、隔离RNG，不改变模型学习。TB写入SB3已有logger（显式开关），CSV/JSON继续保留；训练成功率与独立评估成功率分别命名，不互换。
 
 `plot_sac_training`只使用已保存的JSON，不依赖环境/SDK/模型，输出PNG及原始绘图序列；无测量则skip。只在rl可选依赖中增加TensorBoard/Matplotlib；基础模型和包入口仍不依赖它们。04-D1仅短测试，已记录BC经更新后部分目标退化，没有启动正式长训练。命令、模型指纹、监控标签、回归与限制见[04-D1验证](validation/SAC_BC_INIT_VALIDATION.md)。
+
+## 04-E1 纯强化学习配置
+
+当前研究暂停模仿学习融合，BC代码/模型和旧CLI仅作历史复现。`--task`等新增实验参数强制scratch且禁止bc-model；旧默认CLI不改变。纯RL训练导入路径不经过bc_reach或sac_initialization，监控只有在历史调用明确提供reference时才惰性导入旧辅助。
+
+任务定义保存在reach_tasks.TASKS，合并原ENV_CONFIG，使用同一ReachEnv。固定+X5mm、easy随机2–3mm、原随机3–5mm均保留原验证路径和所有物理检查。task、reward-mode与action-scale可独立配置；新reward_sigma_m/reward_gamma保存在模型环境配置/实际reward_parameters，shaping gamma必须等于SAC gamma。control_period、H等既有Python参数仍可通过environment传入，必须满足原整数物理步条件。
+
+ReachEnv新增reach_shaped_v1时仅扩展奖励/info；previous_achieved_goal是原始步前世界坐标，不修改观测维度或控制状态。指数势差采用gamma*Phi(next)-Phi(previous)，真终止势为0，timeout保留势；新goal下重新判定成功，物理失败/拒绝标记独立。标量、批量与固定归一化wrapper保持一致。原distance/safe_dense数值路径保持。
+
+通用make_probe在sac_reach内复用ReachTransform，历史sac_initialization继续提供同一函数导入；reach_tasks不反向依赖sac_reach，维持无环。MotionStats只读SI坐标和策略动作，训练callback使用terminal_observation避免reset跳变，评估直接用原始观测；不产生动作方向、不调用专家，也不写qpos。
+
+新奖励的终止标签从Episode日志标记映射至Replay存储槽，保留官方done/timeout mask；不再按旧-201阈值猜测新奖励的安全终止。此变化只涉及诊断，不改SAC损失或Replay格式。未来HER还需重标相对目标观测和终止，本次未实现。公式/折扣排序、反例、短测试和用户手动阶段命令见[04-E1验证](validation/PURE_REACH_VALIDATION.md)。

@@ -10,7 +10,7 @@ from stable_baselines3.common.distributions import SquashedDiagGaussianDistribut
 from stable_baselines3.common.torch_layers import CombinedExtractor
 
 from .bc_reach import FEATURE_KEYS, load_policy, weight_digest
-from .sac_reach import ReachTransform
+from .sac_reach import ReachTransform, make_probe
 
 
 def validate_compatibility(model, reference, transform):
@@ -106,12 +106,3 @@ def initialize_actor_from_bc(model, path, transform, probe):
                     critic_initialization='Stock fresh double Critic; Target Critic initialized by SB3 copy, unchanged',
                     replay_prefill=False,optimizer_state_empty=True)
     return reference, metadata
-
-
-def make_probe(environment, seeds):
-    """Independent reset observations, not training rollouts or expert labels."""
-    from ..envs.reach_env import ReachEnv
-    with ReachEnv(**environment) as env:
-        observations = [env.reset(seed=int(s))[0] for s in seeds]
-        transform = ReachTransform.from_env(env)
-    return {key:np.stack([obs[key] for obs in observations]) for key in FEATURE_KEYS},transform
