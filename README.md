@@ -417,7 +417,7 @@ python -I scripts/plot_sac_training.py --run-dir outputs/rl/sac_bc_init_validati
 
 绘图仅读JSON，输出成功率、距离、Actor/Critic分图及温度四个PNG；缺评估时不造曲线。模型/配置/日志位于独立新run，原04-A/B/C产物不覆盖。日志可供长期训练监控，但不提供跨进程完整续训；若BC明显退化，先停止并分析保存的更新证据。
 
-## 纯SAC Reach与渐进任务（04-E1，当前方向）
+## 纯SAC Reach与渐进任务（04-E1）
 
 复用同一个ReachEnv，显式`--task fixed_reach|easy_random_reach|random_reach`分别选择原+X5mm固定目标、2–3mm三维可达球壳、原3–5mm三维可达球壳。新任务强制随机scratch、空Replay，拒绝BC初始化和BC参照；不改变物理模型、IK、执行器、安全规则或33维预处理。
 
@@ -435,3 +435,32 @@ python -I scripts/train_sac_reach.py --task fixed_reach --reward-mode reach_shap
 固定目标评估1集只说明同一固定起点/目标的表现，不冒充随机目标泛化。奖励对照后再单独研究`--action-scale 0.00025`；固定任务未稳定成功时，不继续扩大至随机目标。阶段B/C应保留前阶段选定奖励与尺度，首次均从头训练，不自动迁移参数。
 
 继续使用TensorBoard、独立评估、checkpoint及PNG；新增实际位移、动作相对实际/命令目标的方向比例及路径跟踪统计。纯RL进程测试阻断BC/厂家模块及专家动作调用，训练仍正常执行。开发验收仅运行128步Smoke；用户随后手动完成两组5000步固定目标Pilot，所有独立评估均未成功。新奖励最终200步超时、误差7.448mm，动作主要趋于静止；旧奖励最终36步命令越界、误差12.587mm，两者运动时长不同。暂不扩大至随机目标或30000步。配置核对、完整结果和下一步边界已追加到 [PURE_REACH_VALIDATION.md](docs/validation/PURE_REACH_VALIDATION.md)。
+
+## PPO Reach（04-F1，当前实验入口）
+
+新增官方SB3 2.9.2 `PPO("MultiInputPolicy", ...)`，CPU随机初始化，独立的256×256/Tanh策略和价值网络；不加载BC/SAC权重或专家数据。复用同一个六轴ReachEnv及原33维固定预处理，SAC历史入口和产物保留。默认固定+X5mm目标、`reach_shaped_v1`、每轴0.25mm动作、50ms周期/25个物理步、200步上限、1mm成功阈值、terminate边界。
+
+以下保留首次16384步Pilot复现命令；输出目录必须为空，已存在的同名实验不要覆盖。开发阶段只验证一次完整512步Rollout及更新，用户随后已手动完成此Pilot，结果见本节末尾：
+
+```bash
+conda activate realman_rl
+cd /home/mr-beaver/Documents/robot/realman_rl_simtoreal
+python -I scripts/train_ppo_reach.py --task fixed_reach --reward-mode reach_shaped_v1 --action-scale 0.00025 --timesteps 16384 --seed 2026 --run-dir outputs/rl/ppo_reach/fixed_seed2026_pilot --eval-every 2048 --eval-episodes 1 --eval-seed-start 87000 --checkpoint-every 2048 --tensorboard
+python -I -m tensorboard.main --logdir outputs/rl/ppo_reach --host 127.0.0.1 --port 6006
+```
+
+训练结束后单独检查模型和导出曲线（评估JSON和绘图目录也不覆盖已有结果）：
+
+```bash
+python -I -m json.tool outputs/rl/ppo_reach/fixed_seed2026_pilot/summary.json
+python -I scripts/evaluate_ppo_reach.py --model outputs/rl/ppo_reach/fixed_seed2026_pilot/checkpoints/step_016384/model.zip --episodes 1 --seed-start 88000 --json outputs/rl/ppo_reach/fixed_seed2026_pilot/loaded_evaluation.json
+python -I scripts/plot_ppo_training.py --run-dir outputs/rl/ppo_reach/fixed_seed2026_pilot
+```
+
+`n_steps=512`，每Rollout按64样本做10个epoch。SB3的训练步数是下界；请求步数不足完整Rollout仍采集512步。评估/checkpoint间隔是阈值，只在下一次完整PPO更新后执行，同时保存/评估第0步和最终步。日志分别记录实际交互步、Rollout更新数、epoch数及Adam步数。中断/严重故障的部分Rollout不标成已完成更新。
+
+原始高斯动作和传入环境的Box裁剪动作分别保存；`actions/box_clip_*`统计动作裁剪，`train/clip_fraction`是PPO似然比Clip比例，两者含义不同。TensorBoard还记录独立成功率/误差/步数、训练Episode统计、安全/超时分类、policy/value loss、熵、KL、explained variance、标准差及真实运动；绘图只读取真实评估和更新数据，不从训练回报推导成功率。
+
+固定目标换seed仍是同一目标，不能当作泛化结果；先审查Pilot是否稳定到达，再决定是否尝试`easy_random_reach`或`random_reach`，不自动扩大训练。完整实现、短测试证据和局限见 [PPO_REACH_VALIDATION.md](docs/validation/PPO_REACH_VALIDATION.md)。
+
+用户已完成seed2026的16384步固定目标Pilot：32个Rollout、320个epoch、2560次Adam更新，约59.77步/秒。从2048步checkpoint起后续各次独立固定目标评估均成功，最终18步到达、误差0.960968mm，独立加载最终模型复验一致。训练429/456个Episode成功（94.08%），另17次超时及10次候选命令保护终止，无碰撞/数值失败；最近100个训练Episode均成功。最后Rollout的动作向量Box裁剪率仍为96.09%，固定目标结果不代表随机目标泛化。只读复核、失败轨迹、指标及11张PNG的路径已追加至上述验证报告；未启动新训练。

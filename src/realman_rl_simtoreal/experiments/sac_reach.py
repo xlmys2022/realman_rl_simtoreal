@@ -154,11 +154,11 @@ def summarize_episodes(episodes):
 
 def evaluate(name, seeds, *, model=None, transform=None, config=None, action_seed=2026, gamma=.99,
              reference_policy=None,collect_motion=False):
-    """Raw SI environment for every policy; transform only the SAC network input."""
-    if name not in ('random', 'rule', 'sac') or not seeds:
+    """Raw SI environment; shared deterministic model.predict protocol for SAC/PPO."""
+    if name not in ('random', 'rule', 'sac', 'ppo') or not seeds:
         raise ValueError('Expected policy name and nonempty seeds')
-    if name == 'sac' and (model is None or transform is None):
-        raise ValueError('SAC requires model AND its saved observation transform')
+    if name in ('sac','ppo') and (model is None or transform is None):
+        raise ValueError(name.upper()+' requires model AND its saved observation transform')
     episodes, step_times, reference_errors = [], [], []
     from .reach_tasks import MotionStats
     motion=MotionStats() if collect_motion else None
@@ -176,7 +176,7 @@ def evaluate(name, seeds, *, model=None, transform=None, config=None, action_see
             rejected_actions, rejection_reasons = 0, Counter()
             physics_steps = 0
             for _ in range(env.max_episode_steps):
-                if name == 'sac':
+                if name in ('sac','ppo'):
                     action, _ = model.predict(transform.encode(obs), deterministic=True)
                     if reference_policy is not None:
                         reference_errors.append(action.astype(float)-reference_policy.predict(obs))
@@ -217,7 +217,7 @@ def evaluate(name, seeds, *, model=None, transform=None, config=None, action_see
                                  near_zero_action_fraction=float(np.mean(np.linalg.norm(actions, axis=1) < .01)),
                                  physics_steps=physics_steps, episode_wall_s=perf_counter()-started, actions=actions))
     elapsed = perf_counter()-start_total
-    result = dict(policy=name, deterministic=name == 'sac', summary=summarize_episodes(episodes), episodes=episodes,
+    result = dict(policy=name, deterministic=name in ('sac','ppo'), summary=summarize_episodes(episodes), episodes=episodes,
                 timing=dict(wall_s=elapsed, interaction_steps_per_s=len(step_times)/elapsed,
                             mean_step_s=float(np.mean(step_times)), median_step_s=float(np.median(step_times)),
                             p95_step_s=float(np.percentile(step_times, 95))))

@@ -1,4 +1,4 @@
-# 工程结构与调用约定（02-D至04-E1纯SAC）
+# 工程结构与调用约定（02-D至04-F1 PPO）
 
 本项目采用 src 布局：可复用能力通过安装后的 `realman_rl_simtoreal` 包调用；脚本负责命令行、实验流程及窗口展示。这样未来环境不必导入一个演示脚本来获得控制器，也不会顺带执行参数解析、打印或打开 Viewer。
 
@@ -38,7 +38,8 @@ realman_rl_simtoreal/
 │       ├── bc_reach.py              # 专家数据、独立监督网络、预测误差和闭环对照
 │       ├── sac_initialization.py    # 严格空间/语义校验，BC仅移植Actor均值通路
 │       ├── sac_monitoring.py        # 独立标量、运动及Q监控；BC仅历史惰性分支
-│       └── reach_tasks.py           # 纯RL任务配置和只读MotionStats，不生成动作
+│       ├── reach_tasks.py           # 纯RL任务配置和只读MotionStats，不生成动作
+│       └── ppo_reach.py             # 官方PPO、完整Rollout审计、动作裁剪及独立评估
 ├── scripts/
 │   ├── inspect_model.py
 │   ├── view_robot.py
@@ -62,8 +63,11 @@ realman_rl_simtoreal/
 │   ├── train_bc_reach.py            # 离线MSE/Adam，无物理采样或RL更新
 │   ├── evaluate_bc_reach.py         # 规则/未训练/BC保留目标闭环
 │   ├── plot_sac_training.py         # 只读日志导出PNG，不加载模型或环境
-│   └── validate_reach_training.py   # 真实奖励/随机探索/目标采样探针，无学习器
-├── tests/                          # 原234项及18项纯RL任务/奖励验证
+│   ├── validate_reach_training.py   # 真实奖励/随机探索/目标采样探针，无学习器
+│   ├── train_ppo_reach.py           # 随机初始化PPO；仅完整更新后评估/保存
+│   ├── evaluate_ppo_reach.py        # 冻结PPO确定性推理，使用保存的环境及变换
+│   └── plot_ppo_training.py         # 只读PPO JSON日志，导出PNG及原始曲线数据
+├── tests/                          # 原252项加PPO接口、更新、裁剪及日志验证
 ├── docs/
 │   ├── architecture.md
 │   └── validation/                 # 历史实验、重构及环境验证
@@ -250,3 +254,13 @@ ReachEnv新增reach_shaped_v1时仅扩展奖励/info；previous_achieved_goal是
 通用make_probe在sac_reach内复用ReachTransform，历史sac_initialization继续提供同一函数导入；reach_tasks不反向依赖sac_reach，维持无环。MotionStats只读SI坐标和策略动作，训练callback使用terminal_observation避免reset跳变，评估直接用原始观测；不产生动作方向、不调用专家，也不写qpos。
 
 新奖励的终止标签从Episode日志标记映射至Replay存储槽，保留官方done/timeout mask；不再按旧-201阈值猜测新奖励的安全终止。此变化只涉及诊断，不改SAC损失或Replay格式。未来HER还需重标相对目标观测和终止，本次未实现。公式/折扣排序、反例、短测试和用户手动阶段命令见[04-E1验证](validation/PURE_REACH_VALIDATION.md)。
+
+## 04-F1 官方PPO实验层
+
+`experiments.ppo_reach`使用安装版SB3 PPO，复用`reach_tasks`中的任务定义和MotionStats，以及`sac_reach`现有的固定观测变换、训练环境包装、版本/资产快照、Episode汇总和独立评估协议。后者仅扩展接受`ppo`名称，SAC分支行为不变。核心simulation、envs、vendor不导入任何PPO训练代码，没有第二套环境或底层控制器。
+
+33维特征顺序及物理含义与04-A相同；PPO原生策略是独立的两层256/Tanh策略网络和价值网络，不是SAC的ReLU/tanh压缩Actor。策略输出未压缩高斯均值和可训练log_std；官方采样在进入env.step前按原Box裁剪。RolloutBuffer保存原始动作，likelihood/log_prob也按原始动作计算，保持官方损失。只读审计分别记录raw/applied及向量/分量裁剪率，不修改动作、奖励、优势或Buffer。
+
+驱动每次调用官方learn收集完整512步并完成10个epoch，返回后再读取指标、评估或保存；沿用同一模型、优化器、环境和未结束的Episode。当前学习率和clip_range为常数，无跨调用的学习率/clip调度。eval_every/checkpoint_every是阈值，非整除时向后对齐到完整更新；第0步额外记录。实际步数可以超过请求预算；分别保存Rollout更新数、SB3按epoch计的_n_updates和Adam更新数。部分Rollout/被中断更新明确标注，不假装完成阶段，不支持跨进程续训。
+
+训练回调在SB3处理timeout bootstrap之前保存真实环境奖励；官方RolloutBuffer的timeout奖励可包含终止观测的价值引导。终止与截断仍由原环境和VecEnv处理，审计使用terminal_observation避免自动reset跳变。评估使用独立环境、deterministic=True，核验参数/优化计数不变；固定目标换seed不算泛化。完整更新后的指标写入JSON/CSV/TensorBoard，绘图只读JSON，不导入环境或神经网络。14项新测试共享一次完整Rollout更新；全部266项测试通过。证据、命令和未验证事项见[04-F1验证](validation/PPO_REACH_VALIDATION.md)。
