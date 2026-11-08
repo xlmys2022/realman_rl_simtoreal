@@ -434,4 +434,4 @@ python -I scripts/train_sac_reach.py --task fixed_reach --reward-mode reach_shap
 
 固定目标评估1集只说明同一固定起点/目标的表现，不冒充随机目标泛化。奖励对照后再单独研究`--action-scale 0.00025`；固定任务未稳定成功时，不继续扩大至随机目标。阶段B/C应保留前阶段选定奖励与尺度，首次均从头训练，不自动迁移参数。
 
-继续使用TensorBoard、独立评估、checkpoint及PNG；新增实际位移、动作相对实际/命令目标的方向比例及路径跟踪统计。纯RL进程测试阻断BC/厂家模块及专家动作调用，训练仍正常执行。本次只运行128步Smoke（28更新、成功率0），正式Pilot未执行。奖励公式、排序证明、动作样本、阶段B/C命令及最终测试记录见 [PURE_REACH_VALIDATION.md](docs/validation/PURE_REACH_VALIDATION.md)。
+继续使用TensorBoard、独立评估、checkpoint及PNG；新增实际位移、动作相对实际/命令目标的方向比例及路径跟踪统计。纯RL进程测试阻断BC/厂家模块及专家动作调用，训练仍正常执行。开发验收仅运行128步Smoke；用户随后手动完成两组5000步固定目标Pilot，所有独立评估均未成功。新奖励最终200步超时、误差7.448mm，动作主要趋于静止；旧奖励最终36步命令越界、误差12.587mm，两者运动时长不同。暂不扩大至随机目标或30000步。配置核对、完整结果和下一步边界已追加到 [PURE_REACH_VALIDATION.md](docs/validation/PURE_REACH_VALIDATION.md)。
