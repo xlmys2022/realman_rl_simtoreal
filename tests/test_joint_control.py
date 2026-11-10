@@ -23,7 +23,7 @@ class JointControlTests(unittest.TestCase):
         for line in (assets / "SHA256SUMS").read_text().splitlines():
             checksum, path = line.split(maxsplit=1)
             self.assertEqual(hashlib.sha256((assets / path).read_bytes()).hexdigest(), checksum)
-        result = subprocess.run([sys.executable, "-I", str(ROOT / "scripts/inspect_model.py")],
+        result = subprocess.run([sys.executable, "-I", str(ROOT / "scripts/models/inspect_model.py")],
                                 cwd="/tmp", text=True, capture_output=True, timeout=30)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("nq=7, nv=7, nu=0", result.stdout)

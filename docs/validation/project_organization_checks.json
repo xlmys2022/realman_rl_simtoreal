@@ -1,0 +1,1224 @@
+{
+  "date": "2026-11-10",
+  "baseline_commit": "c459787be64ec2adfb8dedf6a43bbe0fdaee87cd",
+  "branch": "refactor/project-organization",
+  "versions": {
+    "python": "3.11.17 (main, Oct  1 2026, 20:17:42) [GCC 14.3.0]",
+    "executable": "/home/mr-beaver/Documents/miniconda3/envs/realman_rl/bin/python",
+    "packages": {
+      "mujoco": "3.17.0",
+      "numpy": "2.4.6",
+      "gymnasium": "1.4.0",
+      "stable-baselines3": "2.9.2",
+      "torch": "2.14.0+cpu",
+      "tensorboard": "2.21.0",
+      "matplotlib": "3.11.2",
+      "setuptools": "84.0.0",
+      "realman_rl_simtoreal": "0.1.0",
+      "Robotic_Arm": "1.1.7"
+    }
+  },
+  "tests": [
+    {
+      "phase": "重构前",
+      "tests": 266,
+      "seconds": 164.929,
+      "failures": 0,
+      "skipped": 0
+    },
+    {
+      "phase": "阶段 1",
+      "tests": 266,
+      "seconds": 156.914,
+      "failures": 0,
+      "skipped": 0
+    },
+    {
+      "phase": "阶段 2",
+      "tests": 266,
+      "seconds": 166.236,
+      "failures": 0,
+      "skipped": 0
+    },
+    {
+      "phase": "最终完整回归",
+      "tests": 266,
+      "seconds": 166.179,
+      "failures": 0,
+      "skipped": 0
+    }
+  ],
+  "ast_equivalence": {
+    "unchanged_definitions_and_constants": 72,
+    "unchanged_script_bodies": 26
+  },
+  "checkpoints": {
+    "total": 113,
+    "loaded": 107,
+    "rejected": 6,
+    "exact_array_comparisons": 749,
+    "files": [
+      {
+        "path": "outputs/rl/ppo_reach/fixed_seed2026_pilot/checkpoints/step_000000/model.zip",
+        "algorithm": "PPO",
+        "sha256": "ae37cb1162383056f899f8cf562fc77a6d8bfdc74db0b495515cbb0e3dfe7877",
+        "samples": 9,
+        "timesteps": 0,
+        "updates": 0,
+        "replay_size": null
+      },
+      {
+        "path": "outputs/rl/ppo_reach/fixed_seed2026_pilot/checkpoints/step_002048/model.zip",
+        "algorithm": "PPO",
+        "sha256": "46b6867d712c232d82a9dd102b4135eb4992de5bc0d4e46ff0a38a800821aed4",
+        "samples": 9,
+        "timesteps": 2048,
+        "updates": 40,
+        "replay_size": null
+      },
+      {
+        "path": "outputs/rl/ppo_reach/fixed_seed2026_pilot/checkpoints/step_004096/model.zip",
+        "algorithm": "PPO",
+        "sha256": "5fb0a2e4c372224b5b4b2f2ce787e78642e266dfce45485e622b4743dd2fedf5",
+        "samples": 9,
+        "timesteps": 4096,
+        "updates": 80,
+        "replay_size": null
+      },
+      {
+        "path": "outputs/rl/ppo_reach/fixed_seed2026_pilot/checkpoints/step_006144/model.zip",
+        "algorithm": "PPO",
+        "sha256": "2501e6199d9fc893792dd3cd632046a9bc10490c1c4e313371d7b7bad92840a8",
+        "samples": 9,
+        "timesteps": 6144,
+        "updates": 120,
+        "replay_size": null
+      },
+      {
+        "path": "outputs/rl/ppo_reach/fixed_seed2026_pilot/checkpoints/step_008192/model.zip",
+        "algorithm": "PPO",
+        "sha256": "d6472d81476d0878907b3c1d5bc5137e488c96a26e6474e2d6066fa44a29389c",
+        "samples": 9,
+        "timesteps": 8192,
+        "updates": 160,
+        "replay_size": null
+      },
+      {
+        "path": "outputs/rl/ppo_reach/fixed_seed2026_pilot/checkpoints/step_010240/model.zip",
+        "algorithm": "PPO",
+        "sha256": "c29c34049a89858be089c85eb1eecc0178e78674fb0c14112ffe4cfe2d3a84d5",
+        "samples": 9,
+        "timesteps": 10240,
+        "updates": 200,
+        "replay_size": null
+      },
+      {
+        "path": "outputs/rl/ppo_reach/fixed_seed2026_pilot/checkpoints/step_012288/model.zip",
+        "algorithm": "PPO",
+        "sha256": "ab511d2df917f808f503bc574ce27178ae62f250733ff09d50b42d61978c62bc",
+        "samples": 9,
+        "timesteps": 12288,
+        "updates": 240,
+        "replay_size": null
+      },
+      {
+        "path": "outputs/rl/ppo_reach/fixed_seed2026_pilot/checkpoints/step_014336/model.zip",
+        "algorithm": "PPO",
+        "sha256": "fb1dce2f412bcbbb9d37aa9d07a9b6b391f0aa78ea208b2af66946d39c400a6f",
+        "samples": 9,
+        "timesteps": 14336,
+        "updates": 280,
+        "replay_size": null
+      },
+      {
+        "path": "outputs/rl/ppo_reach/fixed_seed2026_pilot/checkpoints/step_016384/model.zip",
+        "algorithm": "PPO",
+        "sha256": "54797765e210fe33c1c6544e0dc1791a4ad52cbdc4a43f361fd9b34463e00b58",
+        "samples": 9,
+        "timesteps": 16384,
+        "updates": 320,
+        "replay_size": null
+      },
+      {
+        "path": "outputs/rl/ppo_reach/fixed_seed2026_pilot/final/model.zip",
+        "algorithm": "PPO",
+        "sha256": "df894b4d6b40897ca192b7402508423b72999ce2afab4c249cacd6bdd3b27ed1",
+        "samples": 9,
+        "timesteps": 16384,
+        "updates": 320,
+        "replay_size": null
+      },
+      {
+        "path": "outputs/rl/ppo_reach/fixed_seed2026_pilot/initial/model.zip",
+        "algorithm": "PPO",
+        "sha256": "ae37cb1162383056f899f8cf562fc77a6d8bfdc74db0b495515cbb0e3dfe7877",
+        "samples": 9,
+        "timesteps": 0,
+        "updates": 0,
+        "replay_size": null
+      },
+      {
+        "path": "outputs/rl/ppo_reach_validation/smoke_seed2026/checkpoints/step_000000/model.zip",
+        "algorithm": "PPO",
+        "sha256": "5489e9e2d3ff4dfd93683a8ca53b7e464b02e3f5f030c01fd7c4ee010b0ebb0a",
+        "samples": 9,
+        "timesteps": 0,
+        "updates": 0,
+        "replay_size": null
+      },
+      {
+        "path": "outputs/rl/ppo_reach_validation/smoke_seed2026/checkpoints/step_000512/model.zip",
+        "algorithm": "PPO",
+        "sha256": "1df5de5783195619cb4624468cee8d69e8f00619743fb5601de33686af8cb5d7",
+        "samples": 9,
+        "timesteps": 512,
+        "updates": 10,
+        "replay_size": null
+      },
+      {
+        "path": "outputs/rl/ppo_reach_validation/smoke_seed2026/final/model.zip",
+        "algorithm": "PPO",
+        "sha256": "c4038d0d298a3749b2ee4c48be1bddd51c8e44f17ab3491e5517ad8f6513f0b6",
+        "samples": 9,
+        "timesteps": 512,
+        "updates": 10,
+        "replay_size": null
+      },
+      {
+        "path": "outputs/rl/ppo_reach_validation/smoke_seed2026/initial/model.zip",
+        "algorithm": "PPO",
+        "sha256": "5489e9e2d3ff4dfd93683a8ca53b7e464b02e3f5f030c01fd7c4ee010b0ebb0a",
+        "samples": 9,
+        "timesteps": 0,
+        "updates": 0,
+        "replay_size": null
+      },
+      {
+        "path": "outputs/rl/pure_reach/fixed_safe_seed2026_pilot/checkpoints/step_000000/model.zip",
+        "algorithm": "SAC",
+        "sha256": "a9ddb48220112768fd497d7595ea90460e95a457da371bb12b6e482897aaad5f",
+        "samples": 9,
+        "timesteps": 0,
+        "updates": 0,
+        "replay_size": 0
+      },
+      {
+        "path": "outputs/rl/pure_reach/fixed_safe_seed2026_pilot/checkpoints/step_001000/model.zip",
+        "algorithm": "SAC",
+        "sha256": "4413e26922c118e5a893f19deaf94eaf51b3587c5ff4e3becfe3a6d829378784",
+        "samples": 9,
+        "timesteps": 1000,
+        "updates": 900,
+        "replay_size": 0
+      },
+      {
+        "path": "outputs/rl/pure_reach/fixed_safe_seed2026_pilot/checkpoints/step_002000/model.zip",
+        "algorithm": "SAC",
+        "sha256": "33a05ad31fadaeb3b466bdd846cbd4f246bc24c9652696c8226776865428ccdb",
+        "samples": 9,
+        "timesteps": 2000,
+        "updates": 1900,
+        "replay_size": 0
+      },
+      {
+        "path": "outputs/rl/pure_reach/fixed_safe_seed2026_pilot/checkpoints/step_003000/model.zip",
+        "algorithm": "SAC",
+        "sha256": "3c3143e979845a1e134b49e9d160eef8fafd9b3e21ac5662b1cdfc44496b61ed",
+        "samples": 9,
+        "timesteps": 3000,
+        "updates": 2900,
+        "replay_size": 0
+      },
+      {
+        "path": "outputs/rl/pure_reach/fixed_safe_seed2026_pilot/checkpoints/step_004000/model.zip",
+        "algorithm": "SAC",
+        "sha256": "3d0ecb00c2225819de0892e15ab65741471b8bb61687d32c6fc1ab8bfb904dcd",
+        "samples": 9,
+        "timesteps": 4000,
+        "updates": 3900,
+        "replay_size": 0
+      },
+      {
+        "path": "outputs/rl/pure_reach/fixed_safe_seed2026_pilot/checkpoints/step_005000/model.zip",
+        "algorithm": "SAC",
+        "sha256": "1707e20b3728842c1fa0a642eee088fc364fba21039794a93ee131f21ef0182c",
+        "samples": 9,
+        "timesteps": 5000,
+        "updates": 4900,
+        "replay_size": 0
+      },
+      {
+        "path": "outputs/rl/pure_reach/fixed_safe_seed2026_pilot/final/model.zip",
+        "algorithm": "SAC",
+        "sha256": "1707e20b3728842c1fa0a642eee088fc364fba21039794a93ee131f21ef0182c",
+        "samples": 9,
+        "timesteps": 5000,
+        "updates": 4900,
+        "replay_size": 5000
+      },
+      {
+        "path": "outputs/rl/pure_reach/fixed_safe_seed2026_pilot/initial/model.zip",
+        "algorithm": "SAC",
+        "sha256": "a9ddb48220112768fd497d7595ea90460e95a457da371bb12b6e482897aaad5f",
+        "samples": 9,
+        "timesteps": 0,
+        "updates": 0,
+        "replay_size": 0
+      },
+      {
+        "path": "outputs/rl/pure_reach/fixed_shaped_seed2026_pilot/checkpoints/step_000000/model.zip",
+        "algorithm": "SAC",
+        "sha256": "be2678a66937ab82bd36c9a4a01d9ceaee4ccee895bd56ce3feb04ef5beab043",
+        "samples": 9,
+        "timesteps": 0,
+        "updates": 0,
+        "replay_size": 0
+      },
+      {
+        "path": "outputs/rl/pure_reach/fixed_shaped_seed2026_pilot/checkpoints/step_001000/model.zip",
+        "algorithm": "SAC",
+        "sha256": "edcb96dca22e39f08a42fa5c02338ccd27452b7aa6c47b3bdad761cb883e332c",
+        "samples": 9,
+        "timesteps": 1000,
+        "updates": 900,
+        "replay_size": 0
+      },
+      {
+        "path": "outputs/rl/pure_reach/fixed_shaped_seed2026_pilot/checkpoints/step_002000/model.zip",
+        "algorithm": "SAC",
+        "sha256": "1df10142cf8541f047c8a9ddba9d91c6cfa9a0e808d771e8b13ead39c24d271d",
+        "samples": 9,
+        "timesteps": 2000,
+        "updates": 1900,
+        "replay_size": 0
+      },
+      {
+        "path": "outputs/rl/pure_reach/fixed_shaped_seed2026_pilot/checkpoints/step_003000/model.zip",
+        "algorithm": "SAC",
+        "sha256": "94fc48200f11a90767672a6510e4dbf2d139026d0b8413c18a6649625f27b918",
+        "samples": 9,
+        "timesteps": 3000,
+        "updates": 2900,
+        "replay_size": 0
+      },
+      {
+        "path": "outputs/rl/pure_reach/fixed_shaped_seed2026_pilot/checkpoints/step_004000/model.zip",
+        "algorithm": "SAC",
+        "sha256": "10074e75ce465b615b4d7b61b17e4158c98be5a87fde2ebe8347cc4a27912874",
+        "samples": 9,
+        "timesteps": 4000,
+        "updates": 3900,
+        "replay_size": 0
+      },
+      {
+        "path": "outputs/rl/pure_reach/fixed_shaped_seed2026_pilot/checkpoints/step_005000/model.zip",
+        "algorithm": "SAC",
+        "sha256": "a5ad307c24fd4058418b02c0c9dea6edeb9485d58b769fda3e4470af571642c6",
+        "samples": 9,
+        "timesteps": 5000,
+        "updates": 4900,
+        "replay_size": 0
+      },
+      {
+        "path": "outputs/rl/pure_reach/fixed_shaped_seed2026_pilot/final/model.zip",
+        "algorithm": "SAC",
+        "sha256": "c2ec578f686dab4c4b6bf5977787fa06bc3202fa520ac982ee4847e99a363963",
+        "samples": 9,
+        "timesteps": 5000,
+        "updates": 4900,
+        "replay_size": 5000
+      },
+      {
+        "path": "outputs/rl/pure_reach/fixed_shaped_seed2026_pilot/initial/model.zip",
+        "algorithm": "SAC",
+        "sha256": "be2678a66937ab82bd36c9a4a01d9ceaee4ccee895bd56ce3feb04ef5beab043",
+        "samples": 9,
+        "timesteps": 0,
+        "updates": 0,
+        "replay_size": 0
+      },
+      {
+        "path": "outputs/rl/pure_reach_validation/smoke_fixed_shaped_seed2026/checkpoints/step_000000/model.zip",
+        "algorithm": "SAC",
+        "sha256": "b66c89f1d7f69ea30b4af83e1d58ca90d6bd3dbf280d9635f966be352f3c6fb7",
+        "samples": 9,
+        "timesteps": 0,
+        "updates": 0,
+        "replay_size": 0
+      },
+      {
+        "path": "outputs/rl/pure_reach_validation/smoke_fixed_shaped_seed2026/checkpoints/step_000064/model.zip",
+        "algorithm": "SAC",
+        "sha256": "2e4e2945d0d3d88a84634f9f4d62d6d334230c5bae5a3c3ee6a1a1d8ca94cab4",
+        "samples": 9,
+        "timesteps": 64,
+        "updates": 0,
+        "replay_size": 0
+      },
+      {
+        "path": "outputs/rl/pure_reach_validation/smoke_fixed_shaped_seed2026/checkpoints/step_000128/model.zip",
+        "algorithm": "SAC",
+        "sha256": "a37cfdb8e0c91f00a1a964c15012d5dcb1b0db550303a20e33093802050a2fa6",
+        "samples": 9,
+        "timesteps": 128,
+        "updates": 28,
+        "replay_size": 0
+      },
+      {
+        "path": "outputs/rl/pure_reach_validation/smoke_fixed_shaped_seed2026/final/model.zip",
+        "algorithm": "SAC",
+        "sha256": "67ca1b4897827e68c92a7f08463e76ac0fd8ecb5d794113de4cbad3b85a4bb1a",
+        "samples": 9,
+        "timesteps": 128,
+        "updates": 28,
+        "replay_size": 128
+      },
+      {
+        "path": "outputs/rl/pure_reach_validation/smoke_fixed_shaped_seed2026/initial/model.zip",
+        "algorithm": "SAC",
+        "sha256": "b66c89f1d7f69ea30b4af83e1d58ca90d6bd3dbf280d9635f966be352f3c6fb7",
+        "samples": 9,
+        "timesteps": 0,
+        "updates": 0,
+        "replay_size": 0
+      },
+      {
+        "path": "outputs/rl/sac_bc_compare/manual_bc_actor_seed2026/checkpoints/step_000000/model.zip",
+        "algorithm": "SAC",
+        "sha256": "3462313ded1acfb1645d577600b280647d5769835c7e4fc63c3321e1d4dc74c5",
+        "samples": 9,
+        "timesteps": 0,
+        "updates": 0,
+        "replay_size": 0
+      },
+      {
+        "path": "outputs/rl/sac_bc_compare/manual_bc_actor_seed2026/checkpoints/step_001000/model.zip",
+        "algorithm": "SAC",
+        "sha256": "37680c798bddf4d9d9aa3c1c094a33d24909cc05890bf31e3d8b7e77d0b209e4",
+        "samples": 9,
+        "timesteps": 1000,
+        "updates": 900,
+        "replay_size": 0
+      },
+      {
+        "path": "outputs/rl/sac_bc_compare/manual_bc_actor_seed2026/checkpoints/step_002000/model.zip",
+        "algorithm": "SAC",
+        "sha256": "c81127558458b0a3a7ded80cb0e20c77eb36d16a77f770f381186019daff273b",
+        "samples": 9,
+        "timesteps": 2000,
+        "updates": 1900,
+        "replay_size": 0
+      },
+      {
+        "path": "outputs/rl/sac_bc_compare/manual_bc_actor_seed2026/checkpoints/step_003000/model.zip",
+        "algorithm": "SAC",
+        "sha256": "f383ffe11026e77ef317dfc00da008e9c73af15e823cb46a80d180a8146d6a51",
+        "samples": 9,
+        "timesteps": 3000,
+        "updates": 2900,
+        "replay_size": 0
+      },
+      {
+        "path": "outputs/rl/sac_bc_compare/manual_bc_actor_seed2026/checkpoints/step_004000/model.zip",
+        "algorithm": "SAC",
+        "sha256": "e3af6e604c5b1e0e92338c5c576a2389fff49177c90cadf0169313ed01133506",
+        "samples": 9,
+        "timesteps": 4000,
+        "updates": 3900,
+        "replay_size": 0
+      },
+      {
+        "path": "outputs/rl/sac_bc_compare/manual_bc_actor_seed2026/checkpoints/step_005000/model.zip",
+        "algorithm": "SAC",
+        "sha256": "326183ed118bdf37ac3c8036774578c909b60b15293049c3280d0113774a8417",
+        "samples": 9,
+        "timesteps": 5000,
+        "updates": 4900,
+        "replay_size": 0
+      },
+      {
+        "path": "outputs/rl/sac_bc_compare/manual_bc_actor_seed2026/checkpoints/step_006000/model.zip",
+        "algorithm": "SAC",
+        "sha256": "932e31f842cd461c838ee45a08f43339682c9a540def607b779bc83b5f5860e2",
+        "samples": 9,
+        "timesteps": 6000,
+        "updates": 5900,
+        "replay_size": 0
+      },
+      {
+        "path": "outputs/rl/sac_bc_compare/manual_bc_actor_seed2026/checkpoints/step_007000/model.zip",
+        "algorithm": "SAC",
+        "sha256": "5d75f2e15f0044c6c722295fe7783422dce7d374b764734a6aedb13e40b905d3",
+        "samples": 9,
+        "timesteps": 7000,
+        "updates": 6900,
+        "replay_size": 0
+      },
+      {
+        "path": "outputs/rl/sac_bc_compare/manual_bc_actor_seed2026/checkpoints/step_008000/model.zip",
+        "algorithm": "SAC",
+        "sha256": "9be2c7aca795124b9088b11662401df886dc50b9d5e965d855d3547bf406dbf8",
+        "samples": 9,
+        "timesteps": 8000,
+        "updates": 7900,
+        "replay_size": 0
+      },
+      {
+        "path": "outputs/rl/sac_bc_compare/manual_bc_actor_seed2026/checkpoints/step_009000/model.zip",
+        "algorithm": "SAC",
+        "sha256": "1a2f2eec84e3fec1f83d4e25df05aa2e0cf1753c3e22dcd44be55affc986151d",
+        "samples": 9,
+        "timesteps": 9000,
+        "updates": 8900,
+        "replay_size": 0
+      },
+      {
+        "path": "outputs/rl/sac_bc_compare/manual_bc_actor_seed2026/checkpoints/step_010000/model.zip",
+        "algorithm": "SAC",
+        "sha256": "7ee64e9d0b59f669b2ace3e3b9def609a1bd0b7e030bff12ad28b58031e57712",
+        "samples": 9,
+        "timesteps": 10000,
+        "updates": 9900,
+        "replay_size": 0
+      },
+      {
+        "path": "outputs/rl/sac_bc_compare/manual_bc_actor_seed2026/final/model.zip",
+        "algorithm": "SAC",
+        "sha256": "fe8dc60d1699f6d6088490fc91ffceebe9a1eceeb33382bac93ec1c5e89aaf9b",
+        "samples": 9,
+        "timesteps": 10000,
+        "updates": 9900,
+        "replay_size": 10000
+      },
+      {
+        "path": "outputs/rl/sac_bc_compare/manual_bc_actor_seed2026/initial/model.zip",
+        "algorithm": "SAC",
+        "sha256": "3462313ded1acfb1645d577600b280647d5769835c7e4fc63c3321e1d4dc74c5",
+        "samples": 9,
+        "timesteps": 0,
+        "updates": 0,
+        "replay_size": 0
+      },
+      {
+        "path": "outputs/rl/sac_bc_compare/manual_scratch_seed2026/checkpoints/step_000000/model.zip",
+        "algorithm": "SAC",
+        "sha256": "f4cc2585e72de256b512b9b9fbf2adcbf0aa6f36ddee3d850443362f0ce448d9",
+        "samples": 9,
+        "timesteps": 0,
+        "updates": 0,
+        "replay_size": 0
+      },
+      {
+        "path": "outputs/rl/sac_bc_compare/manual_scratch_seed2026/checkpoints/step_001000/model.zip",
+        "algorithm": "SAC",
+        "sha256": "f8bcee75dca0e71786fbd74a06681d62757f4d5632ff2cb6c5992040a668b4bc",
+        "samples": 9,
+        "timesteps": 1000,
+        "updates": 900,
+        "replay_size": 0
+      },
+      {
+        "path": "outputs/rl/sac_bc_compare/manual_scratch_seed2026/checkpoints/step_002000/model.zip",
+        "algorithm": "SAC",
+        "sha256": "b9a2db4f71779e1d891d354c325fba1be04bbfe600ceba0515a2496ce89063a8",
+        "samples": 9,
+        "timesteps": 2000,
+        "updates": 1900,
+        "replay_size": 0
+      },
+      {
+        "path": "outputs/rl/sac_bc_compare/manual_scratch_seed2026/checkpoints/step_003000/model.zip",
+        "algorithm": "SAC",
+        "sha256": "d61cbd65965b6ff7c8a8c38d79a57d6176c11eb2f1df57e6994aa39a3635bcdf",
+        "samples": 9,
+        "timesteps": 3000,
+        "updates": 2900,
+        "replay_size": 0
+      },
+      {
+        "path": "outputs/rl/sac_bc_compare/manual_scratch_seed2026/checkpoints/step_004000/model.zip",
+        "algorithm": "SAC",
+        "sha256": "a9fb81b1a77caf174d2b7a983539ed7bd28cbb135f5d3d5373261b6583a5288f",
+        "samples": 9,
+        "timesteps": 4000,
+        "updates": 3900,
+        "replay_size": 0
+      },
+      {
+        "path": "outputs/rl/sac_bc_compare/manual_scratch_seed2026/checkpoints/step_005000/model.zip",
+        "algorithm": "SAC",
+        "sha256": "c06db98f5c5810b83902f81a3f9b31e823e47ac2b1cc90fdc5ba1b01f6f83425",
+        "samples": 9,
+        "timesteps": 5000,
+        "updates": 4900,
+        "replay_size": 0
+      },
+      {
+        "path": "outputs/rl/sac_bc_compare/manual_scratch_seed2026/checkpoints/step_006000/model.zip",
+        "algorithm": "SAC",
+        "sha256": "89b70b943b24b738c2cbc07609624c878e665c89d42937f9bc5d47e909417834",
+        "samples": 9,
+        "timesteps": 6000,
+        "updates": 5900,
+        "replay_size": 0
+      },
+      {
+        "path": "outputs/rl/sac_bc_compare/manual_scratch_seed2026/checkpoints/step_007000/model.zip",
+        "algorithm": "SAC",
+        "sha256": "366a92d9096833a136ce45c2bdafda360d5ce06653d29c82b4b3487fee67997a",
+        "samples": 9,
+        "timesteps": 7000,
+        "updates": 6900,
+        "replay_size": 0
+      },
+      {
+        "path": "outputs/rl/sac_bc_compare/manual_scratch_seed2026/checkpoints/step_008000/model.zip",
+        "algorithm": "SAC",
+        "sha256": "2fad9819cb1edf9bd3b70ace2e4e0320cdececba6b2288416e382c8d25ec4dd8",
+        "samples": 9,
+        "timesteps": 8000,
+        "updates": 7900,
+        "replay_size": 0
+      },
+      {
+        "path": "outputs/rl/sac_bc_compare/manual_scratch_seed2026/checkpoints/step_009000/model.zip",
+        "algorithm": "SAC",
+        "sha256": "ae3014336d5e658e69060bbd4b524f9cbc0ec74ed755cce38e4e112f9603c2f5",
+        "samples": 9,
+        "timesteps": 9000,
+        "updates": 8900,
+        "replay_size": 0
+      },
+      {
+        "path": "outputs/rl/sac_bc_compare/manual_scratch_seed2026/checkpoints/step_010000/model.zip",
+        "algorithm": "SAC",
+        "sha256": "c2aea8cb5dad7377915420fadd6c4ad12448708e0fed446843e4d28527a2bf6b",
+        "samples": 9,
+        "timesteps": 10000,
+        "updates": 9900,
+        "replay_size": 0
+      },
+      {
+        "path": "outputs/rl/sac_bc_compare/manual_scratch_seed2026/final/model.zip",
+        "algorithm": "SAC",
+        "sha256": "5e6c2b0891f6f9e2fadd57455a251632e56b539981f01bc5efed6825f36bb76d",
+        "samples": 9,
+        "timesteps": 10000,
+        "updates": 9900,
+        "replay_size": 10000
+      },
+      {
+        "path": "outputs/rl/sac_bc_compare/manual_scratch_seed2026/initial/model.zip",
+        "algorithm": "SAC",
+        "sha256": "f4cc2585e72de256b512b9b9fbf2adcbf0aa6f36ddee3d850443362f0ce448d9",
+        "samples": 9,
+        "timesteps": 0,
+        "updates": 0,
+        "replay_size": 0
+      },
+      {
+        "path": "outputs/rl/sac_bc_init_validation/scratch_compatibility/checkpoints/step_000064/model.zip",
+        "algorithm": "SAC",
+        "sha256": "bcb3dbcde8189528fe3b48d050006f65a24c73a6af0cfc92c3c5dac46f0d1acd",
+        "samples": 9,
+        "timesteps": 64,
+        "updates": 0,
+        "replay_size": 0
+      },
+      {
+        "path": "outputs/rl/sac_bc_init_validation/scratch_compatibility/checkpoints/step_000128/model.zip",
+        "algorithm": "SAC",
+        "sha256": "96001f5ea4128fa9935e38c5659dc90fc62076f3004b1391a44e9bf397307696",
+        "samples": 9,
+        "timesteps": 128,
+        "updates": 28,
+        "replay_size": 0
+      },
+      {
+        "path": "outputs/rl/sac_bc_init_validation/scratch_compatibility/final/model.zip",
+        "algorithm": "SAC",
+        "sha256": "c51a189f9de07329e02c4e6cffd5655bf4f73126fcbe2176f3abd8284b8737aa",
+        "samples": 9,
+        "timesteps": 128,
+        "updates": 28,
+        "replay_size": 128
+      },
+      {
+        "path": "outputs/rl/sac_bc_init_validation/scratch_compatibility/initial/model.zip",
+        "algorithm": "SAC",
+        "sha256": "0c571110e2dbf2551c54a6cd0e7e8407ecf9570acfee590f4b4f71e512753cf6",
+        "samples": 9,
+        "timesteps": 0,
+        "updates": 0,
+        "replay_size": 0
+      },
+      {
+        "path": "outputs/rl/sac_bc_init_validation/scratch_legacy_reference/checkpoints/step_000064/model.zip",
+        "algorithm": "SAC",
+        "sha256": "4ca74b974c6a92033e046d4d28dc1011385c1175c8b585a22fda502c47f6776d",
+        "samples": 9,
+        "timesteps": 64,
+        "updates": 0,
+        "replay_size": 0
+      },
+      {
+        "path": "outputs/rl/sac_bc_init_validation/scratch_legacy_reference/checkpoints/step_000128/model.zip",
+        "algorithm": "SAC",
+        "sha256": "cdae7eca69ec006fe5af89bc119abbec215e2ac134588a5fd134ddf765f7f0ec",
+        "samples": 9,
+        "timesteps": 128,
+        "updates": 28,
+        "replay_size": 0
+      },
+      {
+        "path": "outputs/rl/sac_bc_init_validation/scratch_legacy_reference/final/model.zip",
+        "algorithm": "SAC",
+        "sha256": "8cbd5734eb1bc1808b3bf3a8c4ebac079c390701eb4b8964cb0dd87af131f6f8",
+        "samples": 9,
+        "timesteps": 128,
+        "updates": 28,
+        "replay_size": 128
+      },
+      {
+        "path": "outputs/rl/sac_bc_init_validation/smoke_bc_seed2026/checkpoints/step_000000/model.zip",
+        "algorithm": "SAC",
+        "sha256": "510265007308b348077871ae7c9940474f034df60cc75a387dd7c5ef5e64f16b",
+        "samples": 9,
+        "timesteps": 0,
+        "updates": 0,
+        "replay_size": 0
+      },
+      {
+        "path": "outputs/rl/sac_bc_init_validation/smoke_bc_seed2026/checkpoints/step_000032/model.zip",
+        "algorithm": "SAC",
+        "sha256": "a5b381032d79aa9e244d5b0971d572177d65abf33cd6eab474a94c6b8e5902a1",
+        "samples": 9,
+        "timesteps": 32,
+        "updates": 0,
+        "replay_size": 0
+      },
+      {
+        "path": "outputs/rl/sac_bc_init_validation/smoke_bc_seed2026/checkpoints/step_000064/model.zip",
+        "algorithm": "SAC",
+        "sha256": "f602cb834fd5f9ae9aeb93c40ec54c5d6b32caf6e38719ee8508650325a6a339",
+        "samples": 9,
+        "timesteps": 64,
+        "updates": 0,
+        "replay_size": 0
+      },
+      {
+        "path": "outputs/rl/sac_bc_init_validation/smoke_bc_seed2026/checkpoints/step_000096/model.zip",
+        "algorithm": "SAC",
+        "sha256": "7244e5b2a4370644fca6172224ca5d6134d414269a51f43f5377cf0b35fe29c6",
+        "samples": 9,
+        "timesteps": 96,
+        "updates": 0,
+        "replay_size": 0
+      },
+      {
+        "path": "outputs/rl/sac_bc_init_validation/smoke_bc_seed2026/checkpoints/step_000128/model.zip",
+        "algorithm": "SAC",
+        "sha256": "44c4b8b951a68ce57d0c58c645531f2d48c699c1b41adcab5d4ed626f2e5d42d",
+        "samples": 9,
+        "timesteps": 128,
+        "updates": 28,
+        "replay_size": 0
+      },
+      {
+        "path": "outputs/rl/sac_bc_init_validation/smoke_bc_seed2026/final/model.zip",
+        "algorithm": "SAC",
+        "sha256": "44c4b8b951a68ce57d0c58c645531f2d48c699c1b41adcab5d4ed626f2e5d42d",
+        "samples": 9,
+        "timesteps": 128,
+        "updates": 28,
+        "replay_size": 128
+      },
+      {
+        "path": "outputs/rl/sac_bc_init_validation/smoke_bc_seed2026/initial/model.zip",
+        "algorithm": "SAC",
+        "sha256": "510265007308b348077871ae7c9940474f034df60cc75a387dd7c5ef5e64f16b",
+        "samples": 9,
+        "timesteps": 0,
+        "updates": 0,
+        "replay_size": 0
+      },
+      {
+        "path": "outputs/rl/sac_boundary/controlled_seed2026/training/checkpoints/step_005000/model.zip",
+        "algorithm": "SAC",
+        "sha256": "0801cb246949afe792560788d83f1f30d3da5aea858a0c36c9a1e068a7c728c5",
+        "samples": 9,
+        "timesteps": 5000,
+        "updates": 4900,
+        "replay_size": 0
+      },
+      {
+        "path": "outputs/rl/sac_boundary/controlled_seed2026/training/checkpoints/step_010000/model.zip",
+        "algorithm": "SAC",
+        "sha256": "ac39815c6b359863002547790719a10da074003a04ef0014af7afd5dec2a6db5",
+        "samples": 9,
+        "timesteps": 10000,
+        "updates": 9900,
+        "replay_size": 0
+      },
+      {
+        "path": "outputs/rl/sac_boundary/controlled_seed2026/training/final/model.zip",
+        "algorithm": "SAC",
+        "sha256": "3902fc518e50b944af42c83598c5cb8e7227aea86dd6d6a62189d585b7aef923",
+        "samples": 9,
+        "timesteps": 10000,
+        "updates": 9900,
+        "replay_size": 10000
+      },
+      {
+        "path": "outputs/rl/sac_reach/formal_seed2026/checkpoints/step_005000/model.zip",
+        "algorithm": "SAC",
+        "sha256": "4e4c9931d85063fab4b0f0f7ff8becbd4bc80b2db81577b7593ef8682c3b455b",
+        "samples": 9,
+        "timesteps": 5000,
+        "updates": 4900,
+        "replay_size": 0
+      },
+      {
+        "path": "outputs/rl/sac_reach/formal_seed2026/checkpoints/step_010000/model.zip",
+        "algorithm": "SAC",
+        "sha256": "05396e9657298448046975dfdf2aa9a6a4e6890438d1d36d0e55ccc5b2c5bec2",
+        "samples": 9,
+        "timesteps": 10000,
+        "updates": 9900,
+        "replay_size": 0
+      },
+      {
+        "path": "outputs/rl/sac_reach/formal_seed2026/checkpoints/step_015000/model.zip",
+        "algorithm": "SAC",
+        "sha256": "6583aefa4b722c770acba517e51e2eaef23e2bb037c4aba3941ae29776942962",
+        "samples": 9,
+        "timesteps": 15000,
+        "updates": 14900,
+        "replay_size": 0
+      },
+      {
+        "path": "outputs/rl/sac_reach/formal_seed2026/checkpoints/step_020000/model.zip",
+        "algorithm": "SAC",
+        "sha256": "4f41e0cbbf04f9006fdc6b8f516b925955fc70fd821ecaa3dc7f05caaa816684",
+        "samples": 9,
+        "timesteps": 20000,
+        "updates": 19900,
+        "replay_size": 0
+      },
+      {
+        "path": "outputs/rl/sac_reach/formal_seed2026/checkpoints/step_025000/model.zip",
+        "algorithm": "SAC",
+        "sha256": "7e3ade05f4b13731bc02ed3f04e09a9c21d1371a7460698f463bff034676e4cc",
+        "samples": 9,
+        "timesteps": 25000,
+        "updates": 24900,
+        "replay_size": 0
+      },
+      {
+        "path": "outputs/rl/sac_reach/formal_seed2026/checkpoints/step_030000/model.zip",
+        "algorithm": "SAC",
+        "sha256": "b08ca5de11d119f6e3727a4e1287ea7da5d3b3217b5c144db05dbebaa4fe7ad3",
+        "samples": 9,
+        "timesteps": 30000,
+        "updates": 29900,
+        "replay_size": 0
+      },
+      {
+        "path": "outputs/rl/sac_reach/formal_seed2026/final/model.zip",
+        "algorithm": "SAC",
+        "sha256": "34f1b1ddfa172e16b8e3861c4feab1db12ab1972b9191c8d300766b69dbfd418",
+        "samples": 9,
+        "timesteps": 30000,
+        "updates": 29900,
+        "replay_size": 30000
+      },
+      {
+        "path": "outputs/rl/sac_reach/pilot_seed2026/checkpoints/step_005000/model.zip",
+        "algorithm": "SAC",
+        "sha256": "cb0386d658626a42a8891b4f4c6f1de70890b6ba91af141bc75de5d96ebfd0c6",
+        "samples": 9,
+        "timesteps": 5000,
+        "updates": 4900,
+        "replay_size": 0
+      },
+      {
+        "path": "outputs/rl/sac_reach/pilot_seed2026/final/model.zip",
+        "algorithm": "SAC",
+        "sha256": "f6dcdef8a77de695fce20092a0020287ce032d74d8778792df61245b11f133f8",
+        "samples": 9,
+        "timesteps": 5000,
+        "updates": 4900,
+        "replay_size": 5000
+      },
+      {
+        "path": "outputs/rl/sac_reach/smoke_ready_seed2026/checkpoints/step_000160/model.zip",
+        "algorithm": "SAC",
+        "sha256": "85e0718ee39f53047c10485f24e3b675e5a2070bb1747cf5adbf017c05430f66",
+        "samples": 9,
+        "timesteps": 160,
+        "updates": 60,
+        "replay_size": 0
+      },
+      {
+        "path": "outputs/rl/sac_reach/smoke_ready_seed2026/final/model.zip",
+        "algorithm": "SAC",
+        "sha256": "85e0718ee39f53047c10485f24e3b675e5a2070bb1747cf5adbf017c05430f66",
+        "samples": 9,
+        "timesteps": 160,
+        "updates": 60,
+        "replay_size": 160
+      },
+      {
+        "path": "outputs/rl/sac_reach/smoke_seed2026/checkpoints/step_000160/model.zip",
+        "algorithm": "SAC",
+        "sha256": "f540cfa2ce391801bf3e3ff7de2331e25d8684ba3e186d6c90d688fe8eea7078",
+        "rejected": "Unsupported observation transform",
+        "schema": 1
+      },
+      {
+        "path": "outputs/rl/sac_reach/smoke_seed2026/final/model.zip",
+        "sha256": "f9d78f441d88355c0da2fb62df017f4036b8d685f9d1b97c51b7bfa1464502f1",
+        "rejected": "Missing adjacent config.json"
+      },
+      {
+        "path": "outputs/rl/sac_reach/smoke_verified_seed2026/checkpoints/step_000160/model.zip",
+        "algorithm": "SAC",
+        "sha256": "10f2fab35670e98bc40a58590269584e5fe5bf20ee63a2b751e949a000c232f6",
+        "rejected": "Unsupported observation transform",
+        "schema": 1
+      },
+      {
+        "path": "outputs/rl/sac_reach/smoke_verified_seed2026/final/model.zip",
+        "algorithm": "SAC",
+        "sha256": "9af4d15ea3481b928cef4b247443552a2df8b766d3c703131e19a45c0cebaf0b",
+        "rejected": "Unsupported observation transform",
+        "schema": 1
+      },
+      {
+        "path": "outputs/rl/ppo_reach/fixed_seed2026_pilot/initial_model.zip",
+        "algorithm": "PPO",
+        "sha256": "6efbfeec4d3ddf3c6cae847acab828fefb2d1a4ba24d3ad8f03a5c6f4d635776",
+        "samples": 9,
+        "timesteps": 0,
+        "updates": 0,
+        "replay_size": null
+      },
+      {
+        "path": "outputs/rl/ppo_reach_validation/smoke_seed2026/initial_model.zip",
+        "algorithm": "PPO",
+        "sha256": "f8f496ff6b13c669c47db9260043a6510195b4b3ce70dc331d13a20fa261ab92",
+        "samples": 9,
+        "timesteps": 0,
+        "updates": 0,
+        "replay_size": null
+      },
+      {
+        "path": "outputs/rl/pure_reach/fixed_safe_seed2026_pilot/initial_model.zip",
+        "algorithm": "SAC",
+        "sha256": "f59bb729405585f604a87126be16ec07eef12afcd3510f24499e0b78924df685",
+        "samples": 9,
+        "timesteps": 0,
+        "updates": 0,
+        "replay_size": 0
+      },
+      {
+        "path": "outputs/rl/pure_reach/fixed_shaped_seed2026_pilot/initial_model.zip",
+        "algorithm": "SAC",
+        "sha256": "7fa4ce3fd8585b1515e00e428b33817c1bcb61758538cca1ab2f9d57ea87ce2d",
+        "samples": 9,
+        "timesteps": 0,
+        "updates": 0,
+        "replay_size": 0
+      },
+      {
+        "path": "outputs/rl/pure_reach_validation/smoke_fixed_shaped_seed2026/initial_model.zip",
+        "algorithm": "SAC",
+        "sha256": "186f9675fffc060bba7620cc0d67bc12797b062a1bac0cacee6d6a94b75300c4",
+        "samples": 9,
+        "timesteps": 0,
+        "updates": 0,
+        "replay_size": 0
+      },
+      {
+        "path": "outputs/rl/sac_bc_compare/manual_bc_actor_seed2026/initial_model.zip",
+        "algorithm": "SAC",
+        "sha256": "56c6a702661cdd3b2ae89b3a51f89fd0f4be64dd7b56601dd95c1b611c30fc98",
+        "samples": 9,
+        "timesteps": 0,
+        "updates": 0,
+        "replay_size": 0
+      },
+      {
+        "path": "outputs/rl/sac_bc_compare/manual_scratch_seed2026/initial_model.zip",
+        "algorithm": "SAC",
+        "sha256": "9b542a3a8c8187b1fcc14eb245abbe6ce2033d080dc254cda17883953b269518",
+        "samples": 9,
+        "timesteps": 0,
+        "updates": 0,
+        "replay_size": 0
+      },
+      {
+        "path": "outputs/rl/sac_bc_init_validation/scratch_compatibility/initial_model.zip",
+        "algorithm": "SAC",
+        "sha256": "23d91146f7c92317c1a531a32a35e89a6c823277cea1b75a2c99154c994b9904",
+        "samples": 9,
+        "timesteps": 0,
+        "updates": 0,
+        "replay_size": 0
+      },
+      {
+        "path": "outputs/rl/sac_bc_init_validation/scratch_legacy_reference/initial_model.zip",
+        "algorithm": "SAC",
+        "sha256": "b1348775876fb19d0b311ba8278e3ae7b0c3575d408549edff5bdc03ac087cfc",
+        "samples": 9,
+        "timesteps": 0,
+        "updates": 0,
+        "replay_size": 0
+      },
+      {
+        "path": "outputs/rl/sac_bc_init_validation/smoke_bc_seed2026/initial_model.zip",
+        "algorithm": "SAC",
+        "sha256": "a1e1f7d4d1c9865ec392460b49e05c55257801e2fc0f68ef601dcbfd4df67ed4",
+        "samples": 9,
+        "timesteps": 0,
+        "updates": 0,
+        "replay_size": 0
+      },
+      {
+        "path": "outputs/rl/sac_boundary/controlled_seed2026/training/initial_model.zip",
+        "algorithm": "SAC",
+        "sha256": "b293746b78ef7692a5789abe5a65bd33e5185cf3a8b84f24315fedd83e932a12",
+        "samples": 9,
+        "timesteps": 0,
+        "updates": 0,
+        "replay_size": 0
+      },
+      {
+        "path": "outputs/rl/sac_reach/formal_seed2026/initial_model.zip",
+        "algorithm": "SAC",
+        "sha256": "626f0baf001471b981c28b56315d0461a35e5a765f2305ab783971757bd71de9",
+        "samples": 9,
+        "timesteps": 0,
+        "updates": 0,
+        "replay_size": 0
+      },
+      {
+        "path": "outputs/rl/sac_reach/pilot_seed2026/initial_model.zip",
+        "algorithm": "SAC",
+        "sha256": "d3c94cc9a4cf0f28c351e5e66e696ca40df4ce8cdb6509971166bbf5448b8ff9",
+        "samples": 9,
+        "timesteps": 0,
+        "updates": 0,
+        "replay_size": 0
+      },
+      {
+        "path": "outputs/rl/sac_reach/smoke_ready_seed2026/initial_model.zip",
+        "algorithm": "SAC",
+        "sha256": "ea0957c79ecca74270ba6f658027c37c6fb8a6ef0c77315b07c5e5d13ba9d4ed",
+        "samples": 9,
+        "timesteps": 0,
+        "updates": 0,
+        "replay_size": 0
+      },
+      {
+        "path": "outputs/rl/sac_reach/smoke_seed2026/initial_model.zip",
+        "algorithm": "SAC",
+        "sha256": "4eab6e53ecc5c084a3b29d91fdca265848ed0b18c17978c7ae2182d4d86c097e",
+        "rejected": "Unsupported observation transform",
+        "schema": 1
+      },
+      {
+        "path": "outputs/rl/sac_reach/smoke_verified_seed2026/initial_model.zip",
+        "algorithm": "SAC",
+        "sha256": "5299d2647e450b0f104953371a463f2b8b1b6e8a458382588c9e8311e9730355",
+        "rejected": "Unsupported observation transform",
+        "schema": 1
+      },
+      {
+        "path": "outputs/bc_reach/fit_seed2026/best_bc.pt",
+        "algorithm": "BC",
+        "sha256": "af059a26c78f0cb5eb40075ddfdf16ad1e1e18821660396ac44bd9dfe04eb8b8",
+        "samples": 9
+      },
+      {
+        "path": "outputs/bc_reach/fit_seed2026/last_epoch_bc.pt",
+        "algorithm": "BC",
+        "sha256": "51a0dbae010c4385812e4aeb6dfb4024121c79e8c83c9e7437f77d1698774534",
+        "samples": 9
+      },
+      {
+        "path": "outputs/bc_reach/fit_seed2026/untrained_bc.pt",
+        "algorithm": "BC",
+        "sha256": "b5934e00ee2c9591c52eb694dd85614e0e63dbdec9c9b4b9e411ba73cd63df8e",
+        "samples": 9
+      }
+    ]
+  },
+  "protected_files": {
+    "total": 1118,
+    "groups": {
+      "outputs": 1070,
+      "assets": 36,
+      "core": 12
+    }
+  },
+  "protected_verification": {
+    "verified": true,
+    "files": 1118,
+    "bytes": 690320232,
+    "missing": [],
+    "added": [],
+    "changed": [],
+    "manifest_sha256": "cf4e2b3f24881ec0e60e352fd3668af9fa665f2ea5af944b2ffdfb6799e73ded"
+  },
+  "documentation": {
+    "current_documents_checked": 6,
+    "local_links_checked": 51,
+    "indexed_python_files": 77,
+    "unchanged_historical_reports": 17,
+    "errors": [],
+    "all_documents_checked": 25,
+    "all_local_links_checked": 81
+  },
+  "historical_cli": {
+    "ppo": {
+      "model": "/home/mr-beaver/Documents/robot/realman_rl_simtoreal/outputs/rl/ppo_reach/fixed_seed2026_pilot/checkpoints/step_016384/model.zip",
+      "seeds": [
+        88000
+      ],
+      "summary": {
+        "episodes": 1,
+        "success_rate": 1.0,
+        "mean_return": 8.17318374460006,
+        "mean_discounted_return": 6.9230665546159305,
+        "mean_episode_length": 18.0,
+        "mean_success_steps": 18.0,
+        "mean_final_distance_m": 0.0009609675835569294,
+        "safety_failures": 0,
+        "rejected_actions": 0,
+        "termination_counts": {
+          "success": 1,
+          "workspace_limit": 0,
+          "joint_limit": 0,
+          "ik_failure": 0,
+          "orientation_limit": 0,
+          "collision": 0,
+          "numerical_failure": 0,
+          "time_limit": 0,
+          "unreachable_target": 0,
+          "velocity_limit": 0,
+          "drive_failure": 0
+        }
+      },
+      "parameters_unchanged": true
+    },
+    "sac": {
+      "model": "/home/mr-beaver/Documents/robot/realman_rl_simtoreal/outputs/rl/sac_reach/formal_seed2026/final/model.zip",
+      "seeds": [
+        88100
+      ],
+      "summary": {
+        "episodes": 1,
+        "success_rate": 0.0,
+        "mean_return": -46.52774540633707,
+        "mean_discounted_return": -20.503938214623314,
+        "mean_episode_length": 200.0,
+        "mean_success_steps": null,
+        "mean_final_distance_m": 0.00402821771241283,
+        "safety_failures": 0,
+        "rejected_actions": 0,
+        "termination_counts": {
+          "success": 0,
+          "workspace_limit": 0,
+          "joint_limit": 0,
+          "ik_failure": 0,
+          "orientation_limit": 0,
+          "collision": 0,
+          "numerical_failure": 0,
+          "time_limit": 1,
+          "unreachable_target": 0,
+          "velocity_limit": 0,
+          "drive_failure": 0
+        }
+      }
+    },
+    "bc": {
+      "model": "/home/mr-beaver/Documents/robot/realman_rl_simtoreal/outputs/bc_reach/fit_seed2026/best_bc.pt",
+      "seeds": [
+        88100
+      ],
+      "paired_goals_identical": true,
+      "no_supervised_target_overlap": true,
+      "summaries": {
+        "rule": {
+          "episodes": 1,
+          "success_rate": 1.0,
+          "mean_success_steps": 14.0,
+          "mean_episode_length": 14.0,
+          "mean_final_distance_m": 0.0007969846261752673,
+          "mean_return": -1.6770143983478094,
+          "safety_failures": 0,
+          "termination_counts": {
+            "success": 1
+          },
+          "actual_toward_fraction": 1.0,
+          "command_toward_fraction": 1.0,
+          "reversed_fraction": 0.0,
+          "command_path_m": 0.0035000000524023868,
+          "actual_path_m": 0.003111015584937329,
+          "actual_to_command_path_ratio": 0.8888615823882459
+        },
+        "untrained": {
+          "episodes": 1,
+          "success_rate": 0.0,
+          "mean_success_steps": null,
+          "mean_episode_length": 200.0,
+          "mean_final_distance_m": 0.007600920723277984,
+          "mean_return": -46.00328980851668,
+          "safety_failures": 0,
+          "termination_counts": {
+            "time_limit": 1
+          },
+          "actual_toward_fraction": 0.26,
+          "command_toward_fraction": 0.25,
+          "reversed_fraction": 0.0,
+          "command_path_m": 0.00948492905166599,
+          "actual_path_m": 0.00938342331464428,
+          "actual_to_command_path_ratio": 0.9892982080868721
+        },
+        "bc": {
+          "episodes": 1,
+          "success_rate": 1.0,
+          "mean_success_steps": 14.0,
+          "mean_episode_length": 14.0,
+          "mean_final_distance_m": 0.0007830662429889778,
+          "mean_return": -1.672784402350891,
+          "safety_failures": 0,
+          "termination_counts": {
+            "success": 1
+          },
+          "actual_toward_fraction": 1.0,
+          "command_toward_fraction": 1.0,
+          "reversed_fraction": 0.0,
+          "command_path_m": 0.003516567283832134,
+          "actual_path_m": 0.003124930787966793,
+          "actual_to_command_path_ratio": 0.8886310244464994
+        }
+      }
+    },
+    "ppo_png_count": 11,
+    "ppo_png_files": [
+      "action_box_clipping.png",
+      "approx_kl.png",
+      "clip_fraction.png",
+      "entropy_loss.png",
+      "evaluation_distance.png",
+      "evaluation_episode_length.png",
+      "evaluation_success.png",
+      "explained_variance.png",
+      "policy_gradient_loss.png",
+      "policy_std.png",
+      "value_loss.png"
+    ]
+  }
+}

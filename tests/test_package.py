@@ -16,6 +16,34 @@ from unittest.mock import Mock, patch
 from realman_rl_simtoreal.paths import PROJECT_ROOT as ROOT
 
 
+SCRIPT_PATHS = {'train_ppo_reach': 'train/train_ppo_reach.py',
+ 'train_sac_reach': 'train/train_sac_reach.py',
+ 'train_bc_reach': 'train/train_bc_reach.py',
+ 'collect_reach_demonstrations': 'train/collect_reach_demonstrations.py',
+ 'evaluate_ppo_reach': 'evaluate/evaluate_ppo_reach.py',
+ 'evaluate_sac_reach': 'evaluate/evaluate_sac_reach.py',
+ 'evaluate_bc_reach': 'evaluate/evaluate_bc_reach.py',
+ 'evaluate_reach_baselines': 'evaluate/evaluate_reach_baselines.py',
+ 'view_robot': 'demos/view_robot.py',
+ 'control_joints': 'demos/control_joints.py',
+ 'control_ee': 'demos/control_ee.py',
+ 'demo_gripper': 'demos/demo_gripper.py',
+ 'build_dynamics_model': 'models/build_dynamics_model.py',
+ 'build_gripper_model': 'models/build_gripper_model.py',
+ 'build_grasp_scene': 'models/build_grasp_scene.py',
+ 'inspect_model': 'models/inspect_model.py',
+ 'compare_controllers': 'diagnostics/compare_controllers.py',
+ 'compare_fk': 'diagnostics/compare_fk.py',
+ 'compare_ik': 'diagnostics/compare_ik.py',
+ 'compare_sac_boundary': 'diagnostics/compare_sac_boundary.py',
+ 'diagnose_sac_reach': 'diagnostics/diagnose_sac_reach.py',
+ 'smoke_reach_env': 'diagnostics/smoke_reach_env.py',
+ 'plot_ppo_training': 'plots/plot_ppo_training.py',
+ 'plot_sac_training': 'plots/plot_sac_training.py',
+ 'run_grasp_contact_cases': 'demos/run_grasp_contact_cases.py',
+ 'probe_reach_env': 'diagnostics/probe_reach_env.py'}
+
+
 class PackageTests(unittest.TestCase):
     def run_code(self, code):
         with tempfile.TemporaryDirectory(prefix="realman-import-") as directory:
@@ -31,9 +59,13 @@ import sys
 import realman_rl_simtoreal as package
 import realman_rl_simtoreal.simulation
 import realman_rl_simtoreal.vendor
-import realman_rl_simtoreal.experiments
+import realman_rl_simtoreal.tasks
+import realman_rl_simtoreal.rl
+import realman_rl_simtoreal.rl.common
+import realman_rl_simtoreal.imitation
+import realman_rl_simtoreal.utils
 assert '/src/realman_rl_simtoreal/' in package.__file__
-assert not any(n in sys.modules for n in ('mujoco','glfw','Robotic_Arm'))
+assert not any(n in sys.modules for n in ('mujoco','glfw','Robotic_Arm','torch','stable_baselines3'))
 ''')
 
     def test_core_import_and_resources_under_isolated_python(self):
@@ -103,6 +135,10 @@ for constructor in (lambda:RealManFK(),lambda:RealManIK(kin.limits)):
         self.assertEqual(len(optional)+len(rl_optional), len(all_optional))
         direct = json.loads(metadata.distribution('realman_rl_simtoreal').read_text('direct_url.json'))
         self.assertTrue(direct['dir_info']['editable'])
+        from setuptools import find_packages
+        discovered = set(find_packages(where=str(ROOT/'src'), include=['realman_rl_simtoreal*']))
+        for suffix in ('tasks','rl','rl.common','imitation','utils'):
+            self.assertIn('realman_rl_simtoreal.'+suffix, discovered)
 
     def test_canonical_import_graph_has_no_scripts_or_cycles(self):
         package = ROOT/'src/realman_rl_simtoreal'
@@ -123,8 +159,17 @@ for constructor in (lambda:RealManFK(),lambda:RealManIK(kin.limits)):
                 else:
                     continue
                 self.assertFalse(any(n=='scripts' or n.startswith('scripts.') for n in imports))
+                self.assertFalse(any(n.startswith('realman_rl_simtoreal.experiments') for n in imports))
+                if '.envs.' in name or '.tasks.' in name:
+                    self.assertFalse(any(n.startswith(('realman_rl_simtoreal.rl',
+                                                       'realman_rl_simtoreal.imitation')) for n in imports))
+                if '.rl.common.' in name or name=='realman_rl_simtoreal.rl.ppo':
+                    self.assertFalse(any(n.startswith(('realman_rl_simtoreal.rl.sac',
+                                                       'realman_rl_simtoreal.imitation')) for n in imports))
+                if name.startswith('realman_rl_simtoreal.rl.sac'):
+                    self.assertFalse(any(n.startswith('realman_rl_simtoreal.rl.ppo') for n in imports))
                 if '.simulation.' in name:
-                    self.assertFalse(any(n.startswith(('realman_rl_simtoreal.vendor','realman_rl_simtoreal.experiments',
+                    self.assertFalse(any(n.startswith(('realman_rl_simtoreal.vendor','realman_rl_simtoreal.rl','realman_rl_simtoreal.imitation','realman_rl_simtoreal.tasks','realman_rl_simtoreal.utils',
                                                        'realman_rl_simtoreal.viewer')) for n in imports))
                 edges[name].update(n for n in imports if n in modules)
         done,visiting=set(),set()
@@ -135,18 +180,28 @@ for constructor in (lambda:RealManFK(),lambda:RealManIK(kin.limits)):
             for dep in edges[name]:visit(dep)
             visiting.remove(name);done.add(name)
         for name in edges:visit(name)
-        for path in [*package.rglob('*.py'),*(ROOT/'scripts').glob('*.py'),*(ROOT/'tests').glob('*.py')]:
+        for path in [*package.rglob('*.py'),*(ROOT/'scripts').rglob('*.py'),*(ROOT/'tests').glob('*.py')]:
             for node in ast.walk(ast.parse(path.read_text())):
                 if isinstance(node,ast.Call) and isinstance(node.func,ast.Attribute):
                     self.assertFalse(ast.unparse(node.func).startswith('sys.path.'),str(path))
         for old in ('kinematics.py','realman_fk.py','realman_ik.py'):
             self.assertFalse((ROOT/'scripts'/old).exists())
+        self.assertFalse((package/'experiments').exists())
+        self.assertFalse(list((ROOT/'scripts').glob('*.py')))
 
     def test_existing_argparse_entries_help_from_other_directory(self):
-        names = ('inspect_model','view_robot','control_joints','control_ee','compare_controllers','compare_fk','compare_ik')
+        # Builders have no argparse interface and are exercised by byte-for-byte asset tests.
+        names = [name for name in SCRIPT_PATHS if not name.startswith('build_')]
         for name in names:
+            if name in ('train_ppo_reach','train_sac_reach','train_bc_reach',
+                        'collect_reach_demonstrations','evaluate_ppo_reach','evaluate_sac_reach',
+                        'evaluate_bc_reach','compare_sac_boundary','diagnose_sac_reach',
+                        'probe_reach_env') and util.find_spec('stable_baselines3') is None:
+                continue
+            if name.startswith('plot_') and util.find_spec('matplotlib') is None:
+                continue
             with self.subTest(script=name):
-                result = subprocess.run([sys.executable,'-I',str(ROOT/'scripts'/f'{name}.py'),'--help'],
+                result = subprocess.run([sys.executable,'-I',str(ROOT/'scripts'/SCRIPT_PATHS[name]),'--help'],
                                         cwd='/tmp',capture_output=True,text=True,timeout=30)
                 self.assertEqual(result.returncode,0,result.stderr)
                 self.assertIn('usage:',result.stdout)
@@ -158,13 +213,13 @@ for constructor in (lambda:RealManFK(),lambda:RealManIK(kin.limits)):
                  ('compare_ik',['--model','/tmp/realman-missing.xml'],1)]
         for name,args,code in cases:
             with self.subTest(script=name):
-                result=subprocess.run([sys.executable,'-I',str(ROOT/'scripts'/f'{name}.py'),*args],
+                result=subprocess.run([sys.executable,'-I',str(ROOT/'scripts'/SCRIPT_PATHS[name]),*args],
                                       cwd='/tmp',capture_output=True,text=True,timeout=30)
                 self.assertEqual(result.returncode,code,result.stdout+result.stderr)
 
     def test_static_viewer_missing_display_fails_clearly(self):
         env={k:v for k,v in os.environ.items() if k not in ('DISPLAY','WAYLAND_DISPLAY')}
-        result=subprocess.run([sys.executable,'-I',str(ROOT/'scripts/view_robot.py'),'--duration','1'],
+        result=subprocess.run([sys.executable,'-I',str(ROOT/'scripts/demos/view_robot.py'),'--duration','1'],
                               cwd='/tmp',env=env,capture_output=True,text=True,timeout=15)
         self.assertEqual(result.returncode,1)
         self.assertIn('No desktop display',result.stderr)

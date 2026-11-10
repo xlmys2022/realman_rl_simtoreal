@@ -386,7 +386,7 @@ assert not any(n.startswith('realman_rl_simtoreal.vendor') for n in sys.modules)
     def test_headless_smoke_cli(self):
         with tempfile.TemporaryDirectory() as directory:
             output = Path(directory)/'result.json'
-            result = subprocess.run([sys.executable, '-I', str(PROJECT_ROOT/'scripts/smoke_reach_env.py'),
+            result = subprocess.run([sys.executable, '-I', str(PROJECT_ROOT/'scripts/diagnostics/smoke_reach_env.py'),
                                      '--json', str(output)], cwd=directory, capture_output=True, text=True, timeout=30)
             self.assertEqual(result.returncode, 0, result.stdout+result.stderr)
             rows = json.loads(output.read_text())['steps']

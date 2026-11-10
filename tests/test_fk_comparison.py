@@ -13,7 +13,7 @@ import mujoco
 import numpy as np
 
 ROOT = Path(__file__).resolve().parents[1]
-_spec = importlib.util.spec_from_file_location("_test_compare_fk", ROOT / "scripts/compare_fk.py")
+_spec = importlib.util.spec_from_file_location("_test_compare_fk", ROOT / "scripts/diagnostics/compare_fk.py")
 comparison = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(comparison)
 from realman_rl_simtoreal.simulation import control, model as model_api
@@ -210,7 +210,7 @@ class VendorFKTests(unittest.TestCase):
     def test_cli_from_other_directory_reports_mismatch_and_matrices(self):
         with tempfile.TemporaryDirectory(prefix="realman-fk-") as directory:
             path = Path(directory) / "comparison.json"
-            result = subprocess.run([sys.executable, "-I", str(ROOT / "scripts/compare_fk.py"), "--json", str(path)],
+            result = subprocess.run([sys.executable, "-I", str(ROOT / "scripts/diagnostics/compare_fk.py"), "--json", str(path)],
                                     cwd=directory, capture_output=True, text=True, timeout=30)
             self.assertEqual(result.returncode, 2, result.stderr)
             self.assertIn("[MISMATCH]", result.stdout)

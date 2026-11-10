@@ -21,7 +21,7 @@ from realman_rl_simtoreal.simulation.control import validate_target
 from realman_rl_simtoreal.simulation.ee_control import check_motion
 from realman_rl_simtoreal.simulation.kinematics import IKResult, rotation_vector
 
-_spec = util.spec_from_file_location('_test_reach_baselines', PROJECT_ROOT/'scripts/evaluate_reach_baselines.py')
+_spec = util.spec_from_file_location('_test_reach_baselines', PROJECT_ROOT/'scripts/evaluate/evaluate_reach_baselines.py')
 baselines = util.module_from_spec(_spec)
 _spec.loader.exec_module(baselines)
 
@@ -304,7 +304,7 @@ assert not any(n.startswith('realman_rl_simtoreal.vendor') for n in sys.modules)
     def test_evaluation_cli_from_other_directory_and_profile(self):
         with tempfile.TemporaryDirectory() as directory:
             output = Path(directory)/'result.json'
-            result = subprocess.run([sys.executable, '-I', str(PROJECT_ROOT/'scripts/evaluate_reach_baselines.py'),
+            result = subprocess.run([sys.executable, '-I', str(PROJECT_ROOT/'scripts/evaluate/evaluate_reach_baselines.py'),
                                      '--episodes', '2', '--profile', '--json', str(output)], cwd=directory,
                                     capture_output=True, text=True, timeout=30)
             self.assertEqual(result.returncode, 0, result.stdout+result.stderr)
