@@ -1,6 +1,6 @@
 # realman_rl_simtoreal
 
-基于 MuJoCo 的睿尔曼机械臂仿真项目。长期目标是强化学习控制、抓取及 sim-to-real；当前已完成模型、控制、离线运动学验证，以及固定/随机局部目标的 Gymnasium reaching 环境和训练前基线评估。尚未实现强化学习算法或训练。
+基于 MuJoCo 的睿尔曼机械臂仿真项目。长期目标是强化学习控制、抓取及 sim-to-real；当前主动研究纯SAC Reach的奖励、动作尺度与目标难度。模型、控制、离线运动学、夹爪接触、历史SAC及BC研究全部保留；暂停BC与SAC融合。训练流程与策略表现分开验证，最新入口见下文04-E1。
 
 实际模型为官方 **RML63II-6F-V**。它与目标实物 RML63-6F-V 的代际关系尚未核实。静态检查 URDF 保留相机支架转动关节，为 `nq=nv=7, nu=0`；新增动力学 MJCF 将相机刚性固定，为 `nq=nv=nu=6`。
 
@@ -188,7 +188,7 @@ python -I /home/mr-beaver/Documents/robot/realman_rl_simtoreal/scripts/compare_c
 
 静态 URDF 零位下仍报告 `base_link/link_1` 约 2.73 mm 的装配包络重叠。动力学 MJCF 仅排除该相邻装配对；其他非相邻自碰撞及环境碰撞保留，并有反例测试。相机固定在支架原始零角度，未修改官方原始 URDF 或 STL 尺寸。
 
-后续仍需核实实物版本、零位、惯量、碰撞几何和控制参数。当前只验证小范围关节/末端运动及局部目标环境；已增加独立夹爪接触实验，未实现强化学习或真机通信，不自动上传 GitHub。
+后续仍需核实实物版本、零位、惯量、碰撞几何和控制参数。当前已验证小范围关节/末端运动、局部目标环境及独立夹爪接触，并完成首次SAC训练；真机通信未实现，不自动上传 GitHub。
 
 ## 最小 Gymnasium 环境（03-A）
 
@@ -218,7 +218,7 @@ with ReachEnv(render_mode="ansi") as env:
 
 复用原IK、51点路径预检和位置执行器；新增 `advance_control_cycle` 替代演示用整段控制，不等待稳态、不重置home。关节指令平均变化率上限10°/s并进行平滑插值，实际速度限制30°/s；仍保留home ±5°和10mm命令区域。正常step不改写实际qpos。
 
-当前仅支持无渲染和`ansi`文本render，没有环境内Viewer/RGB图像或正式训练。官方checker通过，保留无限观测边界及直接构造实例缺少注册spec的提示；文本render、重复close另有测试。03-A固定目标的完整API与历史结果见 [REACH_ENV_VALIDATION.md](docs/validation/REACH_ENV_VALIDATION.md)。03-B后的完整测试为134项（原112项＋新增22项）。
+当前仅支持无渲染和`ansi`文本render，没有环境内Viewer/RGB图像；04-A训练由独立脚本实现。官方checker通过，保留无限观测边界及直接构造实例缺少注册spec的提示；文本render、重复close另有测试。03-A固定目标的完整API与历史结果见 [REACH_ENV_VALIDATION.md](docs/validation/REACH_ENV_VALIDATION.md)。03-B后的完整测试为134项（原112项＋新增22项）。
 
 ## 随机目标与训练前验证（03-B）
 
@@ -244,7 +244,7 @@ python -I /home/mr-beaver/Documents/robot/realman_rl_simtoreal/scripts/evaluate_
 
 本次成功率为随机11/100、规则100/100；平均Episode长度53.66/14.54步，平均回报-192.60246/-1.88148。两组无碰撞和数值失败。实测step均值约15ms，含reset和策略检查的交互速度约65–67步/秒，不按50ms仿真周期推算。命令边界、关节限制、IK和物理安全失败仍终止，超时截断；没有投影非法IK解或放宽安全阈值。
 
-可开始受限局部任务的小规模训练实验，但尚未训练或实现HER。未来HER需同步重算27维观测的目标相对字段、距离和成功终止条件，并保存独立安全标记。完整目标分布、失败统计、奖励推导、性能与限制见 [REACH_TASK_VALIDATION.md](docs/validation/REACH_TASK_VALIDATION.md)。
+03-B验证为受限局部训练准备了基线；04-A已进行首次SAC实验（见后文），尚未实现HER。未来HER需同步重算27维观测的目标相对字段、距离和成功终止条件，并保存独立安全标记。完整目标分布、失败统计、奖励推导、性能与限制见 [REACH_TASK_VALIDATION.md](docs/validation/REACH_TASK_VALIDATION.md)。
 
 ## EG2-4C2夹爪（03-C1）
 
@@ -334,3 +334,133 @@ python -I -m unittest discover -s /home/mr-beaver/Documents/robot/realman_rl_sim
 10g、指垫摩擦系数0.7时已验证真实接触、5mm法向抬升、2秒离台保持及降近台面后释放；不闭合时方块仍由台面支撑。低摩擦0.05和30g案例触发原mimic/速度保护，未放宽限制。当前177项测试通过，其中负例测试验证安全停止，**不代表所有物理案例夹持成功**。质量、安装、传动和控制均未实物标定，结果不代表真实EG2-4C2性能。
 
 同步控制使用`simulation.control.advance_synchronized_cycle`：同一周期更新机械臂和夹爪ctrl，再推进25个2ms物理步，总计50ms；不能顺序调用两个各推进25步的接口来替代。ReachEnv保持原接口。完整参数、接触力、失败过程、Viewer及局限见 [GRASP_CONTACT_VALIDATION.md](docs/validation/GRASP_CONTACT_VALIDATION.md)。
+
+## SAC Reach训练（04-A，可选CPU依赖）
+
+训练仅使用原六轴`ReachEnv`，不加载夹爪场景。环境、IK、奖励和安全规则不变。新增SB3/PyTorch独立可选依赖，基础仿真仍无需它们：
+
+```bash
+conda activate realman_rl
+python -I -m pip install --dry-run --extra-index-url https://download.pytorch.org/whl/cpu -c requirements.txt -r requirements-rl.txt
+python -I -m pip install --extra-index-url https://download.pytorch.org/whl/cpu -c requirements.txt -r requirements-rl.txt
+python -I -m pip install --no-deps --no-build-isolation -e .
+python -I -m pip check
+python -I scripts/train_sac_reach.py --run-dir outputs/rl/sac_reach/my_pilot --timesteps 5000 --label pilot
+```
+
+采用官方`SAC("MultiInputPolicy", ...)`、CPU单线程、Actor及双Critic各两层256/ReLU。27维observation按固定home和原实验范围缩放；两个goal字段保留米制以保持compute_reward接口，SB3在网络入口转为float32。原safe_dense奖励不缩放、不修改。所有偏移/尺度及环境/训练参数保存在config.json和observation_transform.json，无在线统计需要恢复。
+
+每5,000步用独立种子10000–10009评估并保存checkpoint，调用间在同一进程保留模型、Replay Buffer和环境状态。每次CLI启动都是独立实验，已有非空目录会拒绝覆盖；本次不提供隐式续训。正式30,000步命令须在Pilot检查后运行：
+
+```bash
+python -I scripts/train_sac_reach.py --run-dir outputs/rl/sac_reach/my_formal --timesteps 30000 --label formal
+python -I scripts/evaluate_sac_reach.py --model outputs/rl/sac_reach/my_formal/final/model.zip --episodes 100 --seed-start 100
+```
+
+最终模型旁必须保留config.json/observation_transform.json；评估脚本会使用保存的同一预处理、deterministic=True和独立环境，按相同100个目标对比随机、原规则及SAC策略。final/replay_buffer.pkl.gz为官方SB3 Replay Buffer的无损压缩存档，独立推理不需要读取它。训练日志、网络、配置和依赖快照全部放在已被Git忽略的outputs/rl/sac_reach下，不上传大文件。
+
+本次实验结果、失败分类、奖励尺度与Critic/Q值分析见 [SAC_REACH_VALIDATION.md](docs/validation/SAC_REACH_VALIDATION.md)。少量步数测试只验接口和更新，不要求策略成功；训练回报和任务成功率分别报告。
+
+本次固定seed首次正式训练30,000步（独立于5k Pilot），实际29,900次更新，CPU约37.17步/秒。独立种子100–199：随机4/100、规则100/100、未训练SAC2/100、最终SAC1/100。最终SAC99次超时、无安全失败，平均末端误差6.713mm，**尚未学得可靠Reach策略**；回报改善主要伴随失败减少。保留了Critic乐观偏差和指令往复的证据，未加步数或修改奖励制造成功。原177加新增12项测试共189项通过；详细结果见上述验证报告。已保存产物为`outputs/rl/sac_reach/formal_seed2026/final/model.zip`及相邻配置。
+
+## SAC诊断与边界对照（04-B）
+
+原04-A模型、Replay Buffer、配置和失败报告全部保留。默认`boundary_mode="terminate"`与原行为一致；显式选择`reject_and_hold`时，仅拒绝超出10mm命令区域或home ±5°的候选命令，保持最近合法命令并继续一个50ms物理周期。非法模型限位/IK解、实际碰撞、速度、总驱动力、姿态及数值异常仍终止。拒绝不裁剪IK解、不修改实际qpos；默认增加1个普通距离成本单位，`compute_reward`通过info中的`is_action_rejected`标量/批量重算。
+
+只读重跑原30k诊断，或复现独立10k边界实验（输出目录必须为空，后者会从头训练）：
+
+```bash
+conda activate realman_rl
+python -I scripts/diagnose_sac_reach.py --out outputs/rl/sac_boundary/new_diagnosis
+python -I scripts/compare_sac_boundary.py --out outputs/rl/sac_boundary/new_seed2026
+```
+
+已有B模型的最终100目标评估无需训练：
+
+```bash
+python -I scripts/compare_sac_boundary.py --final --b outputs/rl/sac_boundary/controlled_seed2026/training/final/model.zip --out outputs/rl/sac_boundary/new_final_evaluation
+python -I -m unittest discover -s tests -v
+```
+
+原30k在20个开发目标上，动作朝实际目标的比例仅50.5%，相邻反向41.0%；全Replay中安全/成功终止样本的soft TD残差很大，未发现SB3接错终止观测或错误屏蔽timeout。新B从头训练10k、CPU约37.96步/秒；同预算A/B最终100目标成功率0%/1%，平均距离7.458/3.229mm，均无安全失败或拒绝。B降低了误差和往复，但仍不能可靠Reach；开发集均0/20，按预定标准没有追加第二seed或更多步数。原189加新增18项测试共207项通过。完整轨迹、TD公式/数组、奖励反例、限制及运行命令见 [SAC_DIAGNOSTICS_VALIDATION.md](docs/validation/SAC_DIAGNOSTICS_VALIDATION.md)。
+
+## Reach行为克隆（04-C）
+
+独立PyTorch BC网络使用与SAC确定性均值通路相同的33→256/ReLU→256/ReLU→3/tanh容量，拟合原规则策略动作。它没有Critic、Replay或强化学习更新，不是SAC预训练。直接复用04-A固定观测变换，默认terminate环境、奖励和安全检查均不变。
+
+```bash
+conda activate realman_rl
+python -I scripts/collect_reach_demonstrations.py --out outputs/bc_reach/new_demonstrations
+python -I scripts/train_bc_reach.py --data outputs/bc_reach/new_demonstrations/demonstrations.npz --out outputs/bc_reach/new_fit
+python -I scripts/evaluate_bc_reach.py --model outputs/bc_reach/new_fit/best_bc.pt --out outputs/bc_reach/new_evaluation
+```
+
+采集默认300个专家Episode（240训练/60验证），按完整Episode划分；训练300个epoch，按独立监督验证MSE选模型。最终种子20000–20099保留用于规则、未训练和BC三组配对闭环，神经分支只输出网络动作，不调用专家修正。已有非空输出目录拒绝覆盖。
+
+本轮4447个示范样本全部为移动动作，验证动作MSE约3.67e-6、方向余弦.999954。最终100个新目标：BC100/100、规则100/100、未训练1/100；BC平均误差.86449mm、成功平均15.15步，无安全失败或超时。支持当前网络容量能够表示有效的局部Reach策略，但没有近零停止样本，不能宣称已学会停车/持续保持，也不能据此断定SAC失败的唯一原因。模型和数据保存在Git忽略的`outputs/bc_reach/`，加载模型只需`experiments.bc_reach.load_policy`，无需原数据或专家。完整闭环结果、局限及全部222项测试记录见 [BC_REACH_VALIDATION.md](docs/validation/BC_REACH_VALIDATION.md)。未追加SAC训练。
+
+## BC初始化SAC与监控（04-D1，历史复现；当前暂停）
+
+训练入口默认仍为scratch；显式`--init-mode bc_actor --bc-model PATH`严格校验原33维特征、预处理、激活与动作映射，只复制latent_pi和mu，保留原log_std、随机双Critic和空Replay。缺失/不兼容BC模型报错，不回退。`--bc-model`也可在scratch模式中仅作冻结监控参照。
+
+新增`--tensorboard`、`--checkpoint-every`、`--eval-at-start`；bc_actor自动保存/评估第0步。评估与checkpoint可独立调度，输出独立评估成功率/距离/步数/故障、训练Episode统计、Actor/Critic loss、温度、拒绝率、BC动作偏差及Q/TD摘要。TensorBoard2.21.0、Matplotlib3.11.2和新增运行依赖已锁在可选requirements-rl.txt，既有物理依赖版本不变。
+
+仅已运行128步Smoke Test和必要测试。第0步新20目标20/20、.879mm，动作最大差5.96e-8；另3个配对目标在128步后从3/3退为1/3，记录2次关节命令保护失败，没有继续训练或添加补救机制。全部234项测试通过；这不是正式SAC训练成功结果。
+
+用户手动A/B的完整10k命令、TensorBoard、JSON查看、独立加载评估及PNG导出命令见 [SAC_BC_INIT_VALIDATION.md](docs/validation/SAC_BC_INIT_VALIDATION.md)。本次未执行这些正式训练命令。已有Smoke可只读检查：
+
+```bash
+python -I -m tensorboard.main --inspect --logdir outputs/rl/sac_bc_init_validation/smoke_bc_seed2026/sb3
+python -I -m json.tool outputs/rl/sac_bc_init_validation/smoke_bc_seed2026/evaluations.json
+python -I scripts/plot_sac_training.py --run-dir outputs/rl/sac_bc_init_validation/smoke_bc_seed2026 --out outputs/rl/sac_bc_init_validation/new_smoke_plots
+```
+
+绘图仅读JSON，输出成功率、距离、Actor/Critic分图及温度四个PNG；缺评估时不造曲线。模型/配置/日志位于独立新run，原04-A/B/C产物不覆盖。日志可供长期训练监控，但不提供跨进程完整续训；若BC明显退化，先停止并分析保存的更新证据。
+
+## 纯SAC Reach与渐进任务（04-E1）
+
+复用同一个ReachEnv，显式`--task fixed_reach|easy_random_reach|random_reach`分别选择原+X5mm固定目标、2–3mm三维可达球壳、原3–5mm三维可达球壳。新任务强制随机scratch、空Replay，拒绝BC初始化和BC参照；不改变物理模型、IK、执行器、安全规则或33维预处理。
+
+`--reward-mode safe_dense`保留旧奖励；新可选`reach_shaped_v1`使用指数距离势的折扣差，配合推导出的成功/失败终值及有限拒绝成本，保持compute_reward与step一致。它不是默认奖励，也不是训练效果已验证的方案。真实轨迹已通过“成功>静止超时>反复拒绝>故意失败”的折扣排序，并保留直接负指数+小失败惩罚的反例。
+
+先由用户手动进行固定目标奖励对照，各自从头5000步；两条命令只改变奖励及输出目录，当前1mm尺度保持一致：
+
+```bash
+conda activate realman_rl
+cd /home/mr-beaver/Documents/robot/realman_rl_simtoreal
+python -I scripts/train_sac_reach.py --task fixed_reach --reward-mode safe_dense --action-scale 0.001 --run-dir outputs/rl/pure_reach/fixed_safe_seed2026_pilot --timesteps 5000 --seed 2026 --init-mode scratch --eval-at-start --eval-every 1000 --checkpoint-every 1000 --eval-episodes 1 --eval-seed-start 85000 --tensorboard
+python -I scripts/train_sac_reach.py --task fixed_reach --reward-mode reach_shaped_v1 --action-scale 0.001 --run-dir outputs/rl/pure_reach/fixed_shaped_seed2026_pilot --timesteps 5000 --seed 2026 --init-mode scratch --eval-at-start --eval-every 1000 --checkpoint-every 1000 --eval-episodes 1 --eval-seed-start 85000 --tensorboard
+```
+
+固定目标评估1集只说明同一固定起点/目标的表现，不冒充随机目标泛化。奖励对照后再单独研究`--action-scale 0.00025`；固定任务未稳定成功时，不继续扩大至随机目标。阶段B/C应保留前阶段选定奖励与尺度，首次均从头训练，不自动迁移参数。
+
+继续使用TensorBoard、独立评估、checkpoint及PNG；新增实际位移、动作相对实际/命令目标的方向比例及路径跟踪统计。纯RL进程测试阻断BC/厂家模块及专家动作调用，训练仍正常执行。开发验收仅运行128步Smoke；用户随后手动完成两组5000步固定目标Pilot，所有独立评估均未成功。新奖励最终200步超时、误差7.448mm，动作主要趋于静止；旧奖励最终36步命令越界、误差12.587mm，两者运动时长不同。暂不扩大至随机目标或30000步。配置核对、完整结果和下一步边界已追加到 [PURE_REACH_VALIDATION.md](docs/validation/PURE_REACH_VALIDATION.md)。
+
+## PPO Reach（04-F1，当前实验入口）
+
+新增官方SB3 2.9.2 `PPO("MultiInputPolicy", ...)`，CPU随机初始化，独立的256×256/Tanh策略和价值网络；不加载BC/SAC权重或专家数据。复用同一个六轴ReachEnv及原33维固定预处理，SAC历史入口和产物保留。默认固定+X5mm目标、`reach_shaped_v1`、每轴0.25mm动作、50ms周期/25个物理步、200步上限、1mm成功阈值、terminate边界。
+
+以下保留首次16384步Pilot复现命令；输出目录必须为空，已存在的同名实验不要覆盖。开发阶段只验证一次完整512步Rollout及更新，用户随后已手动完成此Pilot，结果见本节末尾：
+
+```bash
+conda activate realman_rl
+cd /home/mr-beaver/Documents/robot/realman_rl_simtoreal
+python -I scripts/train_ppo_reach.py --task fixed_reach --reward-mode reach_shaped_v1 --action-scale 0.00025 --timesteps 16384 --seed 2026 --run-dir outputs/rl/ppo_reach/fixed_seed2026_pilot --eval-every 2048 --eval-episodes 1 --eval-seed-start 87000 --checkpoint-every 2048 --tensorboard
+python -I -m tensorboard.main --logdir outputs/rl/ppo_reach --host 127.0.0.1 --port 6006
+```
+
+训练结束后单独检查模型和导出曲线（评估JSON和绘图目录也不覆盖已有结果）：
+
+```bash
+python -I -m json.tool outputs/rl/ppo_reach/fixed_seed2026_pilot/summary.json
+python -I scripts/evaluate_ppo_reach.py --model outputs/rl/ppo_reach/fixed_seed2026_pilot/checkpoints/step_016384/model.zip --episodes 1 --seed-start 88000 --json outputs/rl/ppo_reach/fixed_seed2026_pilot/loaded_evaluation.json
+python -I scripts/plot_ppo_training.py --run-dir outputs/rl/ppo_reach/fixed_seed2026_pilot
+```
+
+`n_steps=512`，每Rollout按64样本做10个epoch。SB3的训练步数是下界；请求步数不足完整Rollout仍采集512步。评估/checkpoint间隔是阈值，只在下一次完整PPO更新后执行，同时保存/评估第0步和最终步。日志分别记录实际交互步、Rollout更新数、epoch数及Adam步数。中断/严重故障的部分Rollout不标成已完成更新。
+
+原始高斯动作和传入环境的Box裁剪动作分别保存；`actions/box_clip_*`统计动作裁剪，`train/clip_fraction`是PPO似然比Clip比例，两者含义不同。TensorBoard还记录独立成功率/误差/步数、训练Episode统计、安全/超时分类、policy/value loss、熵、KL、explained variance、标准差及真实运动；绘图只读取真实评估和更新数据，不从训练回报推导成功率。
+
+固定目标换seed仍是同一目标，不能当作泛化结果；先审查Pilot是否稳定到达，再决定是否尝试`easy_random_reach`或`random_reach`，不自动扩大训练。完整实现、短测试证据和局限见 [PPO_REACH_VALIDATION.md](docs/validation/PPO_REACH_VALIDATION.md)。
+
+用户已完成seed2026的16384步固定目标Pilot：32个Rollout、320个epoch、2560次Adam更新，约59.77步/秒。从2048步checkpoint起后续各次独立固定目标评估均成功，最终18步到达、误差0.960968mm，独立加载最终模型复验一致。训练429/456个Episode成功（94.08%），另17次超时及10次候选命令保护终止，无碰撞/数值失败；最近100个训练Episode均成功。最后Rollout的动作向量Box裁剪率仍为96.09%，固定目标结果不代表随机目标泛化。只读复核、失败轨迹、指标及11张PNG的路径已追加至上述验证报告；未启动新训练。

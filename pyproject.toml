@@ -20,3 +20,4 @@ dependencies = {file = ["requirements.txt"]}
 
 [tool.setuptools.dynamic.optional-dependencies]
 vendor = {file = ["requirements-vendor.txt"]}
+rl = {file = ["requirements-rl.txt"]}

@@ -26,13 +26,26 @@ class ReachEnv(gym.Env):
     def __init__(self, *, action_scale=0.001, control_period=0.05,
                  max_episode_steps=200, success_threshold=0.001,
                  gravity_compensation=True, render_mode=None, target_mode="fixed",
-                 target_radius=0.005, max_target_attempts=64, reward_mode=None):
+                 target_radius=0.005, max_target_attempts=64, reward_mode=None,
+                 boundary_mode="terminate", rejection_penalty=1.0,
+                 reward_sigma_m=0.005, reward_gamma=0.99):
+        if boundary_mode not in ("terminate", "reject_and_hold"):
+            raise ValueError("boundary_mode must be 'terminate' or 'reject_and_hold'")
+        if not np.isfinite(rejection_penalty) or rejection_penalty <= 0:
+            raise ValueError("rejection_penalty must be finite and positive")
+        self.boundary_mode = boundary_mode
+        self.rejection_penalty = float(rejection_penalty)
         if target_mode not in ("fixed", "random"):
             raise ValueError("target_mode must be 'fixed' or 'random'")
         if reward_mode is None:
             reward_mode = "distance" if target_mode == "fixed" else "safe_dense"
-        if reward_mode not in ("distance", "safe_dense"):
-            raise ValueError("reward_mode must be 'distance' or 'safe_dense'")
+        if reward_mode not in ("distance", "safe_dense", "reach_shaped_v1"):
+            raise ValueError("reward_mode must be distance, safe_dense or reach_shaped_v1")
+        if reward_mode == 'reach_shaped_v1':
+            if not np.isfinite(reward_sigma_m) or reward_sigma_m <= 0:
+                raise ValueError('reward_sigma_m must be finite and positive (metres)')
+            if not np.isfinite(reward_gamma) or not 0 < reward_gamma < 1:
+                raise ValueError('reward_gamma must be finite and in (0,1)')
         if render_mode not in (None, "ansi"):
             raise ValueError("render_mode must be None or 'ansi'")
         if not np.isfinite(action_scale) or not 0 < action_scale <= MAX_TRANSLATION:
@@ -51,6 +64,15 @@ class ReachEnv(gym.Env):
         self.target_radius = float(target_radius)
         self.max_target_attempts = int(max_target_attempts)
         self.reward_mode = reward_mode
+        self.reward_sigma_m, self.reward_gamma = float(reward_sigma_m), float(reward_gamma)
+        if reward_mode == 'reach_shaped_v1':
+            # Bounded potential and rejection costs imply strict discounted
+            # success > timeout > safety failure for the declared finite H.
+            exponent = -(max_episode_steps-1)*np.log(self.reward_gamma)
+            if not np.isfinite(exponent) or exponent > np.log(1e6/1.01):
+                raise ValueError('Shaped terminal scale is unbounded for this gamma/horizon')
+            terminal = np.exp(exponent)*1.01
+            self.shaped_terminal_value = float(terminal)
         self.reward_distance_scale = 2*MAX_TRANSLATION
         self._goal_sampling = dict(attempts=0, rejections={})
         self.model, self.joint_ids, self.actuator_ids = load_model(gravity_compensation=gravity_compensation)
@@ -103,7 +125,7 @@ class ReachEnv(gym.Env):
         rotation = self.data.site_xmat[self.kinematics.site_id].reshape(3, 3)
         orientation_error = (float(np.linalg.norm(rotation_vector(self.kinematics.home_rotation, rotation)))
                              if np.isfinite(rotation).all() else None)
-        return dict(distance_m=distance, is_success=reason == "success",
+        result = dict(distance_m=distance, is_success=reason == "success",
                     is_safety_failure=reason not in (None, "success", "time_limit"),
                     target_mode=self.target_mode, reward_mode=self.reward_mode,
                     goal_sampling=dict(attempts=self._goal_sampling['attempts'],
@@ -113,6 +135,13 @@ class ReachEnv(gym.Env):
                     simulation_time_s=float(self.data.time), physics_steps=0,
                     command_position_m=self._command_position.copy(),
                     joint_reference_rad=self._joint_reference.copy(), observation_valid=True, **extra)
+        if self.boundary_mode == "reject_and_hold":
+            result.update(is_action_rejected=False, rejection_reason=None,
+                          boundary_mode=self.boundary_mode)
+        if self.reward_mode == 'reach_shaped_v1':
+            result.setdefault('is_action_rejected',False)
+            result.setdefault('previous_achieved_goal',observation['achieved_goal'].copy())
+        return result
 
     def reset(self, *, seed=None, options=None):
         super().reset(seed=seed)
@@ -186,6 +215,8 @@ class ReachEnv(gym.Env):
                 or not np.isfinite(achieved).all() or not np.isfinite(desired).all()):
             raise ValueError("Expected finite XYZ goal arrays")
         distance = np.linalg.norm(achieved-desired, axis=-1)
+        if self.reward_mode == 'reach_shaped_v1':
+            return self._shaped_reward(achieved,desired,info)
         if self.reward_mode == "distance":
             reward = -distance
         else:
@@ -202,6 +233,55 @@ class ReachEnv(gym.Env):
                 raise ValueError("is_safety_failure must contain boolean values")
             flags = np.broadcast_to(flags, distance.shape)
             reward = -np.minimum(distance/self.reward_distance_scale, 1)-(self.max_episode_steps+1)*flags
+        if self.boundary_mode == "reject_and_hold":
+            if isinstance(info, dict):
+                rejected = np.asarray(info.get('is_action_rejected', None))
+            elif info is not None:
+                records = np.asarray(info, dtype=object)
+                if not all(isinstance(r, dict) and 'is_action_rejected' in r for r in records.flat):
+                    raise ValueError("reject_and_hold requires is_action_rejected in every info record")
+                rejected = np.array([r['is_action_rejected'] for r in records.flat]).reshape(records.shape)
+            else:
+                raise ValueError("reject_and_hold requires info with is_action_rejected")
+            if rejected.dtype != np.bool_:
+                raise ValueError("is_action_rejected must contain boolean values")
+            # One maximum ordinary-distance cost per rejected action. The old
+            # metre-valued distance mode uses the corresponding 20mm cost.
+            unit = 1.0 if self.reward_mode == 'safe_dense' else self.reward_distance_scale
+            reward = reward-self.rejection_penalty*unit*np.broadcast_to(rejected, distance.shape)
+        return float(reward) if reward.ndim == 0 else reward
+
+    def _shaped_reward(self, achieved, desired, info):
+        """Discount-consistent exponential potential; info contains raw previous XYZ.
+
+        Phi=-[1-exp(-d/sigma)], r=gamma*Phi_next-Phi_prev
+        +K*(success-failure)-(1-gamma)*rejected. True terminals have Phi_next=0;
+        truncation retains it. Success is recomputed for the supplied goal.
+        K=1.01/gamma**(H-1); no old is_success/distance fields are reused.
+        """
+        def field(key):
+            if isinstance(info,dict):
+                if key not in info:raise ValueError('reach_shaped_v1 requires '+key)
+                return np.asarray(info[key])
+            if info is None:raise ValueError('reach_shaped_v1 requires info')
+            rows=np.asarray(info,dtype=object)
+            if not all(isinstance(r,dict) and key in r for r in rows.flat):
+                raise ValueError('reach_shaped_v1 requires '+key+' in every info record')
+            values=np.asarray([r[key] for r in rows.flat])
+            return values.reshape(rows.shape+values.shape[1:])
+        failure,rejected,previous=field('is_safety_failure'),field('is_action_rejected'),field('previous_achieved_goal')
+        if failure.dtype != np.bool_ or rejected.dtype != np.bool_:
+            raise ValueError('Shaped safety/rejection flags must be boolean')
+        if previous.shape[-1:] != (3,) or not np.isfinite(previous).all():
+            raise ValueError('previous_achieved_goal must contain finite world XYZ metres')
+        distance=np.linalg.norm(achieved-desired,axis=-1)
+        failure=np.broadcast_to(failure,distance.shape);rejected=np.broadcast_to(rejected,distance.shape)
+        success=(distance <= self.success_threshold) & ~failure
+        phi_previous=np.broadcast_to(np.expm1(-np.linalg.norm(previous-desired,axis=-1)/self.reward_sigma_m),distance.shape)
+        phi_next=np.where(success|failure,0.,np.expm1(-distance/self.reward_sigma_m))
+        reward=(self.reward_gamma*phi_next-phi_previous
+                +self.shaped_terminal_value*(success.astype(float)-failure.astype(float))
+                -(1-self.reward_gamma)*rejected)
         return float(reward) if reward.ndim == 0 else reward
 
     def step(self, action):
@@ -213,8 +293,26 @@ class ReachEnv(gym.Env):
         if action.shape != (3,) or not np.isfinite(action).all() or np.any(np.abs(action) > 1):
             raise ValueError("Action must be three finite normalized values in [-1, 1]")
         self._elapsed_steps += 1
+        previous_achieved=self._last_observation['achieved_goal'].copy()
         target = self._command_position+action*self.action_scale
         reason, detail, cycle, ik_info = None, None, None, None
+        rejected = None
+
+        def advance(reference, command=None):
+            nonlocal reason, detail, cycle
+            try:
+                cycle = advance_control_cycle(self.model, self.data, self.joint_ids,
+                                              self.actuator_ids, reference,
+                                              physics_steps=self.physics_steps,
+                                              max_joint_delta=np.deg2rad(10)*self.control_period)
+                if command is not None:
+                    self._command_position = command.copy()
+                self._joint_reference = self.data.ctrl[self.actuator_ids].copy()
+                actual_r = self.data.site_xmat[self.kinematics.site_id].reshape(3, 3)
+                if np.linalg.norm(rotation_vector(self.kinematics.home_rotation, actual_r)) > MAX_ACTUAL_ORIENTATION_ERROR:
+                    reason, detail = "orientation_limit", "Actual orientation exceeded the 1 degree envelope"
+            except ControlCycleError as exc:
+                reason, detail, cycle = exc.reason, str(exc), exc.summary
         actual_q = self.data.qpos[self.kinematics.qadr]
         # The local experiment envelope is NOT a characterization of workspace.
         if not np.isfinite(actual_q).all() or not np.isfinite(self.data.qvel).all():
@@ -223,7 +321,11 @@ class ReachEnv(gym.Env):
               or np.any(actual_q > self.kinematics.limits[:, 1]+1e-4)):
             reason, detail = "joint_limit", "Actual joint position exceeded the model limit tolerance"
         elif np.linalg.norm(target-self.kinematics.home_position) > MAX_TRANSLATION+1e-12:
-            reason, detail = "workspace_limit", "Outside the 10 mm experimental command envelope"
+            detail = "Outside the 10 mm experimental command envelope"
+            if self.boundary_mode == 'reject_and_hold':
+                rejected = 'workspace_limit'
+            else:
+                reason = 'workspace_limit'
         elif np.linalg.norm(target) > self.kinematics.reach_bound:
             reason, detail = "unreachable_target", "Outside the conservative geometric reach bound"
         else:
@@ -245,27 +347,39 @@ class ReachEnv(gym.Env):
                     try:
                         validate_target(self.model, self.joint_ids, self.kinematics.home_q, result.q)
                     except ValueError as exc:
-                        reason, detail = "joint_limit", str(exc)
-                    if reason is None:
+                        legal_model_q = False
+                        if self.boundary_mode == 'reject_and_hold':
+                            try:
+                                q = np.asarray(result.q,dtype=float)
+                                legal_model_q = (q.shape == (6,) and np.isfinite(q).all()
+                                                 and np.all(q > self.kinematics.limits[:, 0])
+                                                 and np.all(q < self.kinematics.limits[:, 1]))
+                            except (TypeError,ValueError):
+                                pass
+                        if (self.boundary_mode == 'reject_and_hold' and legal_model_q
+                                and np.max(np.abs(q-self.kinematics.home_q)) > np.deg2rad(5)+1e-12):
+                            rejected, detail = 'joint_command_limit', str(exc)
+                        else:
+                            reason, detail = "joint_limit", str(exc)
+                    if reason is None and rejected is None:
                         try:
                             check_motion(self.model, self.data, self.joint_ids, self.actuator_ids,
                                          self.kinematics, result, target)
                         except ValueError as exc:
                             reason = "collision" if "collision" in str(exc).lower() else "ik_failure"
                             detail = str(exc)
-                    if reason is None:
-                        try:
-                            cycle = advance_control_cycle(self.model, self.data, self.joint_ids,
-                                                          self.actuator_ids, result.q,
-                                                          physics_steps=self.physics_steps,
-                                                          max_joint_delta=np.deg2rad(10)*self.control_period)
-                            self._command_position = target.copy()
-                            self._joint_reference = self.data.ctrl[self.actuator_ids].copy()
-                            actual_r = self.data.site_xmat[self.kinematics.site_id].reshape(3, 3)
-                            if np.linalg.norm(rotation_vector(self.kinematics.home_rotation, actual_r)) > MAX_ACTUAL_ORIENTATION_ERROR:
-                                reason, detail = "orientation_limit", "Actual orientation exceeded the 1 degree envelope"
-                        except ControlCycleError as exc:
-                            reason, detail, cycle = exc.reason, str(exc), exc.summary
+                    if reason is None and rejected is None:
+                        advance(result.q, target)
+        if rejected is not None:
+            # Reject the NEW task command, never clip an IK result. Keep the
+            # last legal Cartesian reference and issued joint ctrl reference;
+            # the unchanged controller audits/advances exactly one real cycle.
+            try:
+                validate_target(self.model, self.joint_ids, self.kinematics.home_q, self._joint_reference)
+            except ValueError as exc:
+                reason, detail = 'joint_limit', str(exc)
+            if reason is None:
+                advance(self._joint_reference)
         valid_observation = True
         try:
             obs = self._observation()
@@ -283,6 +397,10 @@ class ReachEnv(gym.Env):
             reason = "time_limit"
         self._episode_done = terminated or truncated
         info = self._info(obs, reason, detail=detail, attempted_position_m=target.copy(), ik=ik_info, control=cycle)
+        if self.boundary_mode == 'reject_and_hold':
+            info.update(is_action_rejected=rejected is not None, rejection_reason=rejected)
+        if self.reward_mode == 'reach_shaped_v1':
+            info['previous_achieved_goal']=previous_achieved
         info["observation_valid"] = valid_observation
         if not valid_observation:
             info["orientation_error_rad"] = None
