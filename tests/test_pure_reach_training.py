@@ -13,7 +13,8 @@ import numpy as np
 from gymnasium.utils.env_checker import check_env
 
 from realman_rl_simtoreal.envs.reach_env import ReachEnv
-from realman_rl_simtoreal.experiments.reach_tasks import TASKS,task_environment,MotionStats
+from realman_rl_simtoreal.tasks.reach import TASKS, task_environment
+from realman_rl_simtoreal.rl.common.metrics import MotionStats
 from realman_rl_simtoreal.paths import PROJECT_ROOT
 
 
@@ -172,7 +173,7 @@ AVAILABLE=importlib.util.find_spec('stable_baselines3') is not None
 @unittest.skipUnless(AVAILABLE,'Optional SB3/PyTorch unavailable')
 class PureTrainingTests(unittest.TestCase):
     def driver(self):
-        spec=importlib.util.spec_from_file_location('pure_sac_entry',PROJECT_ROOT/'scripts/train_sac_reach.py')
+        spec=importlib.util.spec_from_file_location('pure_sac_entry',PROJECT_ROOT/'scripts/train/train_sac_reach.py')
         module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module);return module
 
     def test_pure_task_rejects_all_bc_initialization_or_reference(self):
@@ -187,14 +188,14 @@ import importlib.abc,importlib.util,sys,tempfile,json
 from pathlib import Path
 class Block(importlib.abc.MetaPathFinder):
  def find_spec(self,name,*args):
-  if any(s in name for s in ['bc_reach','sac_initialization','Robotic_Arm','realman_rl_simtoreal.vendor']):
+  if any(s in name for s in ['realman_rl_simtoreal.imitation','Robotic_Arm','realman_rl_simtoreal.vendor']):
    raise AssertionError('BC/SDK import forbidden: '+name)
 sys.meta_path.insert(0,Block())
 from realman_rl_simtoreal.paths import PROJECT_ROOT
-from realman_rl_simtoreal.experiments import sac_reach,common
+from realman_rl_simtoreal.rl.common import evaluation, baselines
 def forbidden(*a,**kw):raise AssertionError('Expert action forbidden')
-sac_reach.rule_action=common.rule_action=forbidden
-spec=importlib.util.spec_from_file_location('pure_driver',PROJECT_ROOT/'scripts/train_sac_reach.py')
+evaluation.rule_action=baselines.rule_action=forbidden
+spec=importlib.util.spec_from_file_location('pure_driver',PROJECT_ROOT/'scripts/train/train_sac_reach.py')
 driver=importlib.util.module_from_spec(spec);spec.loader.exec_module(driver)
 with tempfile.TemporaryDirectory() as temp:
  folder=Path(temp)/'run'
@@ -216,21 +217,23 @@ with tempfile.TemporaryDirectory() as temp:
   assert 'training/motion/mean_actual_displacement_m' in tags
   assert 'evaluation/motion/toward_actual_fraction' in tags
   assert not any(tag.startswith('bc/') for tag in tags)
-assert not any('bc_reach' in n or 'sac_initialization' in n for n in sys.modules)
+assert not any(n.startswith('realman_rl_simtoreal.imitation') for n in sys.modules)
 '''
         result=subprocess.run([sys.executable,'-I','-c',code],capture_output=True,text=True,timeout=60)
         self.assertEqual(result.returncode,0,result.stdout+result.stderr)
 
     def test_sb3_processed_goal_reward_contract(self):
         from stable_baselines3.common.env_checker import check_env as sb3_check
-        from realman_rl_simtoreal.experiments.sac_reach import ScaledReachObservation
+        from realman_rl_simtoreal.rl.common.observation import ScaledReachObservation
         with ScaledReachObservation(ReachEnv(reward_mode='reach_shaped_v1')) as env:
             sb3_check(env,warn=True)
 
     def test_new_reward_terminal_td_labels_come_from_flags_not_large_negative_threshold(self):
         import torch
-        from realman_rl_simtoreal.experiments.sac_reach import training_env,make_model,ENV_CONFIG
-        from realman_rl_simtoreal.experiments.sac_diagnostics import td_diagnostic
+        from realman_rl_simtoreal.rl.common.env_factory import training_env
+        from realman_rl_simtoreal.rl.sac import make_model
+        from realman_rl_simtoreal.tasks.reach import ENV_CONFIG
+        from realman_rl_simtoreal.rl.sac_diagnostics import td_diagnostic
         torch.set_num_threads(1);env,_=training_env(ENV_CONFIG);self.addCleanup(env.close)
         model=make_model(env,11,overrides=dict(buffer_size=8,policy_kwargs=dict(net_arch=[16,16])))
         obs=env.reset()

@@ -23,9 +23,13 @@ if AVAILABLE:
     from stable_baselines3 import SAC
     from stable_baselines3.common.env_checker import check_env
     from realman_rl_simtoreal.envs.reach_env import ReachEnv
-    from realman_rl_simtoreal.experiments.sac_reach import (
-        ENV_CONFIG, ReachTransform, ScaledReachObservation, training_env, make_model,
-        q_diagnostic, evaluate, save_checkpoint, write_json)
+    from realman_rl_simtoreal.tasks.reach import ENV_CONFIG
+    from realman_rl_simtoreal.rl.common.observation import ReachTransform, ScaledReachObservation
+    from realman_rl_simtoreal.rl.common.env_factory import training_env
+    from realman_rl_simtoreal.rl.sac import make_model, save_checkpoint
+    from realman_rl_simtoreal.rl.sac_diagnostics import q_diagnostic
+    from realman_rl_simtoreal.rl.common.evaluation import evaluate
+    from realman_rl_simtoreal.rl.common.artifacts import write_json
     from realman_rl_simtoreal.paths import PROJECT_ROOT
 
 
@@ -183,7 +187,8 @@ sys.meta_path.insert(0,BlockVendor())
 import torch
 from stable_baselines3 import SAC
 from realman_rl_simtoreal.envs.reach_env import ReachEnv
-from realman_rl_simtoreal.experiments.sac_reach import ReachTransform,ENV_CONFIG
+from realman_rl_simtoreal.rl.common.observation import ReachTransform
+from realman_rl_simtoreal.tasks.reach import ENV_CONFIG
 from pathlib import Path
 torch.set_num_threads(1)
 m=SAC.load({str(self.folder/'model.zip')!r},device='cpu')
@@ -212,7 +217,7 @@ print('independent inference OK')
             ReachTransform(config)
 
     def test_cli_training_chunks_preserve_total_steps_buffer_and_updates(self):
-        spec = util.spec_from_file_location('sac_training_entry', PROJECT_ROOT/'scripts/train_sac_reach.py')
+        spec = util.spec_from_file_location('sac_training_entry', PROJECT_ROOT/'scripts/train/train_sac_reach.py')
         driver = util.module_from_spec(spec)
         spec.loader.exec_module(driver)
         result = driver.train(self.folder/'driver', timesteps=128, seed=74, eval_every=64,

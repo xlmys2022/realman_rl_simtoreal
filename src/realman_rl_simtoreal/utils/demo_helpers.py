@@ -1,0 +1,48 @@
+"""Shared comparison poses, joint demo sequence and text formatting."""
+import numpy as np
+from ..simulation import control
+
+
+def sample_poses(home):
+    poses = [("home", home.copy())]
+    for i in range(6):
+        q = home.copy()
+        q[i] += np.deg2rad(3)
+        poses.append((f"J{i+1}_plus_3deg", q))
+    poses.extend([("combined", home + np.deg2rad([2, -2, 2, 1, -1, 2])),
+                  ("diverse_fk_only", np.deg2rad([25, -45, 55, 20, 40, -30]))])
+    return poses
+
+
+def joint_result_lines(result):
+    lines = []
+    lines.append(f"\n[PASS] {result['label']}")
+    for i, (target, actual, error) in enumerate(zip(result['target_deg'], result['actual_deg'], result['error_deg']), 1):
+        lines.append(f'  J{i}: target={target:9.4f} deg actual={actual:9.4f} deg error={error:+.6f} deg')
+    lines.append(f"  max final error={max(map(abs, result['error_deg'])):.6f} deg; "
+                 f"overshoot={max(result['overshoot_deg']):.6f} deg; "
+                 f"tail range={max(result['tail_range_deg']):.3e} deg; "
+                 f"tail speed={max(result['tail_speed_deg_s']):.3e} deg/s; "
+                 f"contacts={result['max_contacts']}")
+    lines.append(f"  max uncommanded joint travel={result['max_uncommanded_motion_deg']:.6f} deg")
+    lines.append('  peak torque [N*m]: ' + np.array2string(np.array(result['peak_torque_nm']), precision=5))
+    return lines
+
+
+def run_joint_demo(model, data, joint_ids, actuator_ids, target=None, tick=None, step_observer=None, *, reporter=None):
+    home = data.ctrl[actuator_ids].copy()
+    targets = [("hold home under gravity", home, 0.0, 3.0)]
+    if target is None:
+        for i in range(6):
+            command = home.copy()
+            command[i] += np.deg2rad(3)
+            targets.extend([(f"J{i+1} +3 deg", command, 1.0, 3.0), (f"J{i+1} return", home, 1.0, 1.0)])
+    else:
+        targets.append(("custom six-joint target", control.validate_target(model, joint_ids, home, target), 1.0, 3.0))
+    results = []
+    for label, command, ramp, hold in targets:
+        result = control.run_segment(model, data, joint_ids, actuator_ids, command, label, ramp, hold, tick, step_observer)
+        if reporter is not None:
+            reporter(result)
+        results.append(result)
+    return results

@@ -14,7 +14,7 @@ import mujoco
 import numpy as np
 
 ROOT = Path(__file__).resolve().parents[1]
-_spec = importlib.util.spec_from_file_location("_test_compare_ik", ROOT / "scripts/compare_ik.py")
+_spec = importlib.util.spec_from_file_location("_test_compare_ik", ROOT / "scripts/diagnostics/compare_ik.py")
 comparison = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(comparison)
 from realman_rl_simtoreal.simulation import control, model as model_api
@@ -333,7 +333,7 @@ class VendorIKTests(unittest.TestCase):
     def test_cli_from_other_directory(self):
         with tempfile.TemporaryDirectory(prefix="realman-ik-") as directory:
             output = Path(directory)/"result.json"
-            result = subprocess.run([sys.executable, "-I", str(ROOT/"scripts/compare_ik.py"),
+            result = subprocess.run([sys.executable, "-I", str(ROOT/"scripts/diagnostics/compare_ik.py"),
                                      "--repeats", "1", "--json", str(output)],
                                     cwd=directory, capture_output=True, text=True, timeout=60)
             self.assertEqual(result.returncode, 0, result.stderr)

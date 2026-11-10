@@ -18,7 +18,7 @@ def read(path):
 
 
 def script(name):
-    spec=importlib.util.spec_from_file_location(name,PROJECT_ROOT/'scripts'/f'{name}.py')
+    spec=importlib.util.spec_from_file_location(name,PROJECT_ROOT/'scripts'/('plots' if name.startswith('plot_') else 'train')/f'{name}.py')
     module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
     return module
 
@@ -41,13 +41,13 @@ from pathlib import Path
 import mujoco,numpy as np
 class Block(importlib.abc.MetaPathFinder):
  def find_spec(self,name,*args):
-  if any(s in name for s in ('bc_reach','sac_initialization','Robotic_Arm','realman_rl_simtoreal.vendor')):
+  if any(s in name for s in ('realman_rl_simtoreal.imitation','realman_rl_simtoreal.rl.sac','Robotic_Arm','realman_rl_simtoreal.vendor')):
    raise AssertionError('BC/SDK import forbidden: '+name)
 sys.meta_path.insert(0,Block())
 from realman_rl_simtoreal.paths import PROJECT_ROOT
-from realman_rl_simtoreal.experiments import sac_reach,common
+from realman_rl_simtoreal.rl.common import evaluation, baselines
 def forbidden(*a,**kw):raise AssertionError('SAC weights/expert actions forbidden')
-sac_reach.rule_action=common.rule_action=sac_reach.make_model=sac_reach.SAC=forbidden
+evaluation.rule_action=baselines.rule_action=forbidden
 from realman_rl_simtoreal.envs.reach_env import ReachEnv
 old_env_step,old_physics=ReachEnv.step,mujoco.mj_step
 active={};counts=dict(env_steps=0,physics_steps=0)
@@ -65,7 +65,7 @@ def step(env,action):
   return result
  finally:active.pop(key)
 ReachEnv.step=step;mujoco.mj_step=physical
-spec=importlib.util.spec_from_file_location('ppo_driver',PROJECT_ROOT/'scripts/train_ppo_reach.py')
+spec=importlib.util.spec_from_file_location('ppo_driver',PROJECT_ROOT/'scripts/train/train_ppo_reach.py')
 driver=importlib.util.module_from_spec(spec);spec.loader.exec_module(driver)
 folder=Path(sys.argv[1])
 result=driver.train(folder,timesteps=128,n_steps=512,batch_size=64,n_epochs=10,
@@ -73,7 +73,7 @@ result=driver.train(folder,timesteps=128,n_steps=512,batch_size=64,n_epochs=10,
  tensorboard=importlib.util.find_spec('tensorboard') is not None)
 assert result['status']=='completed',result['error']
 assert result['completed_rollout_updates']==1 and result['actual_timesteps']==512
-assert not any('bc_reach' in n or 'sac_initialization' in n for n in sys.modules)
+assert not any(n.startswith('realman_rl_simtoreal.imitation') for n in sys.modules)
 counts.update(no_expert_or_sac_parameters=True,no_live_qpos_write=True)
 (folder/'test_verification.json').write_text(json.dumps(counts,indent=2)+'\n')
 print(json.dumps(result['timing']))
@@ -83,7 +83,7 @@ print(json.dumps(result['timing']))
             cls.folder.parent.mkdir(parents=True,exist_ok=True)
             (cls.folder.parent/'smoke_process.log').write_text(proc.stdout+proc.stderr)
             if proc.returncode:raise AssertionError(proc.stdout+proc.stderr)
-        from realman_rl_simtoreal.experiments.ppo_reach import load_ppo
+        from realman_rl_simtoreal.rl.ppo import load_ppo
         cls.model,cls.transform,cls.config=load_ppo(cls.folder/'final/model.zip')
         cls.initial,_,_=load_ppo(cls.folder/'initial/model.zip')
         cls.summary=read(cls.folder/'summary.json')
@@ -95,7 +95,7 @@ print(json.dumps(result['timing']))
         import torch
         from stable_baselines3.common.policies import MultiInputActorCriticPolicy
         from realman_rl_simtoreal.envs.reach_env import ReachEnv
-        from realman_rl_simtoreal.experiments.sac_reach import ReachTransform
+        from realman_rl_simtoreal.rl.common.observation import ReachTransform
         self.assertIsInstance(self.model.policy,MultiInputActorCriticPolicy)
         self.assertEqual(self.model.policy.features_extractor.features_dim,33)
         self.assertEqual(list(self.model.observation_space.spaces),['achieved_goal','desired_goal','observation'])
@@ -116,7 +116,7 @@ print(json.dumps(result['timing']))
         np.testing.assert_array_equal(self.initial.policy.log_std.detach().numpy(),np.zeros(3))
 
     def test_single_complete_rollout_and_real_update_counts(self):
-        from realman_rl_simtoreal.experiments.ppo_reach import optimizer_steps
+        from realman_rl_simtoreal.rl.ppo import optimizer_steps
         self.assertEqual(self.summary['status'],'completed')
         for key,value in dict(requested_timesteps=128,actual_timesteps=512,
             planned_complete_rollout_timesteps=512,completed_rollout_updates=1,
@@ -127,7 +127,7 @@ print(json.dumps(result['timing']))
         self.assertFalse(hasattr(self.model,'replay_buffer'))
 
     def test_actor_and_value_parameters_really_updated(self):
-        from realman_rl_simtoreal.experiments.ppo_reach import parameter_hashes
+        from realman_rl_simtoreal.rl.ppo import parameter_hashes
         self.assertTrue(self.summary['actor_updated']);self.assertTrue(self.summary['critic_updated'])
         self.assertEqual(parameter_hashes(self.initial),self.summary['initial_parameter_hashes'])
         self.assertEqual(parameter_hashes(self.model),self.summary['final_parameter_hashes'])
@@ -136,7 +136,7 @@ print(json.dumps(result['timing']))
 
     def test_rollout_advantages_returns_losses_are_finite(self):
         import torch
-        from realman_rl_simtoreal.experiments.ppo_reach import TRAIN_METRICS
+        from realman_rl_simtoreal.rl.ppo import TRAIN_METRICS
         with np.load(self.folder/'final/last_rollout.npz') as data:
             for name in data.files:self.assertTrue(np.isfinite(data[name]).all(),name)
             self.assertEqual(data['advantages'].size,512)
@@ -183,7 +183,7 @@ print(json.dumps(result['timing']))
 
     def test_independent_evaluation_does_not_update_network_or_rng(self):
         import torch
-        from realman_rl_simtoreal.experiments.ppo_reach import evaluate_ppo,parameter_hashes
+        from realman_rl_simtoreal.rl.ppo import evaluate_ppo, parameter_hashes
         before=parameter_hashes(self.model);state=torch.random.get_rng_state().clone()
         config=dict(self.config['environment'],max_episode_steps=2)
         a=evaluate_ppo(self.model,self.transform,config,[88001])
@@ -195,7 +195,7 @@ print(json.dumps(result['timing']))
 
     def test_fixed_target_scope_is_not_random_generalization(self):
         from realman_rl_simtoreal.envs.reach_env import ReachEnv
-        from realman_rl_simtoreal.experiments.ppo_reach import environment_config
+        from realman_rl_simtoreal.rl.ppo import environment_config
         with ReachEnv(**environment_config()) as env:
             a,_=env.reset(seed=87000);b,_=env.reset(seed=88000)
             np.testing.assert_array_equal(a['desired_goal'],b['desired_goal'])
@@ -216,7 +216,7 @@ print(json.dumps(result['timing']))
 
     def test_physical_configuration_and_source_models_unchanged(self):
         import hashlib
-        from realman_rl_simtoreal.experiments.sac_reach import asset_hashes
+        from realman_rl_simtoreal.rl.common.artifacts import asset_hashes
         env=self.config['environment']
         for key,value in dict(target_mode='fixed',reward_mode='reach_shaped_v1',action_scale=.00025,
             control_period=.05,max_episode_steps=200,success_threshold=.001,boundary_mode='terminate',
@@ -262,7 +262,7 @@ print(json.dumps(result['timing']))
         self.assertNotIn('evaluation_success.png',missing['generated'])
 
     def test_interval_validation_and_wrong_algorithm_refused(self):
-        from realman_rl_simtoreal.experiments.ppo_reach import crossed_thresholds,load_ppo
+        from realman_rl_simtoreal.rl.ppo import crossed_thresholds, load_ppo
         self.assertEqual(crossed_thresholds(512,1024,300),[600,900])
         with self.assertRaises(ValueError):crossed_thresholds(0,512,0)
         with self.assertRaises(ValueError):script('train_ppo_reach').train(Path(self.temp.name)/'invalid',n_steps=512,batch_size=63)

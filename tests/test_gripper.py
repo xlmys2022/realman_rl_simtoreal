@@ -284,13 +284,13 @@ class GripperTests(unittest.TestCase):
     def test_generator_is_byte_reproducible_and_headless_demo_works(self):
         files = [GRIPPER_ASSETS/name for name in ['eg2_4c2_mujoco.urdf', 'eg2_4c2.xml', 'rml63_eg2_4c2.xml']]
         before = [p.read_bytes() for p in files]
-        result = subprocess.run([sys.executable, '-I', str(PROJECT_ROOT/'scripts/build_gripper_model.py')],
+        result = subprocess.run([sys.executable, '-I', str(PROJECT_ROOT/'scripts/models/build_gripper_model.py')],
                                 cwd='/tmp', capture_output=True, text=True, timeout=30)
         self.assertEqual(result.returncode, 0, result.stdout+result.stderr)
         self.assertEqual([p.read_bytes() for p in files], before)
         with tempfile.TemporaryDirectory() as directory:
             output = Path(directory)/'result.json'
-            result = subprocess.run([sys.executable, '-I', str(PROJECT_ROOT/'scripts/demo_gripper.py'),
+            result = subprocess.run([sys.executable, '-I', str(PROJECT_ROOT/'scripts/demos/demo_gripper.py'),
                                      '--cycles', '1', '--json', str(output)], cwd=directory,
                                     capture_output=True, text=True, timeout=30)
             self.assertEqual(result.returncode, 0, result.stdout+result.stderr)

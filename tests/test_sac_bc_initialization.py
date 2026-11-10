@@ -15,13 +15,17 @@ if AVAILABLE:
     from gymnasium import spaces
     from stable_baselines3 import SAC
     from realman_rl_simtoreal.paths import PROJECT_ROOT
-    from realman_rl_simtoreal.experiments.bc_reach import BCNetwork,save_policy,weight_digest
-    from realman_rl_simtoreal.experiments.sac_reach import ENV_CONFIG,training_env,make_model,ReachTransform
-    from realman_rl_simtoreal.experiments.sac_initialization import initialize_actor_from_bc,make_probe
+    from realman_rl_simtoreal.imitation.bc import BCNetwork, save_policy, weight_digest
+    from realman_rl_simtoreal.tasks.reach import ENV_CONFIG
+    from realman_rl_simtoreal.rl.common.env_factory import training_env
+    from realman_rl_simtoreal.rl.sac import make_model
+    from realman_rl_simtoreal.rl.common.observation import ReachTransform
+    from realman_rl_simtoreal.imitation.bc_to_sac import initialize_actor_from_bc
+    from realman_rl_simtoreal.rl.common.env_factory import make_probe
 
 
 def entry(name):
-    spec=importlib.util.spec_from_file_location(name,PROJECT_ROOT/'scripts'/f'{name}.py')
+    spec=importlib.util.spec_from_file_location(name,PROJECT_ROOT/'scripts'/('plots' if name.startswith('plot_') else 'train')/f'{name}.py')
     module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
     return module
 

@@ -77,12 +77,12 @@ class ContactModelTests(unittest.TestCase):
             return {str(p): hashlib.sha256(p.read_bytes()).hexdigest()
                     for folder in ('robots', 'grippers') for p in (PROJECT_ROOT/'assets'/folder).rglob('*') if p.is_file()}
         original, scene = hashes(), SCENE.read_bytes()
-        script_module('build_grasp_scene.py', 'grasp_builder').build()
+        script_module('models/build_grasp_scene.py', 'grasp_builder').build()
         self.assertEqual(SCENE.read_bytes(), scene)
         self.assertEqual(hashes(), original)
 
     def test_pad_layers_are_measured_inward_rectangles(self):
-        builder = script_module('build_grasp_scene.py', 'pad_builder')
+        builder = script_module('models/build_grasp_scene.py', 'pad_builder')
         for side, sign in [('left', 1), ('right', -1)]:
             rects = builder.pad_rectangles(side)
             self.assertEqual(len(rects), 12)
@@ -247,7 +247,7 @@ class ContactModelTests(unittest.TestCase):
 class GraspExperimentTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        demo = script_module('test_grasp_contact.py', 'contact_experiment')
+        demo = script_module('demos/run_grasp_contact_cases.py', 'contact_experiment')
         cls.results = {name: demo.run_case(name, **demo.CASES[name])
                        for name in ('normal', 'no_close', 'release', 'low_friction', 'heavy')}
 

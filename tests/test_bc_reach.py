@@ -15,9 +15,10 @@ try:
     import mujoco
     from stable_baselines3.common.torch_layers import CombinedExtractor
     from stable_baselines3.sac.policies import Actor
-    from realman_rl_simtoreal.experiments import bc_reach as bc
-    from realman_rl_simtoreal.experiments.common import rule_action
-    from realman_rl_simtoreal.experiments.sac_reach import ENV_CONFIG, training_env
+    from realman_rl_simtoreal.imitation import bc as bc
+    from realman_rl_simtoreal.rl.common.baselines import rule_action
+    from realman_rl_simtoreal.tasks.reach import ENV_CONFIG
+    from realman_rl_simtoreal.rl.common.env_factory import training_env
     from realman_rl_simtoreal.envs.reach_env import ReachEnv
     AVAILABLE=True
 except ImportError:
@@ -196,7 +197,7 @@ class Block(importlib.abc.MetaPathFinder):
         if 'Robotic_Arm' in fullname or '.vendor' in fullname:
             raise AssertionError('Vendor SDK must not load')
 sys.meta_path.insert(0, Block())
-from realman_rl_simtoreal.experiments.bc_reach import collect_demonstrations
+from realman_rl_simtoreal.imitation.bc import collect_demonstrations
 data, meta=collect_demonstrations([31000],[31001])
 assert len(data['action']) > 0
 """

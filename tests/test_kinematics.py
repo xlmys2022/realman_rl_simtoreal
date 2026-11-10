@@ -44,7 +44,7 @@ class KinematicsTests(unittest.TestCase):
     def test_site_survives_model_regeneration(self):
         path = ROOT / "assets/robots/rml63/rml63_dynamics.xml"
         before = path.read_bytes()
-        p = subprocess.run([sys.executable, "-I", str(ROOT / "scripts/build_dynamics_model.py")],
+        p = subprocess.run([sys.executable, "-I", str(ROOT / "scripts/models/build_dynamics_model.py")],
                            cwd="/tmp", text=True, capture_output=True, timeout=30)
         self.assertEqual(p.returncode, 0, p.stderr)
         self.assertEqual(path.read_bytes(), before)
@@ -247,7 +247,7 @@ class KinematicsTests(unittest.TestCase):
     def test_headless_cli_unreachable_target(self):
         with tempfile.TemporaryDirectory() as directory:
             output = Path(directory) / "result.json"
-            p = subprocess.run([sys.executable, "-I", str(ROOT / "scripts/control_ee.py"),
+            p = subprocess.run([sys.executable, "-I", str(ROOT / "scripts/demos/control_ee.py"),
                                 "--target", "10", "10", "10", "--json", str(output)],
                                cwd="/tmp", capture_output=True, text=True, timeout=15)
             self.assertEqual(p.returncode, 1, p.stdout + p.stderr)
