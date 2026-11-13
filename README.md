@@ -12,7 +12,9 @@
 
 ## 当前状态
 
-用户已完成12维 `fetch_like_v1` 随机Reach的16384步Pilot与100目标独立评估：成功3%、97次超时、0次安全失败，平均最终误差5.888mm。实际Actor/Critic输入均为12维，但±X5mm同Home探针的X动作仍都为正，方向偏置尚未解决。旧33维随机Pilot成功率4%，使用不同测试种子，不能直接作为配对A/B结论。完整训练、开发曲线、方向诊断及原始证据见[Fetch观测验证报告](docs/validation/REACH_FETCH_OBSERVATION_VALIDATION.md)。
+用户已将12维 `fetch_like_v1` 随机Reach从头训练到131072步：完成256个Rollout，独立100目标成功1%、99次超时、0次安全失败，平均最终距离4.571mm。固定20目标开发集从32768步起连续13个检查点均0成功；99次超时末端集中在Home相对位移约[+0.61,-1.20,+2.08]mm，首动作仍固定偏向-X,-Y,+Z。实际Actor/Critic输入均为12维，增加预算尚未带来可靠的目标条件Reach。训练曲线、落点图、方向探针及预算判断见[Fetch观测验证报告](docs/validation/REACH_FETCH_OBSERVATION_VALIDATION.md)。
+
+此前同seed的12维16384步Pilot独立100目标成功3%，旧33维随机Pilot成功4%；三次独立测试使用不同目标，不能把1%/3%/4%的差值直接作为配对对照结论。长训练在16384步时的参数与12维短实验final完全一致，可以比较其后在同一开发集上的变化。
 
 历史33维纯PPO两方向Pilot：+X19步成功、误差0.929mm；-X200步超时、误差10.241mm，训练-X57集均未成功，课程尚未通过，不进入六方向。旧固定目标Pilot成功。两方向±X5mm均通过原保护；六方向5mm中的±Y未通过home±5°预检，该配置仍明确拒绝启动。全部旧产物保留；历史逐目标结果见[目标条件验证](docs/validation/PPO_GOAL_CONDITIONED_VALIDATION.md)、[PPO验证](docs/validation/PPO_REACH_VALIDATION.md)和[实验索引](docs/experiments/README.md)。
 
@@ -183,7 +185,9 @@ python -I scripts/evaluate/evaluate_ppo_reach.py \
 [Fetch观测验证报告](docs/validation/REACH_FETCH_OBSERVATION_VALIDATION.md)。本轮训练完成32次Rollout、
 320个epoch、2560次Adam更新；开发集87000–87019最终成功2/20，独立集88000–88099成功3/100。
 独立集平均初始距离4.122mm、最终距离5.888mm，100次首动作X分量均为正。
-12维接口和训练链路验证通过，但单个seed的Pilot尚未学会可靠的随机Reach；新旧方案仍需相同目标配对评估。
+后续131072步实验位于 `outputs/rl/ppo_reach/random_fetch_v1_seed2026_131072/`，
+使用相同PPO配置和开发集，每8192步评估/保存，独立测试为92000–92099，成功1/100。
+12维接口和训练链路验证通过，但两档预算均未学会可靠的随机Reach；在诊断目标映射和固定落点前，不建议直接扩大到262144步。
 
 ## 模型评估与绘图
 

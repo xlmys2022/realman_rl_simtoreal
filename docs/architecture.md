@@ -144,7 +144,7 @@ PPO/SAC 保存官方 SB3 类和参数，配置以 JSON 保存；Replay 使用官
 
 新PPO配置schema=2保存观测元数据；历史PPO配置schema=1、变换schema=2仍按legacy加载。
 加载核对保存模式、固定变换、模型空间与实际features_dim，33/12维模型不得混用或自动迁移权重。
-314项双模式开发验收及用户完成的12维随机Reach Pilot结果见[Fetch观测验证报告](validation/REACH_FETCH_OBSERVATION_VALIDATION.md)。
+314项双模式开发验收及用户完成的12维随机Reach两档预算结果（16384步、131072步）见[Fetch观测验证报告](validation/REACH_FETCH_OBSERVATION_VALIDATION.md)。
 
 早期 schema 1 SAC smoke 配置以及缺少相邻 config.json 的历史文件在基线已不可通过当前加载协议评估；本次不改变原拒绝行为、不猜测配置。完整数量和路径见重构报告。
 
