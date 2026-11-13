@@ -29,10 +29,15 @@ from realman_rl_simtoreal.rl.common.evaluation import record_evaluation
 
 
 def train(folder,*,timesteps=16384,seed=2026,task='fixed_reach',reward_mode='reach_shaped_v1',
-          action_scale=.00025,eval_every=2048,eval_episodes=1,checkpoint_every=2048,
+          action_scale=.00025,eval_every=2048,eval_episodes=None,checkpoint_every=2048,
           eval_seed_start=87000,tensorboard=False,n_steps=512,batch_size=64,n_epochs=10):
     folder=Path(folder).resolve()
     if folder.exists() and any(folder.iterdir()):raise ValueError('Run directory must be empty; never overwrite')
+    environment=environment_config(task,reward_mode,action_scale)
+    candidate_count=len(environment['target_offsets']) if environment['target_mode']=='discrete' else None
+    if eval_episodes is None:eval_episodes=candidate_count or 1
+    if candidate_count is not None and eval_episodes!=candidate_count:
+        raise ValueError(f'Discrete task requires eval_episodes={candidate_count}, one per distinct target')
     if min(timesteps,eval_every,eval_episodes,checkpoint_every)<1 or min(seed,eval_seed_start)<0:
         raise ValueError('Positive step/interval/count and nonnegative seeds required')
     if min(n_steps,batch_size)<2 or n_steps%batch_size or n_epochs<1:
@@ -40,7 +45,6 @@ def train(folder,*,timesteps=16384,seed=2026,task='fixed_reach',reward_mode='rea
     if tensorboard:
         from torch.utils.tensorboard import SummaryWriter
     torch.set_num_threads(1);torch.use_deterministic_algorithms(True)
-    environment=environment_config(task,reward_mode,action_scale)
     folder.mkdir(parents=True,exist_ok=True)
     env,transform=training_env(environment,folder/'train.monitor.csv')
     model,parameters=make_ppo(env,seed,n_steps=n_steps,batch_size=batch_size,n_epochs=n_epochs)
@@ -105,6 +109,7 @@ def train(folder,*,timesteps=16384,seed=2026,task='fixed_reach',reward_mode='rea
             evaluation=measured['summary']
             evaluations.append(dict(step=current,summary=evaluation,motion=measured['motion'],
                                     box_clipping=measured['box_clipping'],goal_scope=measured['goal_scope']))
+            if 'per_goal' in measured:evaluations[-1]['per_goal']=measured['per_goal']
             write_json(folder/'evaluations.json',evaluations)
         append_json(folder/'metrics.jsonl',metrics)
         row=dict(step=current,phase=metrics['phase'],metrics=metrics,training=audit.summary(),evaluation=evaluation,
@@ -167,7 +172,8 @@ def main():
     p.add_argument('--reward-mode',choices=['distance','safe_dense','reach_shaped_v1'],default='reach_shaped_v1')
     p.add_argument('--action-scale',type=float,default=.00025)
     p.add_argument('--timesteps',type=int,default=16384);p.add_argument('--seed',type=int,default=2026)
-    p.add_argument('--eval-every',type=int,default=2048);p.add_argument('--eval-episodes',type=int,default=1)
+    p.add_argument('--eval-every',type=int,default=2048)
+    p.add_argument('--eval-episodes',type=int,help='Default: one for legacy tasks; all distinct candidates for discrete tasks')
     p.add_argument('--eval-seed-start',type=int,default=87000)
     p.add_argument('--checkpoint-every',type=int,default=2048);p.add_argument('--tensorboard',action='store_true')
     p.add_argument('--n-steps',type=int,default=512);p.add_argument('--batch-size',type=int,default=64)

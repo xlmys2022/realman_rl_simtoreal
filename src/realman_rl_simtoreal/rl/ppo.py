@@ -187,7 +187,7 @@ def post_update_metrics(model,audit):
 
 def evaluate_ppo(model,transform,environment,seeds):
     before=parameter_hashes(model);counters=(model.num_timesteps,model._n_updates,optimizer_steps(model))
-    clipping=ActionClipStats()
+    clipping=ActionClipStats();raw_actions=[];actual_positions=[]
     class ObservedPolicy:
         def predict(self,obs,deterministic):
             if not deterministic:raise ValueError('Independent PPO evaluation must be deterministic')
@@ -196,14 +196,28 @@ def evaluate_ppo(model,transform,environment,seeds):
                 tensors,_=model.policy.obs_to_tensor(obs)
                 raw=model.policy.get_distribution(tensors).get_actions(deterministic=True).cpu().numpy()
             clipping.observe(raw,action,model.action_space.low,model.action_space.high)
+            # SI goal keys survive the existing transform. Read-only records
+            # allow post-hoc clipping/direction audits without replay or IK.
+            raw_actions.append(raw.reshape(3).tolist())
+            actual_positions.append(np.asarray(obs['achieved_goal']).reshape(3).tolist())
             return action,state
     measured=evaluate('ppo',list(seeds),model=ObservedPolicy(),transform=transform,config=environment,
                       gamma=model.gamma,collect_motion=True)
     if parameter_hashes(model)!=before or counters!=(model.num_timesteps,model._n_updates,optimizer_steps(model)):
         raise ValueError('Evaluation changed PPO parameters or optimization counters')
-    measured.update(box_clipping=clipping.summary(),parameters_unchanged=True,
-        goal_scope='one fixed target; repeated seeds do not test target generalization' if environment['target_mode']=='fixed'
-                   else 'independent seeded random reachable targets')
+    offset=0
+    for episode in measured['episodes']:
+        end=offset+episode['length'];stats=ActionClipStats()
+        episode['raw_actions']=raw_actions[offset:end]
+        episode['actual_positions_before_m']=actual_positions[offset:end]
+        stats.observe(episode['raw_actions'],episode['actions'],model.action_space.low,model.action_space.high)
+        episode['box_clipping']=stats.summary();offset=end
+    if offset!=len(raw_actions):raise ValueError('PPO evaluation action/episode records disagree')
+    scope='independent seeded random reachable targets'
+    if environment['target_mode']=='fixed':scope='one fixed target; repeated seeds do not test target generalization'
+    elif environment['target_mode']=='discrete':
+        scope=f"one episode per discrete candidate ({len(measured['episodes'])} unique positions); reset seeds are not random-position generalization"
+    measured.update(box_clipping=clipping.summary(),parameters_unchanged=True,goal_scope=scope)
     return measured
 
 

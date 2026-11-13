@@ -215,18 +215,28 @@ print(json.dumps(result['timing']))
             self.assertTrue(np.isfinite(row['actual_after_m']).all())
 
     def test_physical_configuration_and_source_models_unchanged(self):
+        import ast
         import hashlib
         from realman_rl_simtoreal.rl.common.artifacts import asset_hashes
         env=self.config['environment']
         for key,value in dict(target_mode='fixed',reward_mode='reach_shaped_v1',action_scale=.00025,
             control_period=.05,max_episode_steps=200,success_threshold=.001,boundary_mode='terminate',
             gravity_compensation=True).items():self.assertEqual(env[key],value)
-        self.assertEqual(asset_hashes(),self.config['assets'])
+        # Discrete reset support intentionally changes ReachEnv source. Keep
+        # physical hashes exact and freeze its legacy step/reward/safety AST.
+        env_path='src/realman_rl_simtoreal/envs/reach_env.py'
+        self.assertEqual({k:v for k,v in asset_hashes().items() if k!=env_path},
+                         {k:v for k,v in self.config['assets'].items() if k!=env_path})
+        contract=read(PROJECT_ROOT/'tests/fixtures/reach_env_legacy_contract.json')
+        cls=next(n for n in ast.parse((PROJECT_ROOT/env_path).read_text()).body if isinstance(n,ast.ClassDef))
+        methods={n.name:hashlib.sha256(ast.dump(n,include_attributes=False).encode()).hexdigest()
+                 for n in cls.body if isinstance(n,ast.FunctionDef) and n.name in contract['method_sha256']}
+        self.assertEqual(methods,contract['method_sha256'])
         baseline=PROJECT_ROOT/'outputs/rl/ppo_reach_validation/baseline_manifest.json'
         if baseline.exists():
             # Optional developer integrity evidence; CI does not need old outputs.
             for name,digest in read(baseline).items():
-                if name.startswith(('assets/','src/realman_rl_simtoreal/simulation/','src/realman_rl_simtoreal/envs/')):
+                if name.startswith(('assets/','src/realman_rl_simtoreal/simulation/')):
                     self.assertEqual(hashlib.sha256((PROJECT_ROOT/name).read_bytes()).hexdigest(),digest,name)
 
     def test_tensorboard_contains_measured_update_and_evaluation_metrics(self):

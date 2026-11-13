@@ -43,14 +43,18 @@ def evaluate(name, seeds, *, model=None, transform=None, config=None, action_see
         expected_transform = ReachTransform.from_env(env).config
         if transform is not None and transform.config != expected_transform:
             raise ValueError('Saved transform does not match this model/home and units')
-        for seed in seeds:
+        discrete=env.target_mode=='discrete'
+        if discrete and len(seeds)!=len(env.goal_candidates):
+            raise ValueError(f'Discrete evaluation requires exactly {len(env.goal_candidates)} episodes, one per candidate; repeats are not generalization')
+        for episode_index,seed in enumerate(seeds):
             started = perf_counter()
-            obs, reset_info = env.reset(seed=int(seed))
+            obs, reset_info = env.reset(seed=int(seed),options={'goal_index':episode_index} if discrete else None)
             goal, initial = obs['desired_goal'].copy(), obs['achieved_goal'].copy()
             rng = np.random.default_rng([action_seed, int(seed)])
             rewards, actions = [], []
             rejected_actions, rejection_reasons = 0, Counter()
             physics_steps = 0
+            episode_motion=MotionStats() if discrete and collect_motion else None
             for _ in range(env.max_episode_steps):
                 if name in ('sac','ppo'):
                     action, _ = model.predict(transform.encode(obs), deterministic=True)
@@ -67,6 +71,9 @@ def evaluate(name, seeds, *, model=None, transform=None, config=None, action_see
                 obs, reward, terminated, truncated, info = env.step(action)
                 if motion is not None:
                     motion.observe(before_obs['achieved_goal'],obs['achieved_goal'],before_obs['desired_goal'],
+                        before_obs['observation'][18:21],info['command_position_m'],action,terminated or truncated)
+                if episode_motion is not None:
+                    episode_motion.observe(before_obs['achieved_goal'],obs['achieved_goal'],before_obs['desired_goal'],
                         before_obs['observation'][18:21],info['command_position_m'],action,terminated or truncated)
                 step_times.append(perf_counter()-step_start)
                 if not env.observation_space.contains(obs) or not all(np.isfinite(x).all() for x in obs.values()):
@@ -92,6 +99,13 @@ def evaluate(name, seeds, *, model=None, transform=None, config=None, action_see
                                  rejected_actions=rejected_actions, rejection_reasons=dict(rejection_reasons),
                                  near_zero_action_fraction=float(np.mean(np.linalg.norm(actions, axis=1) < .01)),
                                  physics_steps=physics_steps, episode_wall_s=perf_counter()-started, actions=actions))
+            if discrete:
+                episodes[-1]['goal_index']=episode_index
+                episodes[-1]['termination_detail']=info.get('detail')
+                offset=goal-initial;axis=int(np.argmax(abs(offset)))
+                others=np.delete(offset,axis)
+                episodes[-1]['goal_label']=('+' if offset[axis]>0 else '-')+'XYZ'[axis] if np.all(abs(others)<1e-10) else f'goal_{episode_index}'
+                if episode_motion is not None:episodes[-1]['motion']=episode_motion.summary()
     elapsed = perf_counter()-start_total
     result = dict(policy=name, deterministic=name in ('sac','ppo'), summary=summarize_episodes(episodes), episodes=episodes,
                 timing=dict(wall_s=elapsed, interaction_steps_per_s=len(step_times)/elapsed,
@@ -103,6 +117,13 @@ def evaluate(name, seeds, *, model=None, transform=None, config=None, action_see
                                           mae=float(np.abs(errors).mean()),max_abs=float(np.abs(errors).max()))
                                        if errors.size else None)
     if motion is not None:result['motion']=motion.summary()
+    if discrete:
+        result['per_goal']={e['goal_label']:dict(goal_index=e['goal_index'],goal_position_m=e['target_position_m'],
+            final_position_m=e['final_position_m'],
+            success=e['success'],final_distance_m=e['final_distance_m'],episode_length=e['length'],
+            first_action=e['actions'][0],termination_reason=e['reason'],termination_detail=e.get('termination_detail'),
+            actual_path_m=e.get('motion',{}).get('actual_path_m'),
+            action_direction_fraction=e.get('motion',{}).get('toward_actual_fraction')) for e in episodes}
     return result
 
 
@@ -121,3 +142,11 @@ def record_evaluation(logger, evaluation):
             logger.record('bc/evaluation_states_'+key,evaluation['bc_action_deviation'][key])
     for key,value in evaluation.get('motion',{}).items():
         if value is not None:logger.record('evaluation/motion/'+key,value)
+    for label,row in evaluation.get('per_goal',{}).items():
+        tag=label.replace('+','plus_').replace('-','minus_').lower()
+        for key in ('success','episode_length','action_direction_fraction'):
+            if row[key] is not None:logger.record(f'evaluation/goals/{tag}/{key}',float(row[key]))
+        logger.record(f'evaluation/goals/{tag}/distance_mm',row['final_distance_m']*1000)
+        if row['actual_path_m'] is not None:logger.record(f'evaluation/goals/{tag}/actual_path_mm',row['actual_path_m']*1000)
+        for reason in REASONS:logger.record(f'evaluation/goals/{tag}/termination/'+reason,int(row['termination_reason']==reason))
+        for axis,value in zip('xyz',row['first_action']):logger.record(f'evaluation/goals/{tag}/first_action_{axis}',value)

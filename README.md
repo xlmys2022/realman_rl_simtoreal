@@ -12,7 +12,7 @@
 
 ## 当前状态
 
-当前入口为 PPO Reach。已有 seed2026、16384 步固定目标 Pilot：最终独立评估 18 步成功、误差约 0.961 mm；这是已有实验结果，不代表随机目标泛化。纯 SAC Pilot 未稳定成功，BC 融合暂作历史复现。完整证据见 [PPO 验证](docs/validation/PPO_REACH_VALIDATION.md) 和 [实验索引](docs/experiments/README.md)。本次结构重构没有重新执行正式训练或改变算法、模型及物理参数。
+当前纯PPO两方向Pilot已由用户完成：+X19步成功、误差0.929mm；-X200步超时、误差10.241mm。训练-X57集均未成功，课程尚未通过，不进入六方向。旧固定目标Pilot成功，三维随机Pilot仅4%最终成功率。两方向±X5mm均通过原保护；六方向5mm中的±Y未通过home±5°预检，该配置会明确拒绝启动。全部旧产物保留；逐目标结果及停滞诊断见[目标条件验证](docs/validation/PPO_GOAL_CONDITIONED_VALIDATION.md)，历史见 [PPO 验证](docs/validation/PPO_REACH_VALIDATION.md) 和 [实验索引](docs/experiments/README.md)。
 
 ## 安装环境
 
@@ -72,6 +72,67 @@ python -I -m tensorboard.main --logdir outputs/rl/ppo_reach --host 127.0.0.1 --p
 ```
 
 PPO 保留官方 512 步 Rollout、64 样本 minibatch、10 个 epoch；评估和保存发生在完整更新之后，因此实际步数可能超过请求下界。原始高斯动作与环境 Box 裁剪动作分别记录，动作裁剪率与 PPO `clip_fraction` 含义不同。固定目标更换 seed 不等于泛化验证。
+
+### 三维随机目标Pilot（04-F2）
+
+开发阶段完成200个随机目标检查及短测试；用户随后已手动完成16384步Pilot。最终100目标成功4%、平均误差6.197mm，开发集未呈持续改善，当前尚未学会可靠的三维Reach。结果、方向偏置及训练预算分析见[验证报告](docs/validation/PPO_RANDOM_REACH_VALIDATION.md)。沿用同一ReachEnv，每个Episode在reset采样home周围3–5mm的可达目标，Episode内保持固定。全新PPO随机初始化，不加载固定目标、SAC或BC权重。以下保留Pilot复现参数；输出目录必须未使用，不能覆盖已有实验：
+
+```bash
+conda activate realman_rl
+cd /home/mr-beaver/Documents/robot/realman_rl_simtoreal
+python -I scripts/train/train_ppo_reach.py \
+  --task random_reach --reward-mode reach_shaped_v1 --action-scale 0.00025 \
+  --timesteps 16384 --seed 2026 --run-dir outputs/rl/ppo_reach/random_seed2026_pilot_04f2 \
+  --eval-every 4096 --eval-episodes 20 --eval-seed-start 87000 \
+  --checkpoint-every 4096 --tensorboard
+```
+
+开发期checkpoint始终用87000–87019这20个目标比较。最终模型冻结后再评估90000–90099，不据此反复选模型或调参。监控、查看结果、最终100目标评估、导出曲线和分方向统计：
+
+```bash
+python -I -m tensorboard.main --logdir outputs/rl/ppo_reach/random_seed2026_pilot_04f2/sb3 --host 127.0.0.1 --port 6006
+python -I -m json.tool outputs/rl/ppo_reach/random_seed2026_pilot_04f2/summary.json
+python -I scripts/evaluate/evaluate_ppo_reach.py \
+  --model outputs/rl/ppo_reach/random_seed2026_pilot_04f2/checkpoints/step_016384/model.zip \
+  --episodes 100 --seed-start 90000 \
+  --json outputs/rl/ppo_reach/random_seed2026_pilot_04f2/final_test_90000_90099.json
+python -I scripts/plots/plot_ppo_training.py --run-dir outputs/rl/ppo_reach/random_seed2026_pilot_04f2
+python -I scripts/evaluate/analyze_reach_results.py \
+  --evaluation outputs/rl/ppo_reach/random_seed2026_pilot_04f2/final_test_90000_90099.json \
+  --json outputs/rl/ppo_reach/random_seed2026_pilot_04f2/final_test_direction_analysis.json
+```
+
+提前停止时先检查summary，再选择实际存在的checkpoint。评估JSON、绘图目录及分析JSON均不得覆盖已有结果。方向分析同时输出六个可重叠符号组、八个互斥象限、3–4/4–5mm半径组及每组样本量；不足10个标记小样本。新PPO评估JSON额外保留原始动作和步前实际位置，可计算裁剪角度、动作是否朝实际目标和+X偏置；历史JSON缺少字段时明确报告不可计算。环境、网络、损失及超参数不变。详情见 [PPO随机Reach验证](docs/validation/PPO_RANDOM_REACH_VALIDATION.md)。
+
+### 两方向课程准备（04-F3）
+
+同一ReachEnv新增离散候选模式：每次reset用Gymnasium RNG选择+X或-X 5mm，Episode内固定；两个目标均在初始化时通过原IK、限位、姿态及碰撞预检。动作仍为三维增量，观测仍为原33维，没有额外方向标签、BC或专家指导。PPO从随机权重开始，奖励及全部超参数不变。开发仅执行一次512步Smoke，用户随后已完成正式Pilot；以下保留复现命令，已有目录不得覆盖：
+
+```bash
+conda activate realman_rl
+cd /home/mr-beaver/Documents/robot/realman_rl_simtoreal
+python -I scripts/train/train_ppo_reach.py \
+  --task axis_pair_reach --reward-mode reach_shaped_v1 --action-scale 0.00025 \
+  --timesteps 16384 --seed 2026 --run-dir outputs/rl/ppo_reach/axis_pair_seed2026_pilot_04f3 \
+  --eval-every 2048 --eval-episodes 2 --eval-seed-start 87000 \
+  --checkpoint-every 2048 --tensorboard
+python -I -m tensorboard.main --logdir outputs/rl/ppo_reach/axis_pair_seed2026_pilot_04f3/sb3 --host 127.0.0.1 --port 6006
+```
+
+评估会通过合法reset选项逐一枚举两个候选，保证每次恰好+X、-X各一次；种子只是reset标签，不是不同随机目标。离散任务省略`--eval-episodes`/`--episodes`时自动覆盖所有候选，显式要求100次重复会报错。随机任务的多seed评估语义不变。
+
+```bash
+python -I -m json.tool outputs/rl/ppo_reach/axis_pair_seed2026_pilot_04f3/summary.json
+python -I scripts/evaluate/evaluate_ppo_reach.py \
+  --model outputs/rl/ppo_reach/axis_pair_seed2026_pilot_04f3/checkpoints/step_016384/model.zip \
+  --episodes 2 --json outputs/rl/ppo_reach/axis_pair_seed2026_pilot_04f3/distinct_goal_evaluation.json
+python -I scripts/evaluate/analyze_reach_results.py \
+  --evaluation outputs/rl/ppo_reach/axis_pair_seed2026_pilot_04f3/distinct_goal_evaluation.json \
+  --json outputs/rl/ppo_reach/axis_pair_seed2026_pilot_04f3/distinct_goal_analysis.json
+python -I scripts/plots/plot_ppo_training.py --run-dir outputs/rl/ppo_reach/axis_pair_seed2026_pilot_04f3
+```
+
+JSON、终端和TensorBoard分别报告±X结果、误差、步数、首动作、结束原因、实际路径和动作方向比例；PNG增加两方向曲线及训练成功率/保护分类。所有输出目录须为新位置，不覆盖原产物。两方向均稳定成功后才考虑六方向；`axis_six_reach`5mm目前会拒绝±Y，不能直接启动。显式3mm六方向仅用于已完成的合法reset敏感性诊断，没有偷偷替换训练配置。证据、文件说明和课程边界见[04-F3验证报告](docs/validation/PPO_GOAL_CONDITIONED_VALIDATION.md)。尚未实现`ppo_transfer`或严格跨进程续训。
 
 纯 SAC 的手动入口仍保留：
 

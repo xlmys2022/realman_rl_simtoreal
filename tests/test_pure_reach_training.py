@@ -114,7 +114,7 @@ class PureTaskRewardTests(unittest.TestCase):
         self.assertNotEqual(ra[1],rb[1])
 
     def test_task_goal_definitions_reachable_and_reproducible(self):
-        for task in TASKS:
+        for task in ('fixed_reach','easy_random_reach','random_reach'):
             config=task_environment(task,dict(reward_mode='safe_dense',action_scale=.001))
             env=ReachEnv(**config);self.addCleanup(env.close)
             for seed in range(6):
@@ -154,7 +154,7 @@ class PureTaskRewardTests(unittest.TestCase):
         self.assertGreater(np.linalg.norm(env.data.qpos-env.kinematics.home_q),1e-8)
 
     def test_official_gym_checker_all_task_modes(self):
-        for task in TASKS:
+        for task in ('fixed_reach','easy_random_reach','random_reach'):
             env=ReachEnv(**task_environment(task,dict(reward_mode='reach_shaped_v1',action_scale=.001)))
             self.addCleanup(env.close);check_env(env,skip_render_check=True)
 

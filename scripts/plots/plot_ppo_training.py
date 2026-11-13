@@ -22,6 +22,18 @@ def load_curves(folder):
         evaluation_episode_length=series([(r['step'],r['summary']) for r in evaluations],'mean_episode_length'))
     for key in ('vector_fraction','component_fraction'):
         result['action_box_clip_'+key]=series([(r['step'],r['rollout_box_clipping']) for r in metrics],key)
+    labels=sorted({label for r in evaluations for label in r.get('per_goal',{})})
+    if labels:
+        stages=json.loads((folder/'stages.json').read_text()) if (folder/'stages.json').exists() else []
+        result['training_episode_success_rate']=series([(r['step'],r['training']) for r in stages],'success_rate')
+        result['evaluation_safety_failures']=series([(r['step'],r['summary']) for r in evaluations],'safety_failures')
+        result['evaluation_timeouts']=series([(r['step'],r['summary']['termination_counts']) for r in evaluations],'time_limit')
+    for label in labels:
+        rows=[(r['step'],r['per_goal'][label]) for r in evaluations if label in r.get('per_goal',{})]
+        result['goal/'+label+'/success']=series(rows,'success')
+        result['goal/'+label+'/distance_mm']=[[s,1000*v] for s,v in series(rows,'final_distance_m')]
+        for axis,i in zip('xyz',range(3)):
+            result['goal/'+label+'/first_action_'+axis]=series([(s,dict(value=r['first_action'][i])) for s,r in rows],'value')
     return result
 
 
@@ -45,6 +57,17 @@ def export_plots(folder,output):
         ('policy_std','PPO Gaussian action standard deviation','Raw action std',[('policy_std_mean','Policy std mean')]),
         ('action_box_clipping','Environment action Box clipping per rollout','Fraction',
          [('action_box_clip_vector_fraction','Vectors'),('action_box_clip_component_fraction','Components')])]
+    labels=sorted({key.split('/')[1] for key in curves if key.startswith('goal/')})
+    if labels:
+        specs.extend([('goal_success','Distinct target success','Success (0 or 1)',[(f'goal/{s}/success',s) for s in labels]),
+                      ('goal_distance','Distinct target final distance','Distance (mm)',[(f'goal/{s}/distance_mm',s) for s in labels])])
+        for axis in 'xyz':
+            specs.append(('goal_first_action_'+axis,'First action '+axis.upper()+' by distinct target','Normalized action',
+                          [(f'goal/{s}/first_action_{axis}',s) for s in labels]))
+        specs.extend([('training_episode_success','Cumulative training episode success','Success rate',
+                       [('training_episode_success_rate','Training (stochastic)')]),
+                      ('evaluation_termination','Distinct target evaluation endings','Episode count',
+                       [('evaluation_safety_failures','Safety failures'),('evaluation_timeouts','Timeouts')])])
     generated,skipped=[],[]
     for stem,title,ylabel,items in specs:
         if not any(curves[key] for key,_ in items):
