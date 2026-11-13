@@ -1,6 +1,6 @@
 # 验证报告索引
 
-除本次重构报告外，以下报告保留原始实验数据、结论和旧版路径。历史报告中的命令对应报告当时的结构；当前运行入口见 [README](../../README.md)，完整路径对照见 [本次重构报告](PROJECT_ORGANIZATION_REFACTOR.md)。
+以下历史报告保留原始实验数据、结论和旧版路径；历史命令对应报告当时的结构。04-F2及后续报告使用重构后的入口。当前运行入口见 [README](../../README.md)，完整路径对照见 [重构报告](PROJECT_ORGANIZATION_REFACTOR.md)。
 
 - [项目结构重构（本次）](PROJECT_ORGANIZATION_REFACTOR.md)
 - [初始模型检查](VALIDATION.md)
@@ -20,3 +20,4 @@
 - [BC 初始化 SAC](SAC_BC_INIT_VALIDATION.md)
 - [纯 Reach](PURE_REACH_VALIDATION.md)
 - [PPO](PPO_REACH_VALIDATION.md)
+- [04-F2 PPO三维随机Reach训练准备与泛化验证](PPO_RANDOM_REACH_VALIDATION.md)

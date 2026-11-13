@@ -100,6 +100,10 @@ ReachEnv → ScaledReachObservation → Monitor → DummyVecEnv → VecCheckNan
 5. `learn` 返回后读取优化指标，在跨越配置阈值的完整更新点执行评估和 checkpoint；保留第 0 步、最终步、部分更新中断的原标记。
 6. `evaluate_ppo` 使用独立环境和保存的预处理，确定性推理并核验参数 / 优化计数不变；`record_evaluation` 写原有 JSON / TensorBoard 指标，绘图脚本只读取这些已测量数据。
 
+04-F2直接复用上述流程及`tasks.reach`现有`random_reach`，不增加物理环境或训练器。正式训练只需显式选择随机任务及20个评估目标。PPO评估结果额外保存每个Episode的`raw_actions`、`actual_positions_before_m`和`box_clipping`；原`actions`仍为真正输入环境的Box裁剪动作。记录只读，不改变分布、动作、奖励、网络、Rollout或更新顺序。
+
+`scripts/evaluate/analyze_reach_results.py`只读取评估JSON，按相对reset home的XYZ符号（六组可重叠）、八象限及3–4/4–5mm半径分组，保留空组、小样本和范围外目标计数。它还比较原始/实际动作方向、裁剪角度及+X偏置；缺少原始轨迹的历史文件明确标记不可计算，不反推数据或重新调用IK。该入口仅依赖NumPy/标准库，不加载SDK、模型或环境。原有公共指标名称保留，不创建语义相同的TensorBoard标签。准备检查、种子划分和手动命令见[随机Reach验证](validation/PPO_RANDOM_REACH_VALIDATION.md)。
+
 SAC 同样共享包装、独立评估和日志，保留官方 DictReplayBuffer、损失、采样 RNG 与熵系数。不同算法的更新调度和算法专属 checkpoint 状态分别保留，不强行抽象为一个训练器。
 
 ## Gymnasium 与 MuJoCo
@@ -120,7 +124,7 @@ SAC 同样共享包装、独立评估和日志，保留官方 DictReplayBuffer�
 
 训练更新网络并写新 run；每次 CLI 从头创建模型，不是跨进程完整续训。评估固定模型、使用独立目标种子和保存的环境，不更新网络或 Replay。诊断只读分析 Q/TD/轨迹；边界对照脚本仅在原明确训练模式中启动新的 SAC 进程，`--final` 模式只评估。环境 `probe_reach_env.py` 不创建学习器。
 
-测试位于 `tests/`，模型构建器由逐字节重生成测试覆盖；23 个 argparse 入口在 `/tmp` 下通过绝对路径检查 `--help`。测试含小规模训练更新与保存 / 加载，不以短测试成功率作为算法效果要求。PPO 测试阻断本项目 SAC、BC 与 SDK 导入，纯 SAC 测试阻断 BC / SDK 和专家动作。
+测试位于 `tests/`，模型构建器由逐字节重生成测试覆盖；原23个argparse入口及新增只读分析入口在`/tmp`下通过绝对路径检查`--help`。测试含小规模训练更新与保存 / 加载，不以短测试成功率作为算法效果要求。PPO 测试阻断本项目 SAC、BC 与 SDK 导入，纯 SAC 测试阻断 BC / SDK 和专家动作。随机目标测试覆盖200个目标的原可达性/安全预检、reset/home与Episode内目标稳定、33维方向特征、分组分析及一次完整512步随机任务更新；固定任务的原PPO产物可显式复用，避免重复训练。
 
 ## 保存兼容性与边界
 
