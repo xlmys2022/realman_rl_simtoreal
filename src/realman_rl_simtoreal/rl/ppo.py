@@ -213,9 +213,11 @@ def evaluate_ppo(model,transform,environment,seeds):
         stats.observe(episode['raw_actions'],episode['actions'],model.action_space.low,model.action_space.high)
         episode['box_clipping']=stats.summary();offset=end
     if offset!=len(raw_actions):raise ValueError('PPO evaluation action/episode records disagree')
-    measured.update(box_clipping=clipping.summary(),parameters_unchanged=True,
-        goal_scope='one fixed target; repeated seeds do not test target generalization' if environment['target_mode']=='fixed'
-                   else 'independent seeded random reachable targets')
+    scope='independent seeded random reachable targets'
+    if environment['target_mode']=='fixed':scope='one fixed target; repeated seeds do not test target generalization'
+    elif environment['target_mode']=='discrete':
+        scope=f"one episode per discrete candidate ({len(measured['episodes'])} unique positions); reset seeds are not random-position generalization"
+    measured.update(box_clipping=clipping.summary(),parameters_unchanged=True,goal_scope=scope)
     return measured
 
 

@@ -83,7 +83,9 @@ def run(folder,episodes=4):
         config=task_environment('random_reach',ENV_CONFIG,reward_mode='safe_dense',action_scale=scale)
         scale_results[str(scale)]=[trajectory(config,'random',seed=82000+i) for i in range(episodes)]
     targets={}
-    for task in TASKS:
+    # This historical probe covers fixed/spherical-shell distributions.
+    # Discrete candidates, including rejected future stages, have their own audit.
+    for task in ('fixed_reach','easy_random_reach','random_reach'):
         config=task_environment(task,ENV_CONFIG)
         with ReachEnv(**config) as env:
             offsets=[]

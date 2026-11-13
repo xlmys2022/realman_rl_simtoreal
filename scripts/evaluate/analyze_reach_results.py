@@ -97,7 +97,8 @@ def analyze(document,*,min_samples=10):
         e['_octant']=''.join('+' if x>0 else '-' for x in offset) if np.all(offset!=0) else 'on_coordinate_plane'
         e['_radius_bin']='3-4mm' if .003-1e-12<=radius<.004 else '4-5mm' if .004<=radius<=.005+1e-12 else 'outside_3-5mm'
         seeds.append(e['seed']);rows.append(e)
-    if len(set(seeds))!=len(seeds):raise ValueError('Repeated evaluation seeds; cannot count them as independent targets')
+    if len(set(seeds))!=len(seeds) and not all('goal_index' in e for e in rows):
+        raise ValueError('Repeated evaluation seeds; cannot count them as independent targets')
     directions={sign+axis:group_summary([e for e in rows if (e['_offset'][i]>0 if sign=='+' else e['_offset'][i]<0)],min_samples)
                 for i,axis in enumerate('XYZ') for sign in ('+','-')}
     octants={''.join(signs):group_summary([e for e in rows if e['_octant']==''.join(signs)],min_samples)
@@ -107,7 +108,7 @@ def analyze(document,*,min_samples=10):
            for key in ('3-4mm','4-5mm','outside_3-5mm')}
     assert sum(x['samples'] for x in octants.values())==len(rows)
     offsets=np.asarray([e['_offset'] for e in rows]);distances=np.asarray([e['_radius_m'] for e in rows])
-    return dict(schema=1,policy=document.get('policy'),deterministic=document.get('deterministic'),
+    result=dict(schema=1,policy=document.get('policy'),deterministic=document.get('deterministic'),
         goal_scope=document.get('goal_scope'),seeds=seeds,min_group_samples=min_samples,
         reference='World XYZ offset from each episode initial ee position (reset home in ReachEnv).',
         notes=['Axis sign groups overlap; octants and radius bins partition episodes.',
@@ -124,6 +125,13 @@ def analyze(document,*,min_samples=10):
         targets=[dict(seed=e['seed'],offset_mm=(np.array(e['_offset'])*1000).tolist(),radius_mm=e['_radius_m']*1000,
                       octant=e['_octant'],radius_bin=e['_radius_bin'],success=e['success'],reason=e['reason'],
                       final_distance_mm=e['final_distance_m']*1000,steps=e['length']) for e in rows])
+    if any('goal_index' in e for e in rows):
+        indices=[e['goal_index'] for e in rows]
+        if len(set(indices))!=len(indices):raise ValueError('Repeated discrete candidates are not independent target evaluations')
+        result['discrete_goals']={e['goal_label']:dict(group_summary([e],min_samples),
+            goal_position_m=e['target_position_m'],first_action=e['actions'][0],motion=e.get('motion'),
+            termination_reason=e['reason']) for e in rows}
+    return result
 
 
 def main():
@@ -139,6 +147,10 @@ def main():
             for label,row in result[kind].items():
                 print(kind,label,'n=',row['samples'],'success=',row['success_rate'],
                       'distance_mm=',row['mean_final_distance_mm'],'small_sample=',row['small_sample'])
+        for label,row in result.get('discrete_goals',{}).items():
+            print('distinct goal',label,'success=',row['successes'],'distance_mm=',row['mean_final_distance_mm'],
+                  'steps=',row['mean_episode_length'],'first_action=',row['first_action'],
+                  'reason=',row['termination_reason'],'motion=',row['motion'])
         print('Saved',a.json);return 0
     except (ValueError,KeyError,TypeError,OSError) as exc:p.exit(1,str(exc)+'\n')
 

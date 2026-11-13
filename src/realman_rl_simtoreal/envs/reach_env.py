@@ -1,6 +1,7 @@
 """Local Cartesian reaching with fixed or validated random world-frame goals."""
 
 from collections import Counter
+import copy
 
 import gymnasium as gym
 from gymnasium import spaces
@@ -28,15 +29,15 @@ class ReachEnv(gym.Env):
                  gravity_compensation=True, render_mode=None, target_mode="fixed",
                  target_radius=0.005, max_target_attempts=64, reward_mode=None,
                  boundary_mode="terminate", rejection_penalty=1.0,
-                 reward_sigma_m=0.005, reward_gamma=0.99):
+                 reward_sigma_m=0.005, reward_gamma=0.99,target_offsets=None):
         if boundary_mode not in ("terminate", "reject_and_hold"):
             raise ValueError("boundary_mode must be 'terminate' or 'reject_and_hold'")
         if not np.isfinite(rejection_penalty) or rejection_penalty <= 0:
             raise ValueError("rejection_penalty must be finite and positive")
         self.boundary_mode = boundary_mode
         self.rejection_penalty = float(rejection_penalty)
-        if target_mode not in ("fixed", "random"):
-            raise ValueError("target_mode must be 'fixed' or 'random'")
+        if target_mode not in ("fixed", "random", "discrete"):
+            raise ValueError("target_mode must be 'fixed', 'random' or 'discrete'")
         if reward_mode is None:
             reward_mode = "distance" if target_mode == "fixed" else "safe_dense"
         if reward_mode not in ("distance", "safe_dense", "reach_shaped_v1"):
@@ -62,6 +63,22 @@ class ReachEnv(gym.Env):
             raise ValueError("max_target_attempts must be an integer in [1, 1000]")
         self.target_mode = target_mode
         self.target_radius = float(target_radius)
+        self._target_offsets=None
+        self._goal_candidates=None
+        self._candidate_validation=[]
+        self._goal_index=None
+        if target_mode=='discrete':
+            offsets=np.asarray(target_offsets,dtype=float)
+            if (offsets.ndim!=2 or offsets.shape[1:]!=(3,) or len(offsets)==0
+                    or not np.isfinite(offsets).all()):
+                raise ValueError('Discrete target_offsets must be a nonempty finite Nx3 array (metres)')
+            radii=np.linalg.norm(offsets,axis=1)
+            if (np.any(radii<=success_threshold) or np.any(radii>target_radius+1e-12)
+                    or len(np.unique(offsets,axis=0))!=len(offsets)):
+                raise ValueError('Discrete offsets must be unique, outside success radius and within target_radius')
+            self._target_offsets=offsets.copy()
+        elif target_offsets is not None:
+            raise ValueError('target_offsets requires target_mode=discrete')
         self.max_target_attempts = int(max_target_attempts)
         self.reward_mode = reward_mode
         self.reward_sigma_m, self.reward_gamma = float(reward_sigma_m), float(reward_gamma)
@@ -92,9 +109,13 @@ class ReachEnv(gym.Env):
         self.kinematics = Kinematics(self.model)
         self._goal = self.kinematics.home_position+np.array([0.005, 0, 0])
         # Validate the fixed goal against this exact model, not a workspace guess.
-        goal_result = self.kinematics.solve_ik(self._goal, self.kinematics.home_q)
-        check_motion(self.model, self.data, self.joint_ids, self.actuator_ids,
-                     self.kinematics, goal_result, self._goal)
+        if target_mode=='discrete':
+            self._validate_candidates()
+            self._goal=self._goal_candidates[0].copy()
+        else:
+            goal_result = self.kinematics.solve_ik(self._goal, self.kinematics.home_q)
+            check_motion(self.model, self.data, self.joint_ids, self.actuator_ids,
+                         self.kinematics, goal_result, self._goal)
         self.action_space = spaces.Box(-1.0, 1.0, shape=(3,), dtype=np.float32)
         # Unbounded spaces keep terminal safety states representable; values are
         # checked for finiteness separately. Bounds are not physical guarantees.
@@ -109,6 +130,34 @@ class ReachEnv(gym.Env):
         self._command_position = self.kinematics.home_position.copy()
         self._joint_reference = self.kinematics.home_q.copy()
         self._last_observation = self._observation()
+
+    @property
+    def goal_candidates(self):
+        """Validated world positions; return a copy, never a mutable command."""
+        return None if self._goal_candidates is None else self._goal_candidates.copy()
+
+    @property
+    def candidate_validation(self):
+        return copy.deepcopy(self._candidate_validation)
+
+    def _validate_candidates(self):
+        self._goal_candidates=self.kinematics.home_position+self._target_offsets
+        failures=[]
+        for i,goal in enumerate(self._goal_candidates):
+            result=self.kinematics.solve_ik(goal,self.kinematics.home_q,self.kinematics.home_rotation)
+            record=dict(goal_index=i,offset_m=self._target_offsets[i].tolist(),position_m=goal.tolist(),
+                        ik_success=result.success,position_error_m=result.position_error,
+                        orientation_error_rad=result.orientation_error,valid=False)
+            try:
+                if not result.success or result.q is None:raise ValueError(result.reason or 'IK returned no legal target')
+                validate_target(self.model,self.joint_ids,self.kinematics.home_q,result.q)
+                check_motion(self.model,self.data,self.joint_ids,self.actuator_ids,self.kinematics,result,goal)
+                record.update(valid=True,joint_target_rad=result.q.tolist())
+            except ValueError as exc:
+                record['reason']=str(exc)
+                failures.append(f'candidate {i} offset={record["offset_m"]}: {exc}')
+            self._candidate_validation.append(record)
+        if failures:raise ValueError('Discrete targets rejected; none may be silently removed: '+'; '.join(failures))
 
     def _observation(self):
         p = self.data.site_xpos[self.kinematics.site_id].copy()
@@ -138,6 +187,8 @@ class ReachEnv(gym.Env):
         if self.boundary_mode == "reject_and_hold":
             result.update(is_action_rejected=False, rejection_reason=None,
                           boundary_mode=self.boundary_mode)
+        if self.target_mode=='discrete':
+            result.update(goal_index=self._goal_index,goal_count=len(self._goal_candidates))
         if self.reward_mode == 'reach_shaped_v1':
             result.setdefault('is_action_rejected',False)
             result.setdefault('previous_achieved_goal',observation['achieved_goal'].copy())
@@ -147,8 +198,14 @@ class ReachEnv(gym.Env):
         super().reset(seed=seed)
         if self._closed:
             raise RuntimeError("Environment is closed")
+        goal_index=None
         if options:
-            raise ValueError("This environment has no reset options")
+            if self.target_mode!='discrete' or not isinstance(options,dict) or set(options)!={'goal_index'}:
+                raise ValueError("Only discrete tasks support reset options={'goal_index': index}")
+            goal_index=options['goal_index']
+            if (not isinstance(goal_index,(int,np.integer)) or isinstance(goal_index,bool)
+                    or not 0<=goal_index<len(self._goal_candidates)):
+                raise ValueError('goal_index must be a valid integer candidate index')
         self._episode_done = True  # Sampling failure must leave the environment unsteppable.
         mujoco.mj_resetDataKeyframe(self.model, self.data, self.model.key("home").id)
         mujoco.mj_forward(self.model, self.data)
@@ -157,6 +214,10 @@ class ReachEnv(gym.Env):
         self._elapsed_steps = 0
         if self.target_mode == "random":
             self._goal, self._goal_sampling = self._sample_goal()
+        elif self.target_mode=='discrete':
+            self._goal_index=int(self.np_random.integers(len(self._goal_candidates))) if goal_index is None else int(goal_index)
+            self._goal=self._goal_candidates[self._goal_index].copy()
+            self._goal_sampling=dict(attempts=1,rejections={})
         else:
             self._goal = self.kinematics.home_position+np.array([0.005, 0, 0])
             self._goal_sampling = dict(attempts=0, rejections={})

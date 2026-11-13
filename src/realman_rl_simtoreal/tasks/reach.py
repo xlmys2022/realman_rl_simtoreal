@@ -10,6 +10,11 @@ TASKS = {
     'fixed_reach': dict(target_mode='fixed',target_radius=.005),
     'easy_random_reach': dict(target_mode='random',target_radius=.003),
     'random_reach': dict(target_mode='random',target_radius=.005),
+    'axis_pair_reach': dict(target_mode='discrete',target_radius=.005,
+                           target_offsets=((.005,0.,0.),(-.005,0.,0.))),
+    'axis_six_reach': dict(target_mode='discrete',target_radius=.005,
+                          target_offsets=((.005,0.,0.),(-.005,0.,0.),(0.,.005,0.),
+                                          (0.,-.005,0.),(0.,0.,.005),(0.,0.,-.005))),
 }
 
 
@@ -17,6 +22,7 @@ def task_environment(task, base, *, reward_mode=None, action_scale=None):
     if task not in TASKS:
         raise ValueError('Unknown pure RL task: '+str(task))
     result=dict(base,**TASKS[task])
+    if result['target_mode']!='discrete':result.pop('target_offsets',None)
     if reward_mode is not None:result['reward_mode']=reward_mode
     if action_scale is not None:result['action_scale']=action_scale
     if result['reward_mode']=='reach_shaped_v1':
