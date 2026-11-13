@@ -14,11 +14,17 @@ from ..simulation.kinematics import Kinematics, rotation_vector
 from ..simulation.model import load_model, initialize
 
 
+OBSERVATION_MODES = ("legacy", "fetch_like_v1")
+
+
 class ReachEnv(gym.Env):
     """Fixed home+X5mm or seeded random goal, using existing IK and actuators.
 
     action: float32 XYZ in [-1,1], each component scaled to metres in world.
-    observation: float64 [q(6), qvel(6), ee(3), goal-ee(3), command_xyz(3), ctrl(6)].
+    legacy observation: [q(6), qvel(6), ee(3), goal-ee(3), command_xyz(3), ctrl(6)].
+    fetch_like_v1 observation: [ee_world_m(3), ee_world_velocity * control_period(3)].
+    The latter motion feature is displacement per control period in metres,
+    not unscaled m/s. Both raw observation modes are float64.
     Goal fields are world XYZ metres. No SDK, scripts or Viewer are imported.
     """
 
@@ -29,7 +35,11 @@ class ReachEnv(gym.Env):
                  gravity_compensation=True, render_mode=None, target_mode="fixed",
                  target_radius=0.005, max_target_attempts=64, reward_mode=None,
                  boundary_mode="terminate", rejection_penalty=1.0,
-                 reward_sigma_m=0.005, reward_gamma=0.99,target_offsets=None):
+                 reward_sigma_m=0.005, reward_gamma=0.99,target_offsets=None,
+                 observation_mode="legacy"):
+        if observation_mode not in OBSERVATION_MODES:
+            raise ValueError(f"observation_mode must be one of {OBSERVATION_MODES}")
+        self.observation_mode = observation_mode
         if boundary_mode not in ("terminate", "reject_and_hold"):
             raise ValueError("boundary_mode must be 'terminate' or 'reject_and_hold'")
         if not np.isfinite(rejection_penalty) or rejection_penalty <= 0:
@@ -120,7 +130,8 @@ class ReachEnv(gym.Env):
         # Unbounded spaces keep terminal safety states representable; values are
         # checked for finiteness separately. Bounds are not physical guarantees.
         self.observation_space = spaces.Dict({
-            "observation": spaces.Box(-np.inf, np.inf, shape=(27,), dtype=np.float64),
+            "observation": spaces.Box(-np.inf, np.inf,
+                                      shape=(27 if observation_mode == "legacy" else 6,), dtype=np.float64),
             "achieved_goal": spaces.Box(-np.inf, np.inf, shape=(3,), dtype=np.float64),
             "desired_goal": spaces.Box(-np.inf, np.inf, shape=(3,), dtype=np.float64),
         })
@@ -160,6 +171,23 @@ class ReachEnv(gym.Env):
         if failures:raise ValueError('Discrete targets rejected; none may be silently removed: '+'; '.join(failures))
 
     def _observation(self):
+        if self.observation_mode == "legacy":
+            return self._legacy_observation()
+        # MuJoCo's positional site Jacobian is world-frame, with one column
+        # per generalized velocity (nv), not per qpos coordinate (nq).
+        # Use the full qvel vector; no assumption about arm DOF contiguity.
+        # This query neither advances time nor modifies simulation state.
+        p = self.data.site_xpos[self.kinematics.site_id].copy()
+        jacp = np.empty((3, self.model.nv), dtype=np.float64)
+        mujoco.mj_jacSite(self.model, self.data, jacp, None, self.kinematics.site_id)
+        displacement = (jacp @ self.data.qvel) * self.control_period
+        result = dict(observation=np.concatenate([p, displacement]),
+                      achieved_goal=p, desired_goal=self._goal.copy())
+        if not all(np.isfinite(v).all() for v in result.values()):
+            raise ValueError("Non-finite environment observation")
+        return result
+
+    def _legacy_observation(self):
         p = self.data.site_xpos[self.kinematics.site_id].copy()
         result = dict(observation=np.concatenate([
             self.data.qpos[self.kinematics.qadr], self.data.qvel[self.kinematics.vadr],

@@ -11,7 +11,7 @@ from stable_baselines3.common.callbacks import BaseCallback
 
 from .common.metrics import MotionStats
 from ..tasks.reach import task_environment, ENV_CONFIG
-from .common.observation import ReachTransform
+from .common.observation import checkpoint_transform, validate_model_observation
 from .common.evaluation import evaluate, summarize_episodes
 from .common.artifacts import write_json, append_json
 
@@ -23,9 +23,13 @@ TRAIN_METRICS=('policy_gradient_loss','value_loss','entropy_loss','approx_kl','c
                'explained_variance','std','loss','learning_rate','clip_range')
 
 
-def environment_config(task='fixed_reach',reward_mode='reach_shaped_v1',action_scale=.00025):
+def environment_config(task='fixed_reach',reward_mode='reach_shaped_v1',action_scale=.00025,
+                       observation_mode='legacy'):
+    if observation_mode not in ('legacy', 'fetch_like_v1'):
+        raise ValueError('Unknown observation_mode: '+str(observation_mode))
     return task_environment(task,dict(ENV_CONFIG,boundary_mode='terminate'),
-                            reward_mode=reward_mode,action_scale=action_scale)
+                            reward_mode=reward_mode,action_scale=action_scale,
+                            observation_mode=None if observation_mode=='legacy' else observation_mode)
 
 
 def make_ppo(env,seed,*,n_steps=512,batch_size=64,n_epochs=10):
@@ -186,6 +190,7 @@ def post_update_metrics(model,audit):
 
 
 def evaluate_ppo(model,transform,environment,seeds):
+    validate_model_observation(model, transform)
     before=parameter_hashes(model);counters=(model.num_timesteps,model._n_updates,optimizer_steps(model))
     clipping=ActionClipStats();raw_actions=[];actual_positions=[]
     class ObservedPolicy:
@@ -222,6 +227,7 @@ def evaluate_ppo(model,transform,environment,seeds):
 
 
 def save_ppo_checkpoint(model,folder,config,trained_rollouts,*,completed_stage):
+    checkpoint_transform(config, model)
     folder=Path(folder);folder.mkdir(parents=True,exist_ok=True)
     model.save(folder/'model.zip')
     write_json(folder/'config.json',config)
@@ -232,9 +238,11 @@ def save_ppo_checkpoint(model,folder,config,trained_rollouts,*,completed_stage):
         stage_kind='initial' if model.num_timesteps==0 else 'post_update' if completed_stage else 'partial_or_interrupted'))
 
 
-def load_ppo(path):
+def load_ppo(path, *, observation_mode=None):
     path=Path(path).resolve();config=json.loads((path.parent/'config.json').read_text())
     if config.get('algorithm')!='PPO':raise ValueError('Expected an explicitly marked PPO checkpoint')
+    transform=checkpoint_transform(config, observation_mode=observation_mode)
     torch.set_num_threads(config['torch_num_threads'])
     model=PPO.load(path,device='cpu')
-    return model,ReachTransform(config['observation_transform']),config
+    validate_model_observation(model, transform)
+    return model,transform,config

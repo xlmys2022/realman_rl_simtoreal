@@ -147,6 +147,37 @@ python -I scripts/train/train_sac_reach.py \
 
 `--task fixed_reach|easy_random_reach|random_reach` 使用同一环境，不自动升级任务难度。历史 BC 初始化只在明确指定 `--init-mode bc_actor --bc-model PATH` 的旧实验分支加载，纯 RL 任务拒绝 BC 参照或初始化。
 
+## Reach 观测模式
+
+默认 `legacy` 完整保留原 `27+3+3=33` 维观测及固定预处理。PPO 可显式选择
+`--observation-mode fetch_like_v1`：普通 observation 为实际末端世界位置和
+`末端世界线速度 × control_period`，各 3 维；加上 achieved_goal 和 desired_goal，
+官方 MultiInputPolicy 实际输入共 12 维。运动特征单位为米，包装器将普通位置相对
+home、运动特征按固定 0.01m 尺度处理；两个 goal 始终保持世界坐标米。
+
+以下为后续手动训练/评估示例，本次没有启动正式训练。每次须使用新输出目录：
+
+```bash
+python -I scripts/train/train_ppo_reach.py \
+  --task random_reach --observation-mode fetch_like_v1 \
+  --reward-mode reach_shaped_v1 --action-scale 0.00025 \
+  --timesteps 16384 --seed 2026 --eval-every 2048 --checkpoint-every 2048 \
+  --eval-episodes 20 --eval-seed-start 87000 \
+  --run-dir outputs/rl/ppo_reach/random_fetch_v1_seed2026_ab_new
+
+python -I scripts/evaluate/evaluate_ppo_reach.py \
+  --model outputs/rl/ppo_reach/random_fetch_v1_seed2026_ab_new/final/model.zip \
+  --observation-mode fetch_like_v1 --episodes 100 --seed-start 88000 \
+  --json outputs/rl/ppo_reach/random_fetch_v1_seed2026_ab_new/heldout_88000.json
+```
+
+训练也支持 fixed_reach、axis_pair_reach 和 easy_random_reach；离散两方向评估仍须
+恰好 2 个 Episode。评估默认读取 checkpoint 的模式，显式传入不一致模式会报错。
+旧 schema=1 / transform schema=2 checkpoint 继续识别为 legacy，不迁移权重。
+原命令滞后规则基线、BC 和 SAC 专用实验/诊断目前仅支持 legacy，新模式会明确拒绝。
+配置契约、依赖适配、测试证据和 A/B 建议见
+[Fetch 观测验证报告](docs/validation/REACH_FETCH_OBSERVATION_VALIDATION.md)；12 维尚无正式成功率对照结论。
+
 ## 模型评估与绘图
 
 使用已有 PPO Pilot 模型进行独立只读推理；评估 JSON 和图片使用新的输出位置：

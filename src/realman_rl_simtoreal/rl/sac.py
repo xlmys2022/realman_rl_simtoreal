@@ -14,6 +14,8 @@ SAC_CONFIG = dict(learning_rate=3e-4, batch_size=256, buffer_size=100_000,
 
 
 def make_model(env, seed, *, overrides=None):
+    if env.observation_space['observation'].shape != (27,):
+        raise ValueError("SAC experiments currently require observation_mode='legacy' (33 dimensions); use PPO for fetch_like_v1")
     params = dict(SAC_CONFIG)
     if overrides:
         params.update(overrides)

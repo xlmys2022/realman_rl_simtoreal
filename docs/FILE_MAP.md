@@ -43,7 +43,7 @@
 |---|---|---|---|---|
 | `src/realman_rl_simtoreal/__init__.py` | 轻量包标识，无运行时初始化 | 包基础 | Python 包导入机制 | 否 |
 | `src/realman_rl_simtoreal/envs/__init__.py` | 轻量包标识，无运行时初始化 | envs | Python 包导入机制 | 否 |
-| `src/realman_rl_simtoreal/envs/reach_env.py` | 六轴Reach；原固定/球壳及离散候选reset、全候选预检，原观测/奖励/step不变 | envs | `scripts/diagnostics/probe_reach_env.py`<br>`scripts/diagnostics/smoke_reach_env.py`<br>`scripts/evaluate/evaluate_reach_baselines.py`<br>`src/realman_rl_simtoreal/imitation/bc.py`<br>等（共 17 处静态调用） | 否 |
+| `src/realman_rl_simtoreal/envs/reach_env.py` | 六轴Reach；默认legacy 33维、可选fetch_like_v1 12维；固定/球壳/离散目标，原奖励/step不变 | envs | 训练、评估、诊断和环境测试 | 否 |
 | `src/realman_rl_simtoreal/imitation/__init__.py` | 轻量包标识，无运行时初始化 | imitation | `tests/test_bc_reach.py` | 否 |
 | `src/realman_rl_simtoreal/imitation/bc.py` | 专家示范、离线 BC 网络训练、权重保存加载和闭环评估 | imitation | `scripts/evaluate/evaluate_bc_reach.py`<br>`scripts/train/collect_reach_demonstrations.py`<br>`scripts/train/train_bc_reach.py`<br>`src/realman_rl_simtoreal/imitation/bc_to_sac.py`<br>等（共 6 处静态调用） | 否 |
 | `src/realman_rl_simtoreal/imitation/bc_to_sac.py` | 历史 BC→SAC Actor 均值通路校验、复制与偏差诊断 | imitation | `scripts/train/train_sac_reach.py`<br>`src/realman_rl_simtoreal/rl/sac_monitoring.py`<br>`tests/test_sac_bc_initialization.py` | 否 |
@@ -55,7 +55,7 @@
 | `src/realman_rl_simtoreal/rl/common/env_factory.py` | 原训练包装栈、公开 reset 观测探针 | common | `scripts/train/train_ppo_reach.py`<br>`scripts/train/train_sac_reach.py`<br>`tests/test_bc_reach.py`<br>`tests/test_pure_reach_training.py`<br>等（共 8 处静态调用） | 否 |
 | `src/realman_rl_simtoreal/rl/common/evaluation.py` | 共享确定性评估；离散逐候选枚举、per_goal、路径及TensorBoard | common | `scripts/diagnostics/compare_sac_boundary.py`<br>`scripts/evaluate/evaluate_sac_reach.py`<br>`scripts/train/train_ppo_reach.py`<br>`scripts/train/train_sac_reach.py`<br>等（共 8 处静态调用） | 否 |
 | `src/realman_rl_simtoreal/rl/common/metrics.py` | 只读 SI 运动、路径、动作方向统计 | common | `scripts/diagnostics/probe_reach_env.py`<br>`src/realman_rl_simtoreal/rl/common/evaluation.py`<br>`src/realman_rl_simtoreal/rl/ppo.py`<br>`src/realman_rl_simtoreal/rl/sac_monitoring.py`<br>等（共 5 处静态调用） | 否 |
-| `src/realman_rl_simtoreal/rl/common/observation.py` | 固定 schema 2 观测变换、包装器、33 维特征顺序 | common | `scripts/evaluate/evaluate_sac_reach.py`<br>`src/realman_rl_simtoreal/imitation/bc.py`<br>`src/realman_rl_simtoreal/imitation/bc_to_sac.py`<br>`src/realman_rl_simtoreal/rl/common/env_factory.py`<br>等（共 14 处静态调用） | 否 |
+| `src/realman_rl_simtoreal/rl/common/observation.py` | legacy schema 2 / fetch schema 3固定变换；33/12维顺序、checkpoint契约与模式检查 | common | PPO/SAC/BC边界、env_factory、评估和测试 | 否 |
 | `src/realman_rl_simtoreal/rl/ppo.py` | 官方PPO配置、Rollout/裁剪审计、独立或离散目标评估范围、checkpoint | rl | `scripts/evaluate/evaluate_ppo_reach.py`<br>`scripts/train/train_ppo_reach.py`<br>`tests/test_ppo_reach.py`<br>`tests/test_ppo_random_reach.py`<br>`scripts/diagnostics/probe_ppo_goals.py`<br>`tests/test_goal_conditioned_reach.py` | 否 |
 | `src/realman_rl_simtoreal/rl/sac.py` | 官方 SAC 配置、模型创建及模型 / Replay checkpoint | rl | `scripts/train/train_sac_reach.py`<br>`tests/test_pure_reach_training.py`<br>`tests/test_sac_bc_initialization.py`<br>`tests/test_sac_diagnostics.py`<br>等（共 5 处静态调用） | 否 |
 | `src/realman_rl_simtoreal/rl/sac_diagnostics.py` | 冻结策略轨迹、Q / soft TD、参数指纹和 Replay 加载 | rl | `scripts/diagnostics/compare_sac_boundary.py`<br>`scripts/diagnostics/diagnose_sac_reach.py`<br>`scripts/train/train_sac_reach.py`<br>`src/realman_rl_simtoreal/rl/sac_monitoring.py`<br>等（共 7 处静态调用） | 否 |
@@ -82,6 +82,7 @@
 | 文件路径 | 功能 | 所属层次 | 主要调用者 | 是否为运行入口 |
 |---|---|---|---|---|
 | `tests/test_bc_reach.py` | BC 数据、特征、模型、监督更新与闭环 | 测试 | unittest discover | 是（测试） |
+| `tests/test_fetch_observation.py` | 双模式维度、真实Site运动、网络实际输入、物理一致性、旧checkpoint及单512步PPO Smoke | 测试 | unittest discover | 是（测试） |
 | `tests/test_fk_comparison.py` | FK 坐标、厂家配置与差异对照 | 测试 | unittest discover | 是（测试） |
 | `tests/test_grasp_contact.py` | 接触、代理、同步步进与严格失败反例 | 测试 | unittest discover | 是（测试） |
 | `tests/test_gravity_compensation.py` | 重力补偿路由、合力矩限幅及控制对照 | 测试 | unittest discover | 是（测试） |

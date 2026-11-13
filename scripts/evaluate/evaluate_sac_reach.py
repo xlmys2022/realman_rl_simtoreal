@@ -8,7 +8,7 @@ import torch
 from stable_baselines3 import SAC
 
 from realman_rl_simtoreal.rl.common.evaluation import evaluate
-from realman_rl_simtoreal.rl.common.observation import ReachTransform
+from realman_rl_simtoreal.rl.common.observation import checkpoint_transform, require_legacy, validate_model_observation
 from realman_rl_simtoreal.rl.common.artifacts import write_json, versions
 
 
@@ -17,10 +17,12 @@ def run(model_path, *, episodes=100, seed_start=100, policies=('random', 'rule',
     if episodes < 1 or seed_start < 0:
         raise ValueError('Positive episode count and nonnegative seed required')
     config = json.loads((model_path.parent/'config.json').read_text())
-    transform = ReachTransform(config['observation_transform'])
+    require_legacy(config['environment'], 'SAC evaluation')
+    transform = checkpoint_transform(config)
     torch.set_num_threads(config['torch_num_threads'])
     torch.use_deterministic_algorithms(True)
     model = SAC.load(model_path, device='cpu') if 'sac' in policies else None
+    if model is not None:validate_model_observation(model, transform)
     seeds = list(range(seed_start, seed_start+episodes))
     results = {}
     for policy in policies:

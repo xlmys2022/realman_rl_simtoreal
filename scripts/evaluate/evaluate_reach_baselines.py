@@ -21,9 +21,11 @@ from realman_rl_simtoreal.paths import OUTPUTS
 
 
 from realman_rl_simtoreal.rl.common.baselines import rule_action
+from realman_rl_simtoreal.rl.common.observation import require_legacy
 
 
 def validate_transition(env, observation, reward, info):
+    require_legacy(dict(observation_mode=env.observation_mode), 'Historical baseline validation')
     if (not env.observation_space.contains(observation)
             or not all(np.isfinite(v).all() for v in observation.values())):
         raise ValueError("Invalid observation during evaluation")
