@@ -10,5 +10,8 @@
 - [BC→SAC 04-D1](../validation/SAC_BC_INIT_VALIDATION.md)：历史 Actor 初始化与短期退化证据，当前不作为纯 RL 默认流程。
 - [纯 Reach 04-E1](../validation/PURE_REACH_VALIDATION.md)：固定 / 随机任务、奖励探针、两组手动 5000 步 SAC Pilot 及失败结果。
 - [PPO 04-F1](../validation/PPO_REACH_VALIDATION.md)：完整 Rollout 审计、用户手动 16384 步固定目标 Pilot、独立评估与局限。
+- [PPO 04-F2 随机Reach](../validation/PPO_RANDOM_REACH_VALIDATION.md)：旧33维用户手动16384步Pilot，90000–90099独立100目标成功4%，方向偏置及预算诊断。
+- [PPO 04-F3 两方向课程](../validation/PPO_GOAL_CONDITIONED_VALIDATION.md)：旧33维±X5mm候选与Pilot，+X成功、-X超时，课程未通过。
+- [Fetch-like 12维观测与Pilot](../validation/REACH_FETCH_OBSERVATION_VALIDATION.md)：双模式314项开发验收；用户随后完成16384步随机Reach，88000–88099独立100目标成功3%、97次超时、0次安全失败，±X首动作方向偏置仍在。旧33维4%使用不同目标，尚非配对A/B。
 
-物理、控制和环境的验证记录见 [验证索引](../validation/README.md)。历史报告原文未修改；本次代码组织重构没有把任何历史失败改写为成功，也没有新增算法实验。
+物理、控制和环境的验证记录见[验证索引](../validation/README.md)。代码组织重构本身没有新增算法实验；其后由用户完成的训练另记在对应报告中，保留开发验收和历史失败记录。更新日志只读复核已有产物，不重新训练或覆盖模型。

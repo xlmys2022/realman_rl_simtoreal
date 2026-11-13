@@ -22,4 +22,4 @@
 - [PPO](PPO_REACH_VALIDATION.md)
 - [04-F2 PPO三维随机Reach训练准备与泛化验证](PPO_RANDOM_REACH_VALIDATION.md)
 - [04-F3 PPO目标敏感性、两方向课程与六方向预检](PPO_GOAL_CONDITIONED_VALIDATION.md)
-- [Reach 双观测模式与 Fetch-like 12 维验证](REACH_FETCH_OBSERVATION_VALIDATION.md)
+- [Reach双观测模式与Fetch-like 12维验证及用户Pilot](REACH_FETCH_OBSERVATION_VALIDATION.md)：314项开发测试通过；16384步随机Reach独立100目标成功3%，方向偏置尚未解决。

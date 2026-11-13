@@ -12,7 +12,9 @@
 
 ## 当前状态
 
-当前纯PPO两方向Pilot已由用户完成：+X19步成功、误差0.929mm；-X200步超时、误差10.241mm。训练-X57集均未成功，课程尚未通过，不进入六方向。旧固定目标Pilot成功，三维随机Pilot仅4%最终成功率。两方向±X5mm均通过原保护；六方向5mm中的±Y未通过home±5°预检，该配置会明确拒绝启动。全部旧产物保留；逐目标结果及停滞诊断见[目标条件验证](docs/validation/PPO_GOAL_CONDITIONED_VALIDATION.md)，历史见 [PPO 验证](docs/validation/PPO_REACH_VALIDATION.md) 和 [实验索引](docs/experiments/README.md)。
+用户已完成12维 `fetch_like_v1` 随机Reach的16384步Pilot与100目标独立评估：成功3%、97次超时、0次安全失败，平均最终误差5.888mm。实际Actor/Critic输入均为12维，但±X5mm同Home探针的X动作仍都为正，方向偏置尚未解决。旧33维随机Pilot成功率4%，使用不同测试种子，不能直接作为配对A/B结论。完整训练、开发曲线、方向诊断及原始证据见[Fetch观测验证报告](docs/validation/REACH_FETCH_OBSERVATION_VALIDATION.md)。
+
+历史33维纯PPO两方向Pilot：+X19步成功、误差0.929mm；-X200步超时、误差10.241mm，训练-X57集均未成功，课程尚未通过，不进入六方向。旧固定目标Pilot成功。两方向±X5mm均通过原保护；六方向5mm中的±Y未通过home±5°预检，该配置仍明确拒绝启动。全部旧产物保留；历史逐目标结果见[目标条件验证](docs/validation/PPO_GOAL_CONDITIONED_VALIDATION.md)、[PPO验证](docs/validation/PPO_REACH_VALIDATION.md)和[实验索引](docs/experiments/README.md)。
 
 ## 安装环境
 
@@ -60,7 +62,7 @@ python -I scripts/models/build_grasp_scene.py
 
 ## PPO Reach 训练
 
-以下为手动训练示例，本次重构未执行。每次换一个未使用的 `--run-dir`，保留已有结果：
+以下为手动训练示例。每次换一个未使用的 `--run-dir`，保留已有结果：
 
 ```bash
 python -I scripts/train/train_ppo_reach.py \
@@ -155,7 +157,9 @@ python -I scripts/train/train_sac_reach.py \
 官方 MultiInputPolicy 实际输入共 12 维。运动特征单位为米，包装器将普通位置相对
 home、运动特征按固定 0.01m 尺度处理；两个 goal 始终保持世界坐标米。
 
-以下为后续手动训练/评估示例，本次没有启动正式训练。每次须使用新输出目录：
+用户已按以下参数完成训练与独立评估，产物位于
+`outputs/rl/ppo_reach/random_fetch_v1_seed2026_ab_new/`。以下保留已完成实验的命令；
+复现时必须更换 `--run-dir` 和 `--json`，不能覆盖该目录或原评估文件：
 
 ```bash
 python -I scripts/train/train_ppo_reach.py \
@@ -176,7 +180,10 @@ python -I scripts/evaluate/evaluate_ppo_reach.py \
 旧 schema=1 / transform schema=2 checkpoint 继续识别为 legacy，不迁移权重。
 原命令滞后规则基线、BC 和 SAC 专用实验/诊断目前仅支持 legacy，新模式会明确拒绝。
 配置契约、依赖适配、测试证据和 A/B 建议见
-[Fetch 观测验证报告](docs/validation/REACH_FETCH_OBSERVATION_VALIDATION.md)；12 维尚无正式成功率对照结论。
+[Fetch观测验证报告](docs/validation/REACH_FETCH_OBSERVATION_VALIDATION.md)。本轮训练完成32次Rollout、
+320个epoch、2560次Adam更新；开发集87000–87019最终成功2/20，独立集88000–88099成功3/100。
+独立集平均初始距离4.122mm、最终距离5.888mm，100次首动作X分量均为正。
+12维接口和训练链路验证通过，但单个seed的Pilot尚未学会可靠的随机Reach；新旧方案仍需相同目标配对评估。
 
 ## 模型评估与绘图
 

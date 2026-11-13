@@ -79,9 +79,15 @@ SE(3) 矩阵工具位于 `utils/geometry.py`，共享 FK 姿态、关节演示�
 
 ## 观测、动作和奖励契约
 
-原始 Dict 保持 `observation(27)`、`achieved_goal(3)`、`desired_goal(3)`。27 维依次为：q(6)、qvel(6)、实际末端(3)、目标减实际(3)、命令位置(3)、实际 ctrl(6)。原始观测为 float64，位置单位为米，角度为弧度。
+默认 `observation_mode="legacy"` 的原始 Dict 保持 `observation(27)`、`achieved_goal(3)`、`desired_goal(3)`。27维依次为：q(6)、qvel(6)、实际末端(3)、目标减实际(3)、命令位置(3)、实际ctrl(6)。原始观测为float64，位置单位为米，角度为弧度。
 
 schema 2 固定仿射变换只缩放 27 维 observation，沿用 home 中心、5°、30°/s、10mm 尺度并转为 float32；两个 goal 键仍为 float64 米制，偏移为 0、缩放为 1。网络使用 `achieved_goal → desired_goal → observation` 的 33 维 float32 拼接，保持 SB3 CombinedExtractor 与 BC 的输入顺序一致。不增加 clipping、在线归一化或奖励归一化。
+
+PPO可显式选择 `observation_mode="fetch_like_v1"`：普通observation仅包含ee_site实际世界位置(3)和
+`mj_jacSite`完整位置Jacobian乘qvel、再乘control_period的运动特征(3)，加两个3维goal共12维。
+运动特征单位为米。schema=3固定变换将位置相对home、运动特征按0.01m缩放；两个goal仍为世界坐标米。
+官方MultiInputPolicy/CombinedExtractor将完整Dict的12维传给Actor和Critic，无自定义筛选或额外相对位置拼接。
+规则策略、BC与SAC专用实验/诊断当前只支持legacy，遇到新模式明确拒绝；运动统计从已有info读取命令位置。
 
 包装顺序从内向外严格为：
 
@@ -93,7 +99,7 @@ ReachEnv → ScaledReachObservation → Monitor → DummyVecEnv → VecCheckNan
 
 ## PPO 训练数据流
 
-1. `scripts/train/train_ppo_reach.py` 解析参数，用 `tasks.reach` 的配置构造独立训练环境，保存环境、schema 2 变换、依赖和资源指纹。
+1. `scripts/train/train_ppo_reach.py` 解析任务与观测模式，用 `tasks.reach` 的配置构造独立训练环境，保存环境、对应schema=2/3变换、模式/空间/字段顺序/实际特征维度、依赖和资源指纹。
 2. `rl.ppo.make_ppo` 创建官方 `PPO("MultiInputPolicy")`，保留独立 256×256/Tanh 策略和价值网络及原超参数。
 3. SB3 从包装后的 Dict 预测动作；经原动作 Box 裁剪和 `env.step` 形成真实轨迹。PPOAudit 只读记录原始 / 实际动作、运动、安全与训练 Episode，不产生动作或修改奖励。
 4. SB3 采集完整 512 步 Rollout，计算原优势和 log_prob，按 64 样本 minibatch 完成 10 个 epoch。timeout bootstrap 与优化器逻辑完全使用官方实现。
@@ -135,6 +141,10 @@ SAC 同样共享包装、独立评估和日志，保留官方 DictReplayBuffer�
 ## 保存兼容性与边界
 
 PPO/SAC 保存官方 SB3 类和参数，配置以 JSON 保存；Replay 使用官方序列化并 gzip 压缩。BC 保存显式网络标识、配置和 state_dict，继续 `torch.load(weights_only=True)`。现有有效模型未引用旧业务类路径，无需兼容包装。仅使用仓库已有、来源明确的本地模型做只读验证，不下载或加载未知文件。
+
+新PPO配置schema=2保存观测元数据；历史PPO配置schema=1、变换schema=2仍按legacy加载。
+加载核对保存模式、固定变换、模型空间与实际features_dim，33/12维模型不得混用或自动迁移权重。
+314项双模式开发验收及用户完成的12维随机Reach Pilot结果见[Fetch观测验证报告](validation/REACH_FETCH_OBSERVATION_VALIDATION.md)。
 
 早期 schema 1 SAC smoke 配置以及缺少相邻 config.json 的历史文件在基线已不可通过当前加载协议评估；本次不改变原拒绝行为、不猜测配置。完整数量和路径见重构报告。
 
