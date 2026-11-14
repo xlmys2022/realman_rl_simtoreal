@@ -1,6 +1,6 @@
 # Python 文件地图
 
-路径均相对仓库根目录。共 81 个 Python 文件：核心包 35、脚本 28、测试 18。包内每层的 `__init__.py` 只作轻量包标识。下面列出全部 Python 文件；主要调用者依据实际导入与入口用途整理，不将脚本的文件名当作可导入业务接口。
+路径均相对仓库根目录。共85个Python文件：核心包36、脚本29、测试20。包内每层的 `__init__.py` 只作轻量包标识。下面列出全部Python文件；主要调用者依据实际导入与入口用途整理，不将脚本的文件名当作可导入业务接口。
 
 新增 / 移动 Python 文件时，同步维护本表、[架构](architecture.md)、当前 README 命令和相应测试路径。旧路径见 [迁移对照](validation/PROJECT_ORGANIZATION_REFACTOR.md)。
 
@@ -18,6 +18,7 @@
 | `scripts/diagnostics/compare_ik.py` | 厂家离线 IK 自模型与跨模型验证 | CLI / diagnostics | 用户命令行；对应自动化测试 | 是（CLI） |
 | `scripts/diagnostics/compare_sac_boundary.py` | SAC 边界单因素实验及冻结最终评估 | CLI / diagnostics | 用户命令行；对应自动化测试 | 是（CLI） |
 | `scripts/diagnostics/diagnose_sac_reach.py` | 冻结 SAC 轨迹、反例与全 Replay TD 诊断 | CLI / diagnostics | 用户命令行；对应自动化测试 | 是（CLI） |
+| `scripts/diagnostics/diagnose_reach_rewards.py` | 独立Home动作方向、旧奖励解析、同轨迹新旧计分与四张诊断图；不训练 | CLI / diagnostics | 用户命令行；新奖励专项测试 | 是（CLI） |
 | `scripts/diagnostics/probe_reach_env.py` | 任务分布、奖励与随机探索探针，无学习器 | CLI / diagnostics | 用户命令行；对应自动化测试 | 是（CLI） |
 | `scripts/diagnostics/probe_ppo_goals.py` | 冻结PPO在合法reset目标下的同状态特征/动作敏感性，不执行step或训练 | CLI / diagnostics | 用户命令行；`tests/test_goal_conditioned_reach.py` | 是（CLI） |
 | `scripts/diagnostics/smoke_reach_env.py` | 小规模无界面 Reach 交互 / Gymnasium checker | CLI / diagnostics | 用户命令行；对应自动化测试 | 是（CLI） |
@@ -69,6 +70,7 @@
 | `src/realman_rl_simtoreal/simulation/model.py` | MuJoCo 模型加载、映射、初始化、重力补偿配置与结构检查 | simulation | `scripts/demos/control_ee.py`<br>`scripts/demos/control_joints.py`<br>`scripts/demos/demo_gripper.py`<br>`scripts/demos/run_grasp_contact_cases.py`<br>等（共 19 处静态调用） | 否 |
 | `src/realman_rl_simtoreal/tasks/__init__.py` | 轻量包标识，无运行时初始化 | tasks | Python 包导入机制 | 否 |
 | `src/realman_rl_simtoreal/tasks/reach.py` | 算法无关fixed / easy_random / random / axis_pair / axis_six显式目标配置 | tasks | `scripts/diagnostics/probe_reach_env.py`<br>`scripts/train/train_ppo_reach.py`<br>`scripts/train/train_sac_reach.py`<br>`src/realman_rl_simtoreal/imitation/bc.py`<br>等（共 14 处静态调用） | 否 |
+| `src/realman_rl_simtoreal/tasks/rewards.py` | 奖励模式、进度奖励8项实验初值、组件键与checkpoint一致性校验 | tasks | ReachEnv、任务配置、PPO训练/评估/加载 | 否 |
 | `src/realman_rl_simtoreal/utils/__init__.py` | 轻量包标识，无运行时初始化 | utils | Python 包导入机制 | 否 |
 | `src/realman_rl_simtoreal/utils/demo_helpers.py` | FK 样本姿态、原关节演示序列和结果格式化 | utils | `scripts/demos/control_ee.py`<br>`scripts/demos/control_joints.py`<br>`scripts/diagnostics/compare_controllers.py`<br>`scripts/diagnostics/compare_fk.py`<br>等（共 5 处静态调用） | 否 |
 | `src/realman_rl_simtoreal/utils/geometry.py` | 共享 SE(3) 构造与逆变换 | utils | `scripts/diagnostics/compare_fk.py`<br>`scripts/diagnostics/compare_ik.py` | 否 |
@@ -96,6 +98,7 @@
 | `tests/test_ppo_random_reach.py` | 200个随机目标/观测/reset契约、分组与裁剪分析、单512步随机PPO Smoke及20目标评估接口 | 测试 | unittest discover | 是（测试） |
 | `tests/test_pure_reach_training.py` | 任务配置、奖励 / 探针、纯 SAC 隔离和运动统计 | 测试 | unittest discover | 是（测试） |
 | `tests/test_reach_env.py` | Gymnasium、动作、观测、奖励、真实物理步与保护 | 测试 | unittest discover | 是（测试） |
+| `tests/test_reach_progress_reward.py` | 25项奖励方向、批量、漏洞/边界、兼容、组件与单次512步PPO Smoke | 测试 | unittest discover | 是（测试） |
 | `tests/test_reach_task.py` | 随机可达目标、奖励一致性、基线及 CLI | 测试 | unittest discover | 是（测试） |
 | `tests/test_sac_bc_initialization.py` | 历史 BC Actor 映射、受保护参数、短 SAC 更新与监控 | 测试 | unittest discover | 是（测试） |
 | `tests/test_sac_diagnostics.py` | 冻结动作轨迹、Q / TD / Replay、随机状态与参数不变性 | 测试 | unittest discover | 是（测试） |

@@ -97,6 +97,15 @@ ReachEnv → ScaledReachObservation → Monitor → DummyVecEnv → VecCheckNan
 
 包装器的 `compute_reward` 仍向原环境传入米制 goal。PPO 按官方实现将原始高斯动作裁剪到动作 Box 后交给环境，RolloutBuffer 与 log_prob 仍使用原始动作；SAC 保留官方压缩动作及 Replay 语义。所有奖励、失败、拒绝与 timeout 逻辑都留在原 `reach_env.py`。
 
+奖励保留distance、safe_dense和reach_shaped_v1，并可显式选择reach_progress_v1。
+新奖励使用真实previous_achieved_goal与当前achieved_goal相对传入desired_goal的距离差，
+加持续距离成本、每步成本、成功奖金及真实安全/拒绝成本；不使用命令位移或历史成功标记。
+`tasks/rewards.py`集中默认参数和校验；GoalEnv接口支持标量/批量与目标重标记，
+`reward_components()`为纯查询，info和现有训练/评估JSON记录六个signed分项及距离元数据，不进入观测。
+新checkpoint在环境配置、顶层reward_parameters及SB3普通metadata中保存/核对完整参数；旧checkpoint继续加载。
+PPO更新、目标分布和控制/安全逻辑不变。诊断先于新实现完成，旧公式无明确错误；
+典型安全排序、往返折扣边界及339项验证见[奖励报告](validation/REACH_REWARD_OPTIMIZATION_VALIDATION.md)。
+
 ## PPO 训练数据流
 
 1. `scripts/train/train_ppo_reach.py` 解析任务与观测模式，用 `tasks.reach` 的配置构造独立训练环境，保存环境、对应schema=2/3变换、模式/空间/字段顺序/实际特征维度、依赖和资源指纹。

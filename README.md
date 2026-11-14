@@ -16,6 +16,11 @@
 
 此前同seed的12维16384步Pilot独立100目标成功3%，旧33维随机Pilot成功4%；三次独立测试使用不同目标，不能把1%/3%/4%的差值直接作为配对对照结论。长训练在16384步时的参数与12维短实验final完全一致，可以比较其后在同一开发集上的变化。
 
+奖励方向诊断已完成，未发现旧reach_shaped_v1的明确实现错误。新增显式实验模式reach_progress_v1，
+保留原默认奖励；339项测试通过，开发只新增一次512步PPO Smoke。用户随后完成16384步±X Pilot，
+最终两目标均超时（误差2.531/7.335mm），方向课程尚未通过，暂不进入随机任务；尚无等条件新旧奖励优劣结论。
+实际数值、折扣往返与安全偏好边界见[奖励诊断报告](docs/validation/REACH_REWARD_OPTIMIZATION_VALIDATION.md)。
+
 历史33维纯PPO两方向Pilot：+X19步成功、误差0.929mm；-X200步超时、误差10.241mm，训练-X57集均未成功，课程尚未通过，不进入六方向。旧固定目标Pilot成功。两方向±X5mm均通过原保护；六方向5mm中的±Y未通过home±5°预检，该配置仍明确拒绝启动。全部旧产物保留；历史逐目标结果见[目标条件验证](docs/validation/PPO_GOAL_CONDITIONED_VALIDATION.md)、[PPO验证](docs/validation/PPO_REACH_VALIDATION.md)和[实验索引](docs/experiments/README.md)。
 
 ## 安装环境
@@ -150,6 +155,26 @@ python -I scripts/train/train_sac_reach.py \
 ```
 
 `--task fixed_reach|easy_random_reach|random_reach` 使用同一环境，不自动升级任务难度。历史 BC 初始化只在明确指定 `--init-mode bc_actor --bc-model PATH` 的旧实验分支加载，纯 RL 任务拒绝 BC 参照或初始化。
+
+## Reach 奖励实验
+
+PPO通过 `--reward-mode reach_progress_v1` 选择实际距离进度、持续距离成本、步成本、成功奖金、
+安全失败及动作拒绝成本。8项实验初值集中管理并完整保存到config与模型metadata；独立评估自动读取。
+普通observation仍为12维，不加入奖励分项；原distance、safe_dense、reach_shaped_v1保持可用。
+
+以下仅提供用户手动执行的±X5mm Pilot，输出目录须为新目录；本次没有执行正式训练：
+
+```bash
+python -I scripts/train/train_ppo_reach.py \
+  --task axis_pair_reach --observation-mode fetch_like_v1 --reward-mode reach_progress_v1 \
+  --action-scale 0.00025 --timesteps 16384 --seed 2026 \
+  --eval-every 2048 --checkpoint-every 2048 --eval-episodes 2 --eval-seed-start 97000 \
+  --run-dir outputs/rl/ppo_reward/axis_pair_progress_seed2026_pilot
+```
+
+先检查两方向是否都能选择正确动作，再考虑random_reach。新旧奖励应以相同观测、seed、预算和目标配对，
+至少复核三个训练seed；不同奖励的原始Return不直接比较。完整评估命令、四张诊断图和A/B方案见
+[奖励诊断与验证报告](docs/validation/REACH_REWARD_OPTIMIZATION_VALIDATION.md)。
 
 ## Reach 观测模式
 

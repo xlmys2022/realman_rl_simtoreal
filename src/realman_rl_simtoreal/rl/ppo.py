@@ -11,6 +11,7 @@ from stable_baselines3.common.callbacks import BaseCallback
 
 from .common.metrics import MotionStats
 from ..tasks.reach import task_environment, ENV_CONFIG
+from ..tasks.rewards import REWARD_COMPONENT_KEYS, validate_checkpoint_reward
 from .common.observation import checkpoint_transform, validate_model_observation
 from .common.evaluation import evaluate, summarize_episodes
 from .common.artifacts import write_json, append_json
@@ -24,12 +25,13 @@ TRAIN_METRICS=('policy_gradient_loss','value_loss','entropy_loss','approx_kl','c
 
 
 def environment_config(task='fixed_reach',reward_mode='reach_shaped_v1',action_scale=.00025,
-                       observation_mode='legacy'):
+                       observation_mode='legacy', reward_progress_parameters=None):
     if observation_mode not in ('legacy', 'fetch_like_v1'):
         raise ValueError('Unknown observation_mode: '+str(observation_mode))
     return task_environment(task,dict(ENV_CONFIG,boundary_mode='terminate'),
                             reward_mode=reward_mode,action_scale=action_scale,
-                            observation_mode=None if observation_mode=='legacy' else observation_mode)
+                            observation_mode=None if observation_mode=='legacy' else observation_mode,
+                            reward_progress_parameters=reward_progress_parameters)
 
 
 def make_ppo(env,seed,*,n_steps=512,batch_size=64,n_epochs=10):
@@ -93,6 +95,7 @@ class PPOAudit(BaseCallback):
         self.episodes=[];self.partial_rewards=[];self.partial_actions=[]
         self.motion=MotionStats();self.clipping=ActionClipStats();self.rollout_clipping=ActionClipStats()
         self.complete_rollouts=0;self.abort_reason=None;self.partial_rejections=0;self.rejections=0
+        self.reward_component_totals={};self.reward_component_steps=0
 
     def _on_rollout_start(self):
         self.rollout_clipping=ActionClipStats()
@@ -102,6 +105,11 @@ class PPOAudit(BaseCallback):
         for stats in (self.clipping,self.rollout_clipping):
             stats.observe(raw,applied,self.model.action_space.low,self.model.action_space.high)
         reward=float(self.locals['rewards'][0]);info=self.locals['infos'][0]
+        if 'reward_components' in info:
+            raw_reward=info['reward_components']['total_reward']
+            if np.float32(raw_reward)!=np.float32(reward):
+                raise ValueError('Reward components differ from the unbootstrapped VecEnv reward')
+            reward=float(raw_reward)  # Audit raw SI-env return before VecEnv float32 conversion.
         if not np.isfinite(reward):raise FloatingPointError('Non-finite environment reward')
         done=bool(self.locals['dones'][0]);old=self.model._last_obs
         next_obs=info.get('terminal_observation',self.locals['new_obs'])
@@ -111,7 +119,7 @@ class PPOAudit(BaseCallback):
         self.motion.observe(before,after,goal,command,info['command_position_m'],applied,done)
         self.partial_rewards.append(reward);self.partial_actions.append(float(np.linalg.norm(applied)))
         rejected=bool(info.get('is_action_rejected',False));self.rejections+=int(rejected);self.partial_rejections+=int(rejected)
-        append_json(self.folder/'actions.jsonl',dict(step=int(self.model.num_timesteps),
+        action_record=dict(step=int(self.model.num_timesteps),
             raw_action=raw.tolist(),applied_action=applied.tolist(),box_clipped=bool(np.any(raw!=applied)),
             actual_before_m=before.tolist(),actual_after_m=after.tolist(),goal_m=goal.tolist(),
             command_before_m=command.tolist(),command_after_m=info['command_position_m'].tolist(),
@@ -119,7 +127,16 @@ class PPOAudit(BaseCallback):
             reason=info['termination_reason'],is_success=info['is_success'],
             is_safety_failure=info['is_safety_failure'],is_action_rejected=rejected,
             terminated=done and not bool(info.get('TimeLimit.truncated',False)),
-            truncated=bool(info.get('TimeLimit.truncated',False))))
+            truncated=bool(info.get('TimeLimit.truncated',False)))
+        if 'reward_components' in info:
+            components=info['reward_components']
+            if sum(components[k] for k in REWARD_COMPONENT_KEYS)!=reward or components['total_reward']!=reward:
+                raise ValueError('Logged reward components do not sum to raw environment reward')
+            action_record['reward_components']=components
+            self.reward_component_steps+=1
+            for key in (*REWARD_COMPONENT_KEYS,'total_reward'):
+                self.reward_component_totals[key]=self.reward_component_totals.get(key,0.)+components[key]
+        append_json(self.folder/'actions.jsonl',action_record)
         if done:
             rewards=self.partial_rewards
             row=dict(end_step=int(self.model.num_timesteps),length=len(rewards),return_=float(sum(rewards)),
@@ -146,10 +163,15 @@ class PPOAudit(BaseCallback):
         result.update(partial_episode_steps=len(self.partial_rewards),rejected_actions=self.rejections,
                       collected_rollouts=self.complete_rollouts,abort_reason=self.abort_reason,
                       motion=self.motion.summary(),box_clipping=self.clipping.summary())
+        if self.reward_component_steps:
+            result.update(reward_component_steps=self.reward_component_steps,
+                          reward_component_totals=self.reward_component_totals.copy())
         return result
 
     def record_scalars(self):
         summary=self.summary();tail=self.episodes[-100:]
+        for key,total in self.reward_component_totals.items():
+            self.logger.record('training/reward_components/'+key+'_mean_per_step',total/self.reward_component_steps)
         if tail:
             for tag,key in [('episode_reward_mean','return_'),('episode_length_mean','length'),('episode_success_rate','success')]:
                 self.logger.record('training/'+tag,float(np.mean([e[key] for e in tail])))
@@ -227,6 +249,7 @@ def evaluate_ppo(model,transform,environment,seeds):
 
 
 def save_ppo_checkpoint(model,folder,config,trained_rollouts,*,completed_stage):
+    validate_checkpoint_reward(config, model)
     checkpoint_transform(config, model)
     folder=Path(folder);folder.mkdir(parents=True,exist_ok=True)
     model.save(folder/'model.zip')
@@ -241,8 +264,10 @@ def save_ppo_checkpoint(model,folder,config,trained_rollouts,*,completed_stage):
 def load_ppo(path, *, observation_mode=None):
     path=Path(path).resolve();config=json.loads((path.parent/'config.json').read_text())
     if config.get('algorithm')!='PPO':raise ValueError('Expected an explicitly marked PPO checkpoint')
+    validate_checkpoint_reward(config)
     transform=checkpoint_transform(config, observation_mode=observation_mode)
     torch.set_num_threads(config['torch_num_threads'])
     model=PPO.load(path,device='cpu')
+    validate_checkpoint_reward(config, model)
     validate_model_observation(model, transform)
     return model,transform,config

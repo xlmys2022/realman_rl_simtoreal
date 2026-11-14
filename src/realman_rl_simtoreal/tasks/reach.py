@@ -1,4 +1,5 @@
 """Algorithm-independent Reach defaults and task distributions."""
+from .rewards import progress_parameters
 
 
 ENV_CONFIG = dict(target_mode='random', reward_mode='safe_dense', action_scale=.001,
@@ -18,7 +19,8 @@ TASKS = {
 }
 
 
-def task_environment(task, base, *, reward_mode=None, action_scale=None, observation_mode=None):
+def task_environment(task, base, *, reward_mode=None, action_scale=None, observation_mode=None,
+                     reward_progress_parameters=None):
     if task not in TASKS:
         raise ValueError('Unknown pure RL task: '+str(task))
     result=dict(base,**TASKS[task])
@@ -32,4 +34,9 @@ def task_environment(task, base, *, reward_mode=None, action_scale=None, observa
     if result['reward_mode']=='reach_shaped_v1':
         result.setdefault('reward_sigma_m',.005)
         result.setdefault('reward_gamma',.99)
+    if result['reward_mode']=='reach_progress_v1':
+        result['reward_progress_parameters']=progress_parameters(
+            result.get('reward_progress_parameters') if reward_progress_parameters is None else reward_progress_parameters)
+    elif reward_progress_parameters is not None:
+        raise ValueError('reward_progress_parameters requires reach_progress_v1')
     return result

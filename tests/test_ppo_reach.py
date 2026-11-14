@@ -232,6 +232,16 @@ print(json.dumps(result['timing']))
         cls.body=[n for n in cls.body if not isinstance(n,ast.FunctionDef) or n.name!='_observation']
         for n in cls.body:
             if isinstance(n,ast.FunctionDef) and n.name=='_legacy_observation':n.name='_observation'
+        class LegacyRewardView(ast.NodeTransformer):
+            # Only the added progress dispatch/audit branches are excluded;
+            # old formulas and every physical/safety statement remain frozen.
+            def visit_If(self,node):
+                test=ast.unparse(node.test)
+                if test=="self.reward_mode == 'reach_progress_v1'":return None
+                if test=="self.reward_mode in ('reach_shaped_v1', 'reach_progress_v1')":
+                    node.test=ast.parse("self.reward_mode == 'reach_shaped_v1'",mode='eval').body
+                return self.generic_visit(node)
+        cls=LegacyRewardView().visit(cls)
         methods={n.name:hashlib.sha256(ast.dump(n,include_attributes=False).encode()).hexdigest()
                  for n in cls.body if isinstance(n,ast.FunctionDef) and n.name in contract['method_sha256']}
         self.assertEqual(methods,contract['method_sha256'])

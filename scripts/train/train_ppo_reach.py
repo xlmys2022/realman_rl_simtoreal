@@ -27,16 +27,17 @@ from realman_rl_simtoreal.rl.common.env_factory import training_env
 from realman_rl_simtoreal.rl.common.artifacts import asset_hashes, versions, write_json, append_json
 from realman_rl_simtoreal.rl.common.evaluation import record_evaluation
 from realman_rl_simtoreal.envs.reach_env import OBSERVATION_MODES
+from realman_rl_simtoreal.tasks.rewards import REWARD_MODES
 from realman_rl_simtoreal.rl.common.observation import observation_metadata, validate_model_observation
 
 
 def train(folder,*,timesteps=16384,seed=2026,task='fixed_reach',reward_mode='reach_shaped_v1',
           action_scale=.00025,eval_every=2048,eval_episodes=None,checkpoint_every=2048,
           eval_seed_start=87000,tensorboard=False,n_steps=512,batch_size=64,n_epochs=10,
-          observation_mode='legacy'):
+          observation_mode='legacy', reward_progress_parameters=None):
     folder=Path(folder).resolve()
     if folder.exists() and any(folder.iterdir()):raise ValueError('Run directory must be empty; never overwrite')
-    environment=environment_config(task,reward_mode,action_scale,observation_mode)
+    environment=environment_config(task,reward_mode,action_scale,observation_mode,reward_progress_parameters)
     candidate_count=len(environment['target_offsets']) if environment['target_mode']=='discrete' else None
     if eval_episodes is None:eval_episodes=candidate_count or 1
     if candidate_count is not None and eval_episodes!=candidate_count:
@@ -63,7 +64,8 @@ def train(folder,*,timesteps=16384,seed=2026,task='fixed_reach',reward_mode='rea
         torch_num_threads=1,deterministic_algorithms=True,tensorboard=tensorboard,
         observation_transform=transform.config,reward_transform='none',
         reward_parameters=dict(sigma_m=raw.reward_sigma_m,gamma=raw.reward_gamma,
-            terminal_value=raw.shaped_terminal_value,rejection_cost=1-raw.reward_gamma) if reward_mode=='reach_shaped_v1' else None,
+            terminal_value=raw.shaped_terminal_value,rejection_cost=1-raw.reward_gamma) if reward_mode=='reach_shaped_v1'
+            else raw.reward_progress_parameters.copy() if reward_mode=='reach_progress_v1' else None,
         validation_seeds=list(range(eval_seed_start,eval_seed_start+eval_episodes)),
         evaluation_every_steps=eval_every,checkpoint_every_steps=checkpoint_every,
         scheduling='Intervals are thresholds; run once at the next completed PPO update, plus initial/final. '
@@ -78,6 +80,9 @@ def train(folder,*,timesteps=16384,seed=2026,task='fixed_reach',reward_mode='rea
         checkpoint_note='Independent random run. No BC/SAC weights, expert data, replay prefill or implicit resume. '
                         'One complete rollout per learn call, constant learning rate/clip range; policy and env stay alive.')
     config.update(observation_metadata(raw, transform))
+    if reward_mode=='reach_progress_v1':
+        # Stock SB3 serializes this plain metadata; no policy/optimizer change.
+        model.reach_reward_configuration=dict(mode=reward_mode,parameters=config['reward_parameters'].copy())
     write_json(folder/'config.json',config);write_json(folder/'observation_transform.json',transform.config)
     write_json(folder/'dependencies.json',versions())
     initial=parameter_hashes(model);model.save(folder/'initial_model.zip')
@@ -175,7 +180,7 @@ def main():
     p.add_argument('--run-dir',type=Path,required=True)
     p.add_argument('--task',choices=list(TASKS),default='fixed_reach')
     p.add_argument('--observation-mode',choices=OBSERVATION_MODES,default='legacy')
-    p.add_argument('--reward-mode',choices=['distance','safe_dense','reach_shaped_v1'],default='reach_shaped_v1')
+    p.add_argument('--reward-mode',choices=REWARD_MODES,default='reach_shaped_v1')
     p.add_argument('--action-scale',type=float,default=.00025)
     p.add_argument('--timesteps',type=int,default=16384);p.add_argument('--seed',type=int,default=2026)
     p.add_argument('--eval-every',type=int,default=2048)

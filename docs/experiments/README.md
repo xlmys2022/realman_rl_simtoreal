@@ -13,5 +13,6 @@
 - [PPO 04-F2 随机Reach](../validation/PPO_RANDOM_REACH_VALIDATION.md)：旧33维用户手动16384步Pilot，90000–90099独立100目标成功4%，方向偏置及预算诊断。
 - [PPO 04-F3 两方向课程](../validation/PPO_GOAL_CONDITIONED_VALIDATION.md)：旧33维±X5mm候选与Pilot，+X成功、-X超时，课程未通过。
 - [Fetch-like 12维观测与预算实验](../validation/REACH_FETCH_OBSERVATION_VALIDATION.md)：双模式314项开发验收；用户完成16384步Pilot（100目标成功3%）与131072步实验（100目标成功1%、99次超时、0次安全失败）。长训练开发集连续13个检查点0成功，末端落点集中；不同独立目标集不作配对排名。
+- [Reach奖励诊断与reach_progress_v1](../validation/REACH_REWARD_OPTIMIZATION_VALIDATION.md)：旧公式未发现明确错误；339项测试及一次512步Smoke通过。用户16384步±X Pilot最终0/2成功，训练3/83成功均来自早期-X；6144步短暂单侧成功后消失，两目标最终落点相距0.176mm。已追加四图、奖励审计与冻结网络诊断，方向课程未通过，配对新旧奖励对照待执行。
 
 物理、控制和环境的验证记录见[验证索引](../validation/README.md)。代码组织重构本身没有新增算法实验；其后由用户完成的训练另记在对应报告中，保留开发验收和历史失败记录。更新日志只读复核已有产物，不重新训练或覆盖模型。
