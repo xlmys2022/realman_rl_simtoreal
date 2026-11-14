@@ -165,6 +165,8 @@ PPO/SAC 保存官方 SB3 类和参数，配置以 JSON 保存；Replay 使用官
 
 ## 后续扩展
 
-未来 `GraspEnv` 可置于 `envs/grasp_env.py`，对应任务参数置于 `tasks/grasp.py`，物理与夹爪能力继续复用 `simulation/`。当实际出现第二个任务后再提取可共享接口；当前 `rl/common` 的观测、评估和统计仍是 Reach 专用，不预建空模块或抽象基类。视觉观测及真机适配需要独立验证，尚未实现。
+夹取抬升任务已经由 `envs/grasp_lift_env.py`、`tasks/grasp_lift.py`、`simulation/grasp_controller.py` 和 `rl/grasp_lift.py` 实现，入口为 `scripts/demos/run_grasp_lift.py`。环境提供 41 维 Box 观测、XYZ 加绝对夹爪开口的 4 维动作，通过 `advance_synchronized_cycle` 让机械臂、夹爪和自由物体共享每步 50 次 1 ms 积分。阶段控制器只产生这个动作空间中的动作，使用双侧接触后的有界横向对中反馈；物体的运动由接触、摩擦和重力产生。
+
+成功计时在 1 ms 物理步后读取实际接触力和物体运动，要求持续离台、双侧夹持、低速度及有限滑移。`ContactRecorder` 可选择仅保留最近采样或保存完整物理历史，读取力缓存后才刷新实时几何；数值失败返回明确标记的最近有效观测。抓取评估保存在独立的 `outputs/grasp_lift/`，`rl/common` 的观测变换和训练记录仍服务于 Reach。视觉观测及真机适配需要独立验证，尚未实现。
 
 旧版细节完整保存在 [历史架构快照](experiments/ARCHITECTURE_BEFORE_REFACTOR.md)；历史验证报告中的旧路径对应其原版本。现行命令以 README 和 FILE_MAP 为准。

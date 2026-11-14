@@ -122,7 +122,7 @@ def load_experiment(*, mass=.01, friction=.7, hull=False):
 
 class ContactRecorder:
     """Call immediately after mj_step; retain every physical tick for audit."""
-    def __init__(self, model, data, gripper, policy):
+    def __init__(self, model, data, gripper, policy, *, keep_history=True):
         self.model, self.data, self.gripper, self.policy = model, data, gripper, policy
         self.probe = mujoco.MjData(model)
         self.object = model.body('target_object').id
@@ -130,6 +130,10 @@ class ContactRecorder:
         self.qadr = int(model.joint('target_free').qposadr[0])
         self.vadr = int(model.joint('target_free').dofadr[0])
         self.rows = []
+        self.keep_history = bool(keep_history)
+        self.steps = 0
+        self.last = None
+        self.sample_every = max(1,round(.05/model.opt.timestep))
         self.phase = 'initialize'
         self._seen_categories = set()
 
@@ -163,9 +167,9 @@ class ContactRecorder:
                    left_normal_n=0., right_normal_n=0., left_tangent_n=0., right_tangent_n=0.,
                    support_normal_n=0., contact_count=int(data.ncon), contacts=[], contacts_sampled=False)
         categories = {p.classify(*c.geom) for c in data.contact}
-        # Scalars/forces at every 2ms tick; full contact vectors/points at 20Hz
+        # Scalars/forces at every physics tick; full contact vectors/points at 20Hz
         # and each category's first appearance. Avoid enormous redundant logs.
-        detailed = len(self.rows) % 25 == 0 or bool(categories-self._seen_categories)
+        detailed = self.steps % self.sample_every == 0 or bool(categories-self._seen_categories)
         self._seen_categories.update(categories)
         row['contacts_sampled'] = detailed
         for index, c in enumerate(data.contact):
@@ -186,7 +190,10 @@ class ContactRecorder:
                 row[side+'_tangent_n'] += float(np.linalg.norm(force[1:3]))
             elif category == 'target_support':
                 row['support_normal_n'] += float(force[0])
-        self.rows.append(row)
+        self.steps += 1
+        self.last = row
+        if self.keep_history:
+            self.rows.append(row)
 
 
 def groove_probe(*, hull=False):

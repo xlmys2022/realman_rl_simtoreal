@@ -148,7 +148,7 @@ class ControlCycleError(ValueError):
 
 
 def advance_synchronized_cycle(model, data, joint_ids, actuator_ids, target, gripper, *,
-                               physics_steps=25, step_observer=None):
+                               physics_steps=25, step_observer=None, max_home_delta=np.deg2rad(5)):
     """Arm + gripper references, ONE integration per tick, shared safety audit.
 
     Gripper owns its existing force/state checks and optional contact policy.
@@ -162,9 +162,9 @@ def advance_synchronized_cycle(model, data, joint_ids, actuator_ids, target, gri
     require(isinstance(physics_steps, (int, np.integer)) and not isinstance(physics_steps, bool)
             and physics_steps > 0, 'physics_steps must be a positive integer')
     home = model.key_qpos[model.key('home').id, model.jnt_qposadr[joint_ids]]
-    target = validate_target(model, joint_ids, home, target)
+    target = validate_target(model, joint_ids, home, target, max_home_delta=max_home_delta)
     start = data.ctrl[actuator_ids].copy()
-    validate_target(model, joint_ids, home, start)
+    validate_target(model, joint_ids, home, start, max_home_delta=max_home_delta)
     command = start+np.clip(target-start, -np.deg2rad(.5), np.deg2rad(.5))
     initial_time = float(data.time)
     gripper._check_state()

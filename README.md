@@ -10,6 +10,30 @@
 - 独立 BC 示范采集、训练和推理；保留历史 BC→SAC Actor 初始化、边界对照与 Q/TD 诊断。
 - 自动化回归测试、环境探针及只读训练曲线绘图。
 
+## 夹取与抬升
+
+`GraspLiftEnv` 将机械臂和 EG2-4C2 夹爪接入同一个物理控制周期。默认任务使用 20 mm、10 g 的自由方块，物体位置在支撑面内随机偏移最多 2 mm；机械臂从距夹取位置 20 mm 处接近，缓慢闭合夹爪，沿支撑面法线抬升 30 mm，再稳定保持。支撑面约倾斜 30°，因此离台高度和世界竖直抬升量分别记录。演示采用带横向对中反馈的分阶段控制器，对中每周期最多 0.05 mm、累计最多 2 mm。
+
+成功要求左右指垫法向力均大于 5 mN、支撑力小于 1 mN、离台间隙至少 28 mm、横向位置误差小于 3 mm、物体线速度小于 2 mm/s、角速度小于 0.1 rad/s，并连续保持 2 秒且相对指垫滑移小于 2 mm。物体由接触与摩擦带动；正常 step 只写控制量，位置初始化仅发生在 reset。每步共享 50 个 1 ms 物理步，继续检查力矩、速度、mimic 残差和分类碰撞；该局部任务的关节命令范围为 home±25°。
+
+在 `realman_rl` 环境运行夹取抬升，输出文件须选择新路径：
+
+```bash
+conda activate realman_rl
+python -I scripts/demos/run_grasp_lift.py --episodes 1 --seed-start 2027 \
+  --json /tmp/realman_pick_lift.json
+```
+
+追加 `--viewer` 可显示仿真，`--record-physics` 保存逐 1 ms 的物体运动和接触力。`--no-close` 与 `--no-lift` 是负对照；未完成夹取抬升会返回状态码 1，同时保存失败原因。`--mass`、`--friction`、`--object-radius` 和 `--lift-height` 支持实验参数。当前参数针对这一局部方块场景验证，夹爪模型与摩擦参数仍为未标定仿真值。
+
+RL 接口为 4 维 `Box(-1,1)`：前三维是世界 XYZ 增量，每轴最多 1 mm；第四维为绝对开口，-1 闭合、+1 达到模型最大开口约 66.2 mm。41 维 float32 观测包含机械臂状态、物体相对位置及速度、开口、双侧/支撑接触力和保持进度，可直接交给 SB3 `PPO("MlpPolicy", env)`。接口测试覆盖真实 Rollout、PPO 更新、模型保存和重载；本文演示结果来自分阶段控制器。
+
+独立测试种子 230000–230019 的 **20/20 个随机位置全部夹取抬升成功**，平均离台间隙 29.206 mm、世界竖直抬升 25.243 mm，最短连续保持 2.032 秒，零安全终止。447000 次物理积分的力矩、速度和时间记录核对通过，mimic 残差峰值为 0.0002174 rad，低于原 0.001 rad 保护阈值。全套 380 项回归通过；将抓取任务改为 1 ms 后，重新通过 16 项抓取专项和 24 项接触回归。见[逐回合结果](outputs/grasp_lift/validation_1ms_20/evaluation.json)、[核对记录](outputs/grasp_lift/validation_1ms_20/verification.json)及[实测动图](outputs/grasp_lift/pick_lift_1ms.gif)。
+
+负对照中，不闭合和不抬升均在 700 步超时、保持计时为零；摩擦降为 0.05 时触发 mimic 保护，30 g 方块未达到高度与保持条件、在 700 步超时。失败记录分别保存在 [no_close](outputs/grasp_lift/controls_1ms/no_close.json)、[no_lift](outputs/grasp_lift/controls_1ms/no_lift.json)、[low_friction](outputs/grasp_lift/controls_1ms/low_friction.json)和[heavy](outputs/grasp_lift/controls_1ms/heavy.json)。开发阶段的 2 ms 失败案例与控制时序诊断仍保存在 `outputs/grasp_lift/`。
+
+实现入口为 [GraspLiftEnv](src/realman_rl_simtoreal/envs/grasp_lift_env.py)、[任务配置](src/realman_rl_simtoreal/tasks/grasp_lift.py)、[夹取控制器](src/realman_rl_simtoreal/simulation/grasp_controller.py)与[回合评估](src/realman_rl_simtoreal/rl/grasp_lift.py)。
+
 ## 随机起点与连续多目标 Reach
 
 任务 `random_start_multi_reach_20cm` 每回合从一个经过 IK 和碰撞预检的随机姿态开始，初始速度为零，并连续执行 5 个目标。起点和目标均位于以 home 为中心、半径 20 cm 的可达区域，连续目标的计划间距至少为 10 mm。完整目标计划在 reset 时用 Gymnasium RNG 生成，同一 seed 对应相同的起点和目标计划。

@@ -42,8 +42,11 @@ class Gripper:
     open and close only select a target; normal motion never assigns qpos.
     """
 
-    def __init__(self, model, data, *, contact_policy=None):
+    def __init__(self, model, data, *, contact_policy=None, reference_speed=.5):
         self.model, self.data = model, data
+        require(np.isfinite(reference_speed) and 0 < reference_speed <= .5,
+                'Gripper reference_speed must be in (0, .5] rad/s')
+        self.reference_speed = float(reference_speed)
         # Opt-in, scene-specific contact classification; the empty-gripper
         # default retains its original strict 0.1mm collision check.
         self.contact_policy = contact_policy
@@ -153,7 +156,8 @@ class Gripper:
         m, d, aid = self.model, self.data, self.actuator_id
         current = float(d.ctrl[aid])
         require(np.isfinite(current) and 0 <= current <= MAX_ANGLE, 'Invalid gripper control reference')
-        d.ctrl[aid] = current+np.clip(self._target_angle-current, -.5*m.opt.timestep, .5*m.opt.timestep)
+        maximum = self.reference_speed*m.opt.timestep
+        d.ctrl[aid] = current+np.clip(self._target_angle-current, -maximum, maximum)
 
     def observe_step(self):
         """Audit one completed mj_step BEFORE anyone refreshes its force cache."""
