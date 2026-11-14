@@ -12,13 +12,19 @@ from ..simulation.control import advance_control_cycle, ControlCycleError, valid
 from ..simulation.ee_control import check_motion, MAX_TRANSLATION, MAX_ACTUAL_ORIENTATION_ERROR
 from ..simulation.kinematics import Kinematics, rotation_vector
 from ..simulation.model import load_model, initialize
+from ..tasks.reach import OBSERVATION_MODES
+from ..tasks.rewards import REWARD_MODES, REWARD_COMPONENT_KEYS, progress_parameters
 
 
 class ReachEnv(gym.Env):
     """Fixed home+X5mm or seeded random goal, using existing IK and actuators.
 
     action: float32 XYZ in [-1,1], each component scaled to metres in world.
-    observation: float64 [q(6), qvel(6), ee(3), goal-ee(3), command_xyz(3), ctrl(6)].
+    legacy observation: [q(6), qvel(6), ee(3), goal-ee(3), command_xyz(3), ctrl(6)].
+    fetch_like_v1 observation: [ee_world_m(3), ee_world_velocity * control_period(3)].
+    The latter motion feature is displacement per control period in metres,
+    not unscaled m/s. goal_relative_v1 observation: [goal-command, command-ee]
+    in world-frame metres. All raw observation modes are float64.
     Goal fields are world XYZ metres. No SDK, scripts or Viewer are imported.
     """
 
@@ -29,7 +35,11 @@ class ReachEnv(gym.Env):
                  gravity_compensation=True, render_mode=None, target_mode="fixed",
                  target_radius=0.005, max_target_attempts=64, reward_mode=None,
                  boundary_mode="terminate", rejection_penalty=1.0,
-                 reward_sigma_m=0.005, reward_gamma=0.99,target_offsets=None):
+                 reward_sigma_m=0.005, reward_gamma=0.99,target_offsets=None,
+                 observation_mode="legacy", reward_progress_parameters=None):
+        if observation_mode not in OBSERVATION_MODES:
+            raise ValueError(f"observation_mode must be one of {OBSERVATION_MODES}")
+        self.observation_mode = observation_mode
         if boundary_mode not in ("terminate", "reject_and_hold"):
             raise ValueError("boundary_mode must be 'terminate' or 'reject_and_hold'")
         if not np.isfinite(rejection_penalty) or rejection_penalty <= 0:
@@ -40,8 +50,12 @@ class ReachEnv(gym.Env):
             raise ValueError("target_mode must be 'fixed', 'random' or 'discrete'")
         if reward_mode is None:
             reward_mode = "distance" if target_mode == "fixed" else "safe_dense"
-        if reward_mode not in ("distance", "safe_dense", "reach_shaped_v1"):
-            raise ValueError("reward_mode must be distance, safe_dense or reach_shaped_v1")
+        if reward_mode not in REWARD_MODES:
+            raise ValueError(f"reward_mode must be one of {REWARD_MODES}")
+        if reward_mode == 'reach_progress_v1':
+            self.reward_progress_parameters = progress_parameters(reward_progress_parameters)
+        elif reward_progress_parameters is not None:
+            raise ValueError('reward_progress_parameters requires reach_progress_v1')
         if reward_mode == 'reach_shaped_v1':
             if not np.isfinite(reward_sigma_m) or reward_sigma_m <= 0:
                 raise ValueError('reward_sigma_m must be finite and positive (metres)')
@@ -120,7 +134,8 @@ class ReachEnv(gym.Env):
         # Unbounded spaces keep terminal safety states representable; values are
         # checked for finiteness separately. Bounds are not physical guarantees.
         self.observation_space = spaces.Dict({
-            "observation": spaces.Box(-np.inf, np.inf, shape=(27,), dtype=np.float64),
+            "observation": spaces.Box(-np.inf, np.inf,
+                                      shape=(27 if observation_mode == "legacy" else 6,), dtype=np.float64),
             "achieved_goal": spaces.Box(-np.inf, np.inf, shape=(3,), dtype=np.float64),
             "desired_goal": spaces.Box(-np.inf, np.inf, shape=(3,), dtype=np.float64),
         })
@@ -160,6 +175,23 @@ class ReachEnv(gym.Env):
         if failures:raise ValueError('Discrete targets rejected; none may be silently removed: '+'; '.join(failures))
 
     def _observation(self):
+        if self.observation_mode == "legacy":
+            return self._legacy_observation()
+        p = self.data.site_xpos[self.kinematics.site_id].copy()
+        if self.observation_mode == "goal_relative_v1":
+            ordinary = np.concatenate([self._goal - self._command_position, self._command_position - p])
+        else:
+            # World-frame site Jacobian, with one column per generalized velocity.
+            jacp = np.empty((3, self.model.nv), dtype=np.float64)
+            mujoco.mj_jacSite(self.model, self.data, jacp, None, self.kinematics.site_id)
+            displacement = (jacp @ self.data.qvel) * self.control_period
+            ordinary = np.concatenate([p, displacement])
+        result = dict(observation=ordinary, achieved_goal=p, desired_goal=self._goal.copy())
+        if not all(np.isfinite(v).all() for v in result.values()):
+            raise ValueError("Non-finite environment observation")
+        return result
+
+    def _legacy_observation(self):
         p = self.data.site_xpos[self.kinematics.site_id].copy()
         result = dict(observation=np.concatenate([
             self.data.qpos[self.kinematics.qadr], self.data.qvel[self.kinematics.vadr],
@@ -189,7 +221,7 @@ class ReachEnv(gym.Env):
                           boundary_mode=self.boundary_mode)
         if self.target_mode=='discrete':
             result.update(goal_index=self._goal_index,goal_count=len(self._goal_candidates))
-        if self.reward_mode == 'reach_shaped_v1':
+        if self.reward_mode in ('reach_shaped_v1', 'reach_progress_v1'):
             result.setdefault('is_action_rejected',False)
             result.setdefault('previous_achieved_goal',observation['achieved_goal'].copy())
         return result
@@ -276,6 +308,8 @@ class ReachEnv(gym.Env):
                 or not np.isfinite(achieved).all() or not np.isfinite(desired).all()):
             raise ValueError("Expected finite XYZ goal arrays")
         distance = np.linalg.norm(achieved-desired, axis=-1)
+        if self.reward_mode == 'reach_progress_v1':
+            return self.reward_components(achieved, desired, info)['total_reward']
         if self.reward_mode == 'reach_shaped_v1':
             return self._shaped_reward(achieved,desired,info)
         if self.reward_mode == "distance":
@@ -311,6 +345,52 @@ class ReachEnv(gym.Env):
             unit = 1.0 if self.reward_mode == 'safe_dense' else self.reward_distance_scale
             reward = reward-self.rejection_penalty*unit*np.broadcast_to(rejected, distance.shape)
         return float(reward) if reward.ndim == 0 else reward
+
+    def reward_components(self, achieved_goal, desired_goal, info):
+        """Signed progress-reward terms, recomputed from real SI GoalEnv states.
+
+        Pure query: never trusts historical success/distance/components and never
+        changes info. Dicts of batched arrays and arrays/lists of info work alike.
+        The six signed reward terms sum to total_reward; distance metadata is in m.
+        """
+        if self.reward_mode != 'reach_progress_v1':
+            raise ValueError('Reward components require reach_progress_v1')
+        def field(key):
+            if isinstance(info, dict):
+                if key not in info:raise ValueError('reach_progress_v1 requires '+key)
+                return np.asarray(info[key])
+            if info is None:raise ValueError('reach_progress_v1 requires info')
+            rows=np.asarray(info,dtype=object)
+            if not all(isinstance(r,dict) and key in r for r in rows.flat):
+                raise ValueError('reach_progress_v1 requires '+key+' in every info record')
+            values=np.asarray([r[key] for r in rows.flat])
+            return values.reshape(rows.shape+values.shape[1:])
+        achieved,desired=np.asarray(achieved_goal,dtype=float),np.asarray(desired_goal,dtype=float)
+        previous=field('previous_achieved_goal')
+        failure,rejected=field('is_safety_failure'),field('is_action_rejected')
+        if any(v.shape[-1:]!=(3,) or not np.isfinite(v).all() for v in (achieved,desired,previous)):
+            raise ValueError('Expected finite world XYZ metres for current/previous/desired goals')
+        if failure.dtype!=np.bool_ or rejected.dtype!=np.bool_:
+            raise ValueError('Progress safety/rejection flags must be boolean')
+        try:
+            current_distance,previous_distance,failure,rejected=np.broadcast_arrays(
+                np.linalg.norm(achieved-desired,axis=-1),np.linalg.norm(previous-desired,axis=-1),failure,rejected)
+        except ValueError as exc:
+            raise ValueError('Progress reward goal/info batch shapes cannot broadcast') from exc
+        p=self.reward_progress_parameters
+        change=previous_distance-current_distance
+        success=(current_distance<=self.success_threshold)&~failure
+        terms=dict(progress_reward=p['w_progress']*change/p['progress_scale'],
+            distance_penalty=-p['w_distance']*current_distance/p['distance_scale'],
+            step_penalty=np.full(current_distance.shape,-p['step_cost']),
+            success_bonus=p['success_bonus']*success,
+            safety_penalty=-p['safety_penalty']*failure,
+            rejection_penalty=-p['rejection_cost']*rejected)
+        terms['total_reward']=sum(terms[key] for key in REWARD_COMPONENT_KEYS)
+        terms.update(previous_distance_m=previous_distance,current_distance_m=current_distance,distance_change_m=change)
+        if not all(np.isfinite(v).all() for v in terms.values()):
+            raise ValueError('Non-finite reach_progress_v1 reward component')
+        return {k:float(v) if np.ndim(v)==0 else v for k,v in terms.items()}
 
     def _shaped_reward(self, achieved, desired, info):
         """Discount-consistent exponential potential; info contains raw previous XYZ.
@@ -460,12 +540,14 @@ class ReachEnv(gym.Env):
         info = self._info(obs, reason, detail=detail, attempted_position_m=target.copy(), ik=ik_info, control=cycle)
         if self.boundary_mode == 'reject_and_hold':
             info.update(is_action_rejected=rejected is not None, rejection_reason=rejected)
-        if self.reward_mode == 'reach_shaped_v1':
+        if self.reward_mode in ('reach_shaped_v1', 'reach_progress_v1'):
             info['previous_achieved_goal']=previous_achieved
         info["observation_valid"] = valid_observation
         if not valid_observation:
             info["orientation_error_rad"] = None
         info["physics_steps"] = 0 if cycle is None else cycle["physics_steps"]
+        if self.reward_mode == 'reach_progress_v1':
+            info['reward_components']=self.reward_components(obs['achieved_goal'],obs['desired_goal'],info)
         return obs, self.compute_reward(obs["achieved_goal"], obs["desired_goal"], info), terminated, truncated, info
 
     def render(self):

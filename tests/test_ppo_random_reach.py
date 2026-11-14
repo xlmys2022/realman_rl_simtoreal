@@ -240,7 +240,7 @@ def step(env,action):
 mujoco.mj_step=mj_step;ReachEnv.step=step
 spec=importlib.util.spec_from_file_location('random_ppo_driver',PROJECT_ROOT/'scripts/train/train_ppo_reach.py')
 driver=importlib.util.module_from_spec(spec);spec.loader.exec_module(driver)
-folder=Path(sys.argv[1]);s=driver.train(folder,timesteps=512,task='random_reach',seed=2026,
+folder=Path(sys.argv[1]);s=driver.train(folder,timesteps=512,task='random_reach',seed=2026,observation_mode='legacy',
  eval_every=512,eval_episodes=2,eval_seed_start=86000,checkpoint_every=512,
  tensorboard=importlib.util.find_spec('tensorboard') is not None)
 assert s['status']=='completed',s['error']

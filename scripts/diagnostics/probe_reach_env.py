@@ -15,7 +15,7 @@ from realman_rl_simtoreal.rl.common.artifacts import write_json
 def trajectory(config, name, seed=81000):
     rows=[];motion=MotionStats()
     with ReachEnv(**config) as env:
-        obs,_=env.reset(seed=seed)
+        obs,previous_info=env.reset(seed=seed)
         initial=obs['achieved_goal'].copy()
         rng=np.random.default_rng([2026,seed])
         for step in range(env.max_episode_steps):
@@ -26,10 +26,12 @@ def trajectory(config, name, seed=81000):
             elif name=='random':action=rng.uniform(-1,1,3).astype(np.float32)
             else:raise ValueError('Unknown probe')
             before=obs
+            command_before=np.asarray(previous_info['command_position_m']).copy()
             obs,reward,t,tr,info=env.step(action)
             assert reward==env.compute_reward(obs['achieved_goal'],obs['desired_goal'],info)
             motion.observe(before['achieved_goal'],obs['achieved_goal'],obs['desired_goal'],
-                           before['observation'][18:21],info['command_position_m'],action,t or tr)
+                           command_before,info['command_position_m'],action,t or tr)
+            previous_info=info
             rows.append(dict(step=step+1,action=action.tolist(),previous_m=before['achieved_goal'].tolist(),
                 achieved_m=obs['achieved_goal'].tolist(),goal_m=obs['desired_goal'].tolist(),reward=reward,
                 physics_steps=info['physics_steps'],distance_m=info['distance_m'],

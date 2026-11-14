@@ -222,13 +222,26 @@ print(json.dumps(result['timing']))
         for key,value in dict(target_mode='fixed',reward_mode='reach_shaped_v1',action_scale=.00025,
             control_period=.05,max_episode_steps=200,success_threshold=.001,boundary_mode='terminate',
             gravity_compensation=True).items():self.assertEqual(env[key],value)
-        # Discrete reset support intentionally changes ReachEnv source. Keep
-        # physical hashes exact and freeze its legacy step/reward/safety AST.
+        # Observation dispatch is new; the renamed legacy implementation and
+        # all step/reward/safety bodies must retain their original AST hashes.
         env_path='src/realman_rl_simtoreal/envs/reach_env.py'
         self.assertEqual({k:v for k,v in asset_hashes().items() if k!=env_path},
                          {k:v for k,v in self.config['assets'].items() if k!=env_path})
         contract=read(PROJECT_ROOT/'tests/fixtures/reach_env_legacy_contract.json')
         cls=next(n for n in ast.parse((PROJECT_ROOT/env_path).read_text()).body if isinstance(n,ast.ClassDef))
+        cls.body=[n for n in cls.body if not isinstance(n,ast.FunctionDef) or n.name!='_observation']
+        for n in cls.body:
+            if isinstance(n,ast.FunctionDef) and n.name=='_legacy_observation':n.name='_observation'
+        class LegacyRewardView(ast.NodeTransformer):
+            # Only the added progress dispatch/audit branches are excluded;
+            # old formulas and every physical/safety statement remain frozen.
+            def visit_If(self,node):
+                test=ast.unparse(node.test)
+                if test=="self.reward_mode == 'reach_progress_v1'":return None
+                if test=="self.reward_mode in ('reach_shaped_v1', 'reach_progress_v1')":
+                    node.test=ast.parse("self.reward_mode == 'reach_shaped_v1'",mode='eval').body
+                return self.generic_visit(node)
+        cls=LegacyRewardView().visit(cls)
         methods={n.name:hashlib.sha256(ast.dump(n,include_attributes=False).encode()).hexdigest()
                  for n in cls.body if isinstance(n,ast.FunctionDef) and n.name in contract['method_sha256']}
         self.assertEqual(methods,contract['method_sha256'])

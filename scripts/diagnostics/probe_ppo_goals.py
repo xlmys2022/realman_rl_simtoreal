@@ -17,6 +17,10 @@ def probe(model_path,*,task='axis_pair_reach',distance_mm=5.):
     if task not in ('axis_pair_reach','axis_six_reach'):raise ValueError('Expected an axis curriculum task')
     if not np.isfinite(distance_mm) or distance_mm<=0:raise ValueError('Distance must be finite and positive')
     model,transform,saved=load_ppo(model_path)
+    # Inside the ordinary observation these slices depend on the goal.
+    # Both residuals (goal-ee and goal-command) agree at the home reset.
+    goal_slice = {'legacy': slice(15, 18), 'fetch_like_v1': slice(0, 0),
+                  'goal_relative_v1': slice(0, 3)}[transform.observation_mode]
     environment=task_environment(task,saved['environment'])
     # This explicit diagnostic distance never changes a training task/default.
     environment['target_offsets']=(np.array(environment['target_offsets'])*distance_mm/5).tolist()
@@ -29,13 +33,15 @@ def probe(model_path,*,task='axis_pair_reach',distance_mm=5.):
             obs,info=env.reset(seed=87000,options={'goal_index':i})
             encoded=transform.encode(obs);inputs.append(features(encoded))
             physical.append(np.r_[env.data.qpos,env.data.qvel,env.data.ctrl,env.data.time])
-            other.append(np.r_[obs['achieved_goal'],obs['observation'][:15],obs['observation'][18:]])
+            ordinary = obs['observation']
+            non_goal = np.r_[ordinary[:goal_slice.start], ordinary[goal_slice.stop:]]
+            other.append(np.r_[obs['achieved_goal'],non_goal])
             action,_=model.predict(encoded,deterministic=True)
             delta=obs['desired_goal']-obs['achieved_goal']
             denominator=np.linalg.norm(action)*np.linalg.norm(delta)
             cosine=float(action@delta/denominator) if denominator>1e-12 else None
             rows.append(dict(goal_index=i,goal_position_m=obs['desired_goal'].tolist(),
-                offset_m=delta.tolist(),processed_relative_goal=encoded['observation'][15:18].tolist(),
+                offset_m=delta.tolist(),processed_relative_goal=encoded['observation'][goal_slice].tolist() or None,
                 processed_features=inputs[-1].tolist(),action=action.tolist(),
                 action_goal_cosine=cosine,toward_goal=None if cosine is None else cosine>0,
                 goal_validation=env.candidate_validation[i]))
@@ -45,12 +51,17 @@ def probe(model_path,*,task='axis_pair_reach',distance_mm=5.):
         raise ValueError('Frozen sensitivity probe changed model parameters/counters')
     x=np.stack(inputs);actions=np.asarray([r['action'] for r in rows])
     changed=np.flatnonzero(np.any(x!=x[0],axis=0)).tolist()
-    if not set(changed)<={3,4,5,21,22,23}:raise ValueError('Non-goal feature changed during same-state probe')
+    goal_features = dict(desired_goal=[3, 4, 5])
+    if goal_slice.stop > goal_slice.start:
+        goal_features['relative_goal'] = list(range(6 + goal_slice.start, 6 + goal_slice.stop))
+    allowed = {i for indices in goal_features.values() for i in indices}
+    if not set(changed)<=allowed:raise ValueError('Non-goal feature changed during same-state probe')
     responsive=not np.allclose(actions,actions[0],atol=1e-7,rtol=0)
     return dict(model=str(Path(model_path).resolve()),model_file_sha256=hashlib.sha256(Path(model_path).read_bytes()).hexdigest(),
         parameters_unchanged=True,model_parameter_hashes=before,task=task,diagnostic_distance_mm=distance_mm,
         environment=environment,physical_state_identical=True,changed_feature_indices=changed,
-        expected_goal_features=dict(desired_goal=[3,4,5],relative_goal=[21,22,23]),
+        observation_mode=transform.observation_mode,features_dim=transform.features_dim,
+        expected_goal_features=goal_features,
         action_component_span=np.ptp(actions,axis=0).tolist(),action_signs=np.sign(actions).astype(int).tolist(),
         goal_responsive=responsive,initial_toward_count=sum(r['toward_goal'] is True for r in rows),
         classification='goal_insensitive_at_1e-7_action_tolerance' if not responsive else

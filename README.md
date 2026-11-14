@@ -10,9 +10,43 @@
 - 独立 BC 示范采集、训练和推理；保留历史 BC→SAC Actor 初始化、边界对照与 Q/TD 诊断。
 - 自动化回归测试、环境探针及只读训练曲线绘图。
 
-## 当前状态
+## 运行三维随机 Reach
 
-当前纯PPO两方向Pilot已由用户完成：+X19步成功、误差0.929mm；-X200步超时、误差10.241mm。训练-X57集均未成功，课程尚未通过，不进入六方向。旧固定目标Pilot成功，三维随机Pilot仅4%最终成功率。两方向±X5mm均通过原保护；六方向5mm中的±Y未通过home±5°预检，该配置会明确拒绝启动。全部旧产物保留；逐目标结果及停滞诊断见[目标条件验证](docs/validation/PPO_GOAL_CONDITIONED_VALIDATION.md)，历史见 [PPO 验证](docs/validation/PPO_REACH_VALIDATION.md) 和 [实验索引](docs/experiments/README.md)。
+在 `realman_rl` 环境中，`random_reach` 每回合从距 home 3–5 mm 的球壳中采样一个通过逆运动学与安全预检的目标。实际末端进入目标的 1 mm 球内即成功，每回合上限 200 步。
+
+种子 2026 的 PPO 从头训练 16384 步后，在旧模型的同一组 100 个目标（92000–92099）上从 1/100 提高到 100/100，另一组新目标（110000–110099）也达到 100/100。两组合计平均 12.44 步，终止时平均实际误差 0.857 mm，零超时、零安全终止。冻结同一策略单独复测 ±X 5 mm，两个方向均为 18 步。以上为 MuJoCo 仿真结果。
+
+用工作区中已训练的模型复测第一组目标：
+
+```bash
+conda activate realman_rl
+python -I scripts/evaluate/evaluate_ppo_reach.py \
+  --model outputs/rl/ppo_reach/random_goal_relative_seed2026/final/model.zip \
+  --episodes 100 --seed-start 92000 --json /tmp/realman_random_reach_eval.json
+```
+
+从干净检出重新训练可执行以下命令。训练和评估均须使用新的输出位置。评估自己训练的模型时，将上面的 `--model` 换成对应目录下的 `final/model.zip`。
+
+```bash
+python -I scripts/train/train_ppo_reach.py --task random_reach \
+  --timesteps 16384 --seed 2026 --eval-every 4096 --eval-episodes 8 \
+  --checkpoint-every 4096 --run-dir outputs/rl/ppo_reach/random_goal_relative_retrain
+```
+
+变目标 PPO 默认使用 `goal_relative_v1` 观测与 `reach_progress_v1` 奖励。策略每步获得两个世界坐标系下的三维差值，即「目标位置 − 已发命令位置」和「已发命令位置 − 实际末端位置」。策略输入按 1 mm 缩放，GoalEnv 的目标字段、逆运动学和奖励计算使用的位置均以米为单位。训练从随机权重开始，动作由 PPO 产生。评估自动加载模型保存的观测和奖励配置。
+
+## 历史实验
+
+用户已将12维 `fetch_like_v1` 随机Reach从头训练到131072步：完成256个Rollout，独立100目标成功1%、99次超时、0次安全失败，平均最终距离4.571mm。固定20目标开发集从32768步起连续13个检查点均0成功；99次超时末端集中在Home相对位移约[+0.61,-1.20,+2.08]mm，首动作仍固定偏向-X,-Y,+Z。实际Actor/Critic输入均为12维，增加预算尚未带来可靠的目标条件Reach。训练曲线、落点图、方向探针及预算判断见[Fetch观测验证报告](docs/validation/REACH_FETCH_OBSERVATION_VALIDATION.md)。
+
+此前同seed的12维16384步Pilot独立100目标成功3%，旧33维随机Pilot成功4%；三次独立测试使用不同目标，不能把1%/3%/4%的差值直接作为配对对照结论。长训练在16384步时的参数与12维短实验final完全一致，可以比较其后在同一开发集上的变化。
+
+奖励方向诊断已完成，未发现旧reach_shaped_v1的明确实现错误。新增显式实验模式reach_progress_v1，
+保留原默认奖励；339项测试通过，开发只新增一次512步PPO Smoke。用户随后完成16384步±X Pilot，
+最终两目标均超时（误差2.531/7.335mm），方向课程尚未通过，暂不进入随机任务；尚无等条件新旧奖励优劣结论。
+实际数值、折扣往返与安全偏好边界见[奖励诊断报告](docs/validation/REACH_REWARD_OPTIMIZATION_VALIDATION.md)。
+
+历史33维纯PPO两方向Pilot：+X19步成功、误差0.929mm；-X200步超时、误差10.241mm，训练-X57集均未成功，课程尚未通过，不进入六方向。旧固定目标Pilot成功。两方向±X5mm均通过原保护；六方向5mm中的±Y未通过home±5°预检，该配置仍明确拒绝启动。全部旧产物保留；历史逐目标结果见[目标条件验证](docs/validation/PPO_GOAL_CONDITIONED_VALIDATION.md)、[PPO验证](docs/validation/PPO_REACH_VALIDATION.md)和[实验索引](docs/experiments/README.md)。
 
 ## 安装环境
 
@@ -60,7 +94,7 @@ python -I scripts/models/build_grasp_scene.py
 
 ## PPO Reach 训练
 
-以下为手动训练示例，本次重构未执行。每次换一个未使用的 `--run-dir`，保留已有结果：
+以下为手动训练示例。每次换一个未使用的 `--run-dir`，保留已有结果：
 
 ```bash
 python -I scripts/train/train_ppo_reach.py \
@@ -81,7 +115,7 @@ PPO 保留官方 512 步 Rollout、64 样本 minibatch、10 个 epoch；评估�
 conda activate realman_rl
 cd /home/mr-beaver/Documents/robot/realman_rl_simtoreal
 python -I scripts/train/train_ppo_reach.py \
-  --task random_reach --reward-mode reach_shaped_v1 --action-scale 0.00025 \
+  --task random_reach --observation-mode legacy --reward-mode reach_shaped_v1 --action-scale 0.00025 \
   --timesteps 16384 --seed 2026 --run-dir outputs/rl/ppo_reach/random_seed2026_pilot_04f2 \
   --eval-every 4096 --eval-episodes 20 --eval-seed-start 87000 \
   --checkpoint-every 4096 --tensorboard
@@ -112,7 +146,7 @@ python -I scripts/evaluate/analyze_reach_results.py \
 conda activate realman_rl
 cd /home/mr-beaver/Documents/robot/realman_rl_simtoreal
 python -I scripts/train/train_ppo_reach.py \
-  --task axis_pair_reach --reward-mode reach_shaped_v1 --action-scale 0.00025 \
+  --task axis_pair_reach --observation-mode legacy --reward-mode reach_shaped_v1 --action-scale 0.00025 \
   --timesteps 16384 --seed 2026 --run-dir outputs/rl/ppo_reach/axis_pair_seed2026_pilot_04f3 \
   --eval-every 2048 --eval-episodes 2 --eval-seed-start 87000 \
   --checkpoint-every 2048 --tensorboard
@@ -146,6 +180,64 @@ python -I scripts/train/train_sac_reach.py \
 ```
 
 `--task fixed_reach|easy_random_reach|random_reach` 使用同一环境，不自动升级任务难度。历史 BC 初始化只在明确指定 `--init-mode bc_actor --bc-model PATH` 的旧实验分支加载，纯 RL 任务拒绝 BC 参照或初始化。
+
+## Reach 奖励实验
+
+PPO通过 `--reward-mode reach_progress_v1` 选择实际距离进度、持续距离成本、步成本、成功奖金、
+安全失败及动作拒绝成本。8项实验初值集中管理并完整保存到config与模型metadata；独立评估自动读取。
+普通observation仍为12维，不加入奖励分项；原distance、safe_dense、reach_shaped_v1保持可用。
+
+以下仅提供用户手动执行的±X5mm Pilot，输出目录须为新目录；本次没有执行正式训练：
+
+```bash
+python -I scripts/train/train_ppo_reach.py \
+  --task axis_pair_reach --observation-mode fetch_like_v1 --reward-mode reach_progress_v1 \
+  --action-scale 0.00025 --timesteps 16384 --seed 2026 \
+  --eval-every 2048 --checkpoint-every 2048 --eval-episodes 2 --eval-seed-start 97000 \
+  --run-dir outputs/rl/ppo_reward/axis_pair_progress_seed2026_pilot
+```
+
+先检查两方向是否都能选择正确动作，再考虑random_reach。新旧奖励应以相同观测、seed、预算和目标配对，
+至少复核三个训练seed；不同奖励的原始Return不直接比较。完整评估命令、四张诊断图和A/B方案见
+[奖励诊断与验证报告](docs/validation/REACH_REWARD_OPTIMIZATION_VALIDATION.md)。
+
+## Reach 观测模式
+
+原始 ReachEnv 和固定目标 PPO 默认使用 `legacy` 的 `27+3+3=33` 维观测及固定预处理。PPO 可显式选择
+`--observation-mode fetch_like_v1`：普通 observation 为实际末端世界位置和
+`末端世界线速度 × control_period`，各 3 维；加上 achieved_goal 和 desired_goal，
+官方 MultiInputPolicy 实际输入共 12 维。运动特征单位为米，包装器将普通位置相对
+home、运动特征按固定 0.01m 尺度处理；两个 goal 始终保持世界坐标米。
+
+用户已按以下参数完成训练与独立评估，产物位于
+`outputs/rl/ppo_reach/random_fetch_v1_seed2026_ab_new/`。以下保留已完成实验的命令；
+复现时必须更换 `--run-dir` 和 `--json`，不能覆盖该目录或原评估文件：
+
+```bash
+python -I scripts/train/train_ppo_reach.py \
+  --task random_reach --observation-mode fetch_like_v1 \
+  --reward-mode reach_shaped_v1 --action-scale 0.00025 \
+  --timesteps 16384 --seed 2026 --eval-every 2048 --checkpoint-every 2048 \
+  --eval-episodes 20 --eval-seed-start 87000 \
+  --run-dir outputs/rl/ppo_reach/random_fetch_v1_seed2026_ab_new
+
+python -I scripts/evaluate/evaluate_ppo_reach.py \
+  --model outputs/rl/ppo_reach/random_fetch_v1_seed2026_ab_new/final/model.zip \
+  --observation-mode fetch_like_v1 --episodes 100 --seed-start 88000 \
+  --json outputs/rl/ppo_reach/random_fetch_v1_seed2026_ab_new/heldout_88000.json
+```
+
+训练也支持 fixed_reach、axis_pair_reach 和 easy_random_reach；离散两方向评估仍须
+恰好 2 个 Episode。评估默认读取 checkpoint 的模式，显式传入不一致模式会报错。
+旧 schema=1 / transform schema=2 checkpoint 继续识别为 legacy，不迁移权重。
+原命令滞后规则基线、BC 和 SAC 专用实验/诊断目前仅支持 legacy，新模式会明确拒绝。
+配置契约、依赖适配、测试证据和 A/B 建议见
+[Fetch观测验证报告](docs/validation/REACH_FETCH_OBSERVATION_VALIDATION.md)。本轮训练完成32次Rollout、
+320个epoch、2560次Adam更新；开发集87000–87019最终成功2/20，独立集88000–88099成功3/100。
+独立集平均初始距离4.122mm、最终距离5.888mm，100次首动作X分量均为正。
+后续131072步实验位于 `outputs/rl/ppo_reach/random_fetch_v1_seed2026_131072/`，
+使用相同PPO配置和开发集，每8192步评估/保存，独立测试为92000–92099，成功1/100。
+12维接口和训练链路验证通过，但两档预算均未学会可靠的随机Reach；在诊断目标映射和固定落点前，不建议直接扩大到262144步。
 
 ## 模型评估与绘图
 

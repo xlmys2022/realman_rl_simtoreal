@@ -16,7 +16,7 @@ from torch import nn
 
 from ..envs.reach_env import ReachEnv
 from ..rl.common.baselines import rule_action
-from ..rl.common.observation import FEATURE_KEYS, features, ReachTransform
+from ..rl.common.observation import FEATURE_KEYS, features, ReachTransform, require_legacy
 from ..rl.common.artifacts import empty_directory, write_json, versions
 from ..tasks.reach import ENV_CONFIG
 
@@ -45,6 +45,7 @@ class BCNetwork(nn.Module):
 
 class BCPolicy:
     def __init__(self, network, transform):
+        require_legacy(dict(observation_mode=transform.observation_mode), 'BC policy')
         self.network, self.transform = network.eval(), transform
 
     def predict(self, raw_observation):
@@ -57,6 +58,8 @@ class BCPolicy:
 
 
 def save_policy(path, network, config):
+    require_legacy(config['environment'], 'BC checkpoint')
+    require_legacy(dict(observation_mode=ReachTransform(config['observation_transform']).observation_mode), 'BC checkpoint')
     torch.save(dict(kind='reach_behavior_cloning', schema=1, feature_keys=list(FEATURE_KEYS),
                     network='33-256-ReLU-256-ReLU-3-tanh', state_dict=network.state_dict(),
                     config=config), path)
@@ -68,6 +71,7 @@ def load_policy(path):
             or saved.get('feature_keys') != list(FEATURE_KEYS)
             or saved.get('network') != '33-256-ReLU-256-ReLU-3-tanh'):
         raise ValueError('Not a supported BC model')
+    require_legacy(saved['config']['environment'], 'BC checkpoint loading')
     with torch.random.fork_rng(devices=[]):
         network = BCNetwork()
     network.load_state_dict(saved['state_dict'], strict=True)
@@ -92,6 +96,8 @@ def cosine(a, b):
 
 def action_metrics(predictions, labels, raw):
     """Empty stopping strata explicitly have count=0 and null errors."""
+    if np.asarray(raw['observation']).shape[-1:] != (27,):
+        raise ValueError("BC action metrics require observation_mode='legacy' with command position")
     predictions, labels = np.asarray(predictions, dtype=float), np.asarray(labels, dtype=float)
     if predictions.shape != labels.shape or labels.ndim != 2 or labels.shape[1] != 3:
         raise ValueError('Expected matching Nx3 predictions and labels')
@@ -133,6 +139,7 @@ def collect_demonstrations(train_seeds, validation_seeds, *, environment=None):
             or len(set(seeds)) != len(seeds) or set(seeds) & set(FINAL_SEEDS)):
         raise ValueError('Nonempty disjoint nonnegative train/validation seeds, excluding final 20000..20099, required')
     config = dict(ENV_CONFIG if environment is None else environment)
+    require_legacy(config, 'BC demonstration collection')
     samples, episodes = [], []
     started = perf_counter()
     with ReachEnv(**config) as env:
@@ -213,7 +220,10 @@ def load_demonstrations(path):
     if dataset_digest(data) != manifest['data_digest']:
         raise ValueError('Demonstration content hash mismatch')
     raw = {k:data['raw_'+k] for k in FEATURE_KEYS}
-    encoded = ReachTransform(manifest['observation_transform']).encode(raw)
+    require_legacy(manifest['environment'], 'BC demonstrations')
+    transform = ReachTransform(manifest['observation_transform'])
+    require_legacy(dict(observation_mode=transform.observation_mode), 'BC demonstrations')
+    encoded = transform.encode(raw)
     for key in FEATURE_KEYS:
         if not np.array_equal(encoded[key], data['processed_'+key]):
             raise ValueError('Saved preprocessing differs from original 04-A transform')
@@ -307,6 +317,7 @@ def evaluate_policy(name, seeds, *, policy=None, environment=None):
     if name != 'rule' and policy is None:
         raise ValueError('Learned/untrained policy required')
     config=dict(ENV_CONFIG if environment is None else environment)
+    require_legacy(config, 'BC evaluation')
     before=weight_digest(policy.network) if policy is not None else None
     episodes,records,step_times=[],[],[]
     started=perf_counter()

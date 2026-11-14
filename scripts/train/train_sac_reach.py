@@ -19,15 +19,18 @@ from realman_rl_simtoreal.rl.sac_monitoring import TrainingAudit, MonitoredTrain
 from realman_rl_simtoreal.rl.common.evaluation import evaluate, record_evaluation
 from realman_rl_simtoreal.rl.common.artifacts import asset_hashes, versions, write_json
 from realman_rl_simtoreal.rl.sac_diagnostics import td_diagnostic
+from realman_rl_simtoreal.rl.common.observation import require_legacy, observation_metadata
 
 
 def train(folder, *, timesteps=5000, seed=2026, eval_every=5000, eval_episodes=10, label='pilot',
           environment=None, eval_seed_start=10000, init_mode='scratch', bc_model=None,
           tensorboard=False, checkpoint_every=None, eval_at_start=False,
-          task=None, reward_mode=None, action_scale=None):
+          task=None, reward_mode=None, action_scale=None, observation_mode='legacy'):
     folder = Path(folder).resolve()
     if folder.exists() and any(folder.iterdir()):
         raise ValueError('Run directory must be empty; never overwrite a previous experiment')
+    require_legacy(dict(observation_mode=observation_mode), 'SAC training')
+    require_legacy(environment or {}, 'SAC training')
     if min(timesteps, eval_every, eval_episodes) < 1 or min(seed,eval_seed_start) < 0:
         raise ValueError('Positive step/evaluation counts and nonnegative seed required')
     checkpoint_every = eval_every if checkpoint_every is None else checkpoint_every
@@ -102,6 +105,7 @@ def train(folder, *, timesteps=5000, seed=2026, eval_every=5000, eval_episodes=1
                                   'Each CLI invocation starts with empty replay/optimizer; no implicit resume. '
                                   +('Pure RL: no policy transfer/reference or expert replay.' if pure_run else
                                     'BC copies only the explicitly selected Actor mean path.'))
+    config.update(observation_metadata(raw, transform))
     write_json(folder/'config.json', config)
     write_json(folder/'observation_transform.json', transform.config)
     write_json(folder/'dependencies.json', versions())
@@ -238,6 +242,8 @@ def main():
     parser.add_argument('--checkpoint-every',type=int,help='Defaults to --eval-every')
     parser.add_argument('--eval-at-start',action='store_true',help='Also evaluate step 0 (always enabled for bc_actor)')
     parser.add_argument('--task',choices=list(TASKS),help='Explicit pure RL task; prohibits BC initialization/reference')
+    parser.add_argument('--observation-mode',choices=['legacy','fetch_like_v1'],default='legacy',
+                        help='SAC currently supports legacy only; fetch_like_v1 is rejected explicitly')
     parser.add_argument('--reward-mode',choices=['distance','safe_dense','reach_shaped_v1'])
     parser.add_argument('--action-scale',type=float,help='Metres per normalized action component; original default .001')
     args = parser.parse_args()
@@ -251,7 +257,8 @@ def main():
                        dict(boundary_mode=args.boundary_mode,rejection_penalty=args.rejection_penalty),
                        eval_seed_start=args.eval_seed_start,init_mode=args.init_mode,bc_model=args.bc_model,
                        tensorboard=args.tensorboard,checkpoint_every=args.checkpoint_every,eval_at_start=args.eval_at_start,
-                       task=args.task,reward_mode=args.reward_mode,action_scale=args.action_scale)
+                       task=args.task,reward_mode=args.reward_mode,action_scale=args.action_scale,
+                       observation_mode=args.observation_mode)
         print(f"status={result['status']} steps={result['total_timesteps']} error={result['error']}", flush=True)
         return 0 if result['status'] == 'completed' else 1
     except (ValueError, RuntimeError, OSError, ImportError) as exc:

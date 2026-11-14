@@ -22,3 +22,5 @@
 - [PPO](PPO_REACH_VALIDATION.md)
 - [04-F2 PPO三维随机Reach训练准备与泛化验证](PPO_RANDOM_REACH_VALIDATION.md)
 - [04-F3 PPO目标敏感性、两方向课程与六方向预检](PPO_GOAL_CONDITIONED_VALIDATION.md)
+- [Reach双观测模式与Fetch-like 12维预算诊断](REACH_FETCH_OBSERVATION_VALIDATION.md)：314项开发测试通过；16384/131072步的独立成功率分别为3%/1%（不同目标集），长训练固定开发集未持续改善，方向偏置和落点集中仍在。
+- [Reach奖励诊断与进度奖励验证](REACH_REWARD_OPTIMIZATION_VALIDATION.md)：旧公式无明确错误；339项测试及一次512步Smoke通过。用户16384步双方向Pilot最终0/2成功，+X/-X误差2.531/7.335mm，方向偏置与共同落点仍在；已追加检查点、奖励分项、优化指标和冻结12维网络复核，尚未通过进入随机任务的条件。

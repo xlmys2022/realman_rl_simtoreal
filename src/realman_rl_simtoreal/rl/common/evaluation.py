@@ -7,7 +7,8 @@ from ...envs.reach_env import ReachEnv
 from ...tasks.reach import ENV_CONFIG
 from .baselines import rule_action
 from .metrics import MotionStats
-from .observation import ReachTransform
+from .observation import ReachTransform, require_legacy
+from ...tasks.rewards import REWARD_COMPONENT_KEYS
 
 
 REASONS = ('success', 'workspace_limit', 'joint_limit', 'ik_failure', 'orientation_limit',
@@ -36,6 +37,8 @@ def evaluate(name, seeds, *, model=None, transform=None, config=None, action_see
         raise ValueError('Expected policy name and nonempty seeds')
     if name in ('sac','ppo') and (model is None or transform is None):
         raise ValueError(name.upper()+' requires model AND its saved observation transform')
+    if name == 'rule':
+        require_legacy(ENV_CONFIG if config is None else config, 'Command-lag rule baseline')
     episodes, step_times, reference_errors = [], [], []
     motion=MotionStats() if collect_motion else None
     start_total = perf_counter()
@@ -49,9 +52,11 @@ def evaluate(name, seeds, *, model=None, transform=None, config=None, action_see
         for episode_index,seed in enumerate(seeds):
             started = perf_counter()
             obs, reset_info = env.reset(seed=int(seed),options={'goal_index':episode_index} if discrete else None)
+            previous_info = reset_info
             goal, initial = obs['desired_goal'].copy(), obs['achieved_goal'].copy()
             rng = np.random.default_rng([action_seed, int(seed)])
             rewards, actions = [], []
+            reward_components=[]
             rejected_actions, rejection_reasons = 0, Counter()
             physics_steps = 0
             episode_motion=MotionStats() if discrete and collect_motion else None
@@ -68,13 +73,15 @@ def evaluate(name, seeds, *, model=None, transform=None, config=None, action_see
                     raise ValueError('Policy output outside finite action space')
                 step_start = perf_counter()
                 before_obs=obs
+                command_before=np.asarray(previous_info['command_position_m']).copy()
                 obs, reward, terminated, truncated, info = env.step(action)
                 if motion is not None:
                     motion.observe(before_obs['achieved_goal'],obs['achieved_goal'],before_obs['desired_goal'],
-                        before_obs['observation'][18:21],info['command_position_m'],action,terminated or truncated)
+                        command_before,info['command_position_m'],action,terminated or truncated)
                 if episode_motion is not None:
                     episode_motion.observe(before_obs['achieved_goal'],obs['achieved_goal'],before_obs['desired_goal'],
-                        before_obs['observation'][18:21],info['command_position_m'],action,terminated or truncated)
+                        command_before,info['command_position_m'],action,terminated or truncated)
+                previous_info=info
                 step_times.append(perf_counter()-step_start)
                 if not env.observation_space.contains(obs) or not all(np.isfinite(x).all() for x in obs.values()):
                     raise ValueError('Invalid physical observation')
@@ -82,6 +89,11 @@ def evaluate(name, seeds, *, model=None, transform=None, config=None, action_see
                     raise ValueError('Reward changed during evaluation')
                 physics_steps += info['physics_steps']
                 rewards.append(float(reward))
+                if 'reward_components' in info:
+                    components=info['reward_components']
+                    if sum(components[k] for k in REWARD_COMPONENT_KEYS)!=reward or components['total_reward']!=reward:
+                        raise ValueError('Evaluation reward component sum mismatch')
+                    reward_components.append(components.copy())
                 actions.append(action.tolist())
                 rejected_actions += int(info.get('is_action_rejected', False))
                 if info.get('is_action_rejected', False):
@@ -99,6 +111,10 @@ def evaluate(name, seeds, *, model=None, transform=None, config=None, action_see
                                  rejected_actions=rejected_actions, rejection_reasons=dict(rejection_reasons),
                                  near_zero_action_fraction=float(np.mean(np.linalg.norm(actions, axis=1) < .01)),
                                  physics_steps=physics_steps, episode_wall_s=perf_counter()-started, actions=actions))
+            if reward_components:
+                episodes[-1]['reward_components']=reward_components
+                episodes[-1]['reward_component_totals']={k:float(sum(r[k] for r in reward_components))
+                    for k in (*REWARD_COMPONENT_KEYS,'total_reward')}
             if discrete:
                 episodes[-1]['goal_index']=episode_index
                 episodes[-1]['termination_detail']=info.get('detail')
@@ -117,6 +133,9 @@ def evaluate(name, seeds, *, model=None, transform=None, config=None, action_see
                                           mae=float(np.abs(errors).mean()),max_abs=float(np.abs(errors).max()))
                                        if errors.size else None)
     if motion is not None:result['motion']=motion.summary()
+    if any('reward_component_totals' in e for e in episodes):
+        result['reward_component_totals']={k:float(sum(e['reward_component_totals'][k] for e in episodes))
+            for k in (*REWARD_COMPONENT_KEYS,'total_reward')}
     if discrete:
         result['per_goal']={e['goal_label']:dict(goal_index=e['goal_index'],goal_position_m=e['target_position_m'],
             final_position_m=e['final_position_m'],
@@ -128,6 +147,9 @@ def evaluate(name, seeds, *, model=None, transform=None, config=None, action_see
 
 
 def record_evaluation(logger, evaluation):
+    for key,total in evaluation.get('reward_component_totals',{}).items():
+        logger.record('evaluation/reward_components/'+key+'_mean_per_step',
+                      total/sum(e['length'] for e in evaluation['episodes']))
     summary=evaluation['summary']
     for tag,key in [('success_rate','success_rate'),('episode_length_mean','mean_episode_length'),
                     ('episode_reward_mean','mean_return'),('success_steps_mean','mean_success_steps'),

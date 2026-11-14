@@ -22,18 +22,22 @@ from realman_rl_simtoreal.rl.ppo import (
     evaluate_ppo,
     save_ppo_checkpoint,
 )
-from realman_rl_simtoreal.tasks.reach import TASKS
+from realman_rl_simtoreal.tasks.reach import TASKS, OBSERVATION_MODES
 from realman_rl_simtoreal.rl.common.env_factory import training_env
 from realman_rl_simtoreal.rl.common.artifacts import asset_hashes, versions, write_json, append_json
 from realman_rl_simtoreal.rl.common.evaluation import record_evaluation
+from realman_rl_simtoreal.tasks.rewards import REWARD_MODES
+from realman_rl_simtoreal.rl.common.observation import observation_metadata, validate_model_observation
 
 
-def train(folder,*,timesteps=16384,seed=2026,task='fixed_reach',reward_mode='reach_shaped_v1',
+def train(folder,*,timesteps=16384,seed=2026,task='fixed_reach',reward_mode=None,
           action_scale=.00025,eval_every=2048,eval_episodes=None,checkpoint_every=2048,
-          eval_seed_start=87000,tensorboard=False,n_steps=512,batch_size=64,n_epochs=10):
+          eval_seed_start=87000,tensorboard=False,n_steps=512,batch_size=64,n_epochs=10,
+          observation_mode=None, reward_progress_parameters=None):
     folder=Path(folder).resolve()
     if folder.exists() and any(folder.iterdir()):raise ValueError('Run directory must be empty; never overwrite')
-    environment=environment_config(task,reward_mode,action_scale)
+    environment=environment_config(task,reward_mode,action_scale,observation_mode,reward_progress_parameters)
+    reward_mode = environment['reward_mode']
     candidate_count=len(environment['target_offsets']) if environment['target_mode']=='discrete' else None
     if eval_episodes is None:eval_episodes=candidate_count or 1
     if candidate_count is not None and eval_episodes!=candidate_count:
@@ -53,18 +57,20 @@ def train(folder,*,timesteps=16384,seed=2026,task='fixed_reach',reward_mode='rea
     model.set_logger(configure(str(folder/'sb3'),['csv','json']+(['tensorboard'] if tensorboard else [])))
     rounded_budget=math.ceil(timesteps/n_steps)*n_steps
     raw=env.venv.envs[0].unwrapped
-    config=dict(schema=1,algorithm='PPO',policy='MultiInputPolicy',pure_rl=True,init_mode='scratch',
+    validate_model_observation(model, transform)
+    config=dict(schema=2,algorithm='PPO',policy='MultiInputPolicy',pure_rl=True,init_mode='scratch',
         seed=seed,training_task=task,environment=environment,ppo=parameters,
         requested_timesteps=timesteps,planned_complete_rollout_timesteps=rounded_budget,n_envs=1,
         torch_num_threads=1,deterministic_algorithms=True,tensorboard=tensorboard,
         observation_transform=transform.config,reward_transform='none',
         reward_parameters=dict(sigma_m=raw.reward_sigma_m,gamma=raw.reward_gamma,
-            terminal_value=raw.shaped_terminal_value,rejection_cost=1-raw.reward_gamma) if reward_mode=='reach_shaped_v1' else None,
+            terminal_value=raw.shaped_terminal_value,rejection_cost=1-raw.reward_gamma) if reward_mode=='reach_shaped_v1'
+            else raw.reward_progress_parameters.copy() if reward_mode=='reach_progress_v1' else None,
         validation_seeds=list(range(eval_seed_start,eval_seed_start+eval_episodes)),
         evaluation_every_steps=eval_every,checkpoint_every_steps=checkpoint_every,
         scheduling='Intervals are thresholds; run once at the next completed PPO update, plus initial/final. '
                    'No partial-rollout training or snapshots presented as complete updates.',
-        policy_architecture=dict(features=33,actor=[256,256,3],critic=[256,256,1],
+        policy_architecture=dict(features=model.policy.features_extractor.features_dim,actor=[256,256,3],critic=[256,256,1],
             activation=model.policy.activation_fn.__name__,distribution=type(model.policy.action_dist).__name__,
             squash_output=model.policy.squash_output,orthogonal_init=model.policy.ortho_init,
             log_std_initial=model.policy.log_std.detach().cpu().tolist(),
@@ -73,6 +79,10 @@ def train(folder,*,timesteps=16384,seed=2026,task='fixed_reach',reward_mode='rea
             (Path(__file__).resolve(),Path(inspect.getfile(PPOAudit)).resolve(),Path(inspect.getfile(training_env)).resolve())},
         checkpoint_note='Independent random run. No BC/SAC weights, expert data, replay prefill or implicit resume. '
                         'One complete rollout per learn call, constant learning rate/clip range; policy and env stay alive.')
+    config.update(observation_metadata(raw, transform))
+    if reward_mode=='reach_progress_v1':
+        # Stock SB3 serializes this plain metadata; no policy/optimizer change.
+        model.reach_reward_configuration=dict(mode=reward_mode,parameters=config['reward_parameters'].copy())
     write_json(folder/'config.json',config);write_json(folder/'observation_transform.json',transform.config)
     write_json(folder/'dependencies.json',versions())
     initial=parameter_hashes(model);model.save(folder/'initial_model.zip')
@@ -169,7 +179,10 @@ def main():
     p=argparse.ArgumentParser(description=__doc__)
     p.add_argument('--run-dir',type=Path,required=True)
     p.add_argument('--task',choices=list(TASKS),default='fixed_reach')
-    p.add_argument('--reward-mode',choices=['distance','safe_dense','reach_shaped_v1'],default='reach_shaped_v1')
+    p.add_argument('--observation-mode',choices=OBSERVATION_MODES,
+                   help='Defaults to legacy for fixed_reach and goal_relative_v1 for varying targets')
+    p.add_argument('--reward-mode',choices=REWARD_MODES,
+                   help='Defaults to reach_progress_v1 with goal_relative_v1, otherwise reach_shaped_v1')
     p.add_argument('--action-scale',type=float,default=.00025)
     p.add_argument('--timesteps',type=int,default=16384);p.add_argument('--seed',type=int,default=2026)
     p.add_argument('--eval-every',type=int,default=2048)
@@ -183,7 +196,7 @@ def main():
         result=train(a.run_dir,timesteps=a.timesteps,seed=a.seed,task=a.task,reward_mode=a.reward_mode,
             action_scale=a.action_scale,eval_every=a.eval_every,eval_episodes=a.eval_episodes,
             checkpoint_every=a.checkpoint_every,eval_seed_start=a.eval_seed_start,tensorboard=a.tensorboard,
-            n_steps=a.n_steps,batch_size=a.batch_size,n_epochs=a.n_epochs)
+            n_steps=a.n_steps,batch_size=a.batch_size,n_epochs=a.n_epochs,observation_mode=a.observation_mode)
         print(f"status={result['status']} requested={result['requested_timesteps']} actual={result['actual_timesteps']} error={result['error']}")
         return 0 if result['status']=='completed' else 1
     except (ValueError,RuntimeError,OSError,ImportError) as exc:

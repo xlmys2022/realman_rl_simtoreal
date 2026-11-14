@@ -1,0 +1,797 @@
+{
+  "source_environment_sha256": "34f38c340c5e44f1c44206d49a3c00f71548f23675d0683296f114020c209c15",
+  "rows": [
+    {
+      "mode": "distance",
+      "step": 1,
+      "action": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "previous_achieved_goal": [
+        0.005616691094786186,
+        -0.00014515865649906284,
+        1.060227293451642
+      ],
+      "achieved_goal": [
+        0.0056388280949446895,
+        -0.00014532594602727789,
+        1.0602348363323117
+      ],
+      "desired_goal": [
+        0.010616691094786187,
+        -0.00014515865649906284,
+        1.060227293451642
+      ],
+      "initial_distance_m": 0.005000000000000001,
+      "current_distance_m": 0.004977868717455852,
+      "actual_displacement_m": [
+        2.2137000158503617e-05,
+        -1.672895282150424e-07,
+        7.542880669841878e-06
+      ],
+      "command_displacement_m": [
+        0.0002500000000000002,
+        0.0,
+        0.0
+      ],
+      "reward": -0.004977868717455852,
+      "is_success": false,
+      "is_safety_failure": false,
+      "is_action_rejected": false,
+      "termination_reason": null,
+      "terminated": false,
+      "truncated": false,
+      "physics_steps": 25
+    },
+    {
+      "mode": "distance",
+      "step": 1,
+      "action": [
+        -1.0,
+        0.0,
+        0.0
+      ],
+      "previous_achieved_goal": [
+        0.005616691094786186,
+        -0.00014515865649906284,
+        1.060227293451642
+      ],
+      "achieved_goal": [
+        0.005594553542065908,
+        -0.000144991479631386,
+        1.060219748851032
+      ],
+      "desired_goal": [
+        0.010616691094786187,
+        -0.00014515865649906284,
+        1.060227293451642
+      ],
+      "initial_distance_m": 0.005000000000000001,
+      "current_distance_m": 0.005022143222508663,
+      "actual_displacement_m": [
+        -2.213755272027773e-05,
+        1.6717686767683598e-07,
+        -7.544600609810104e-06
+      ],
+      "command_displacement_m": [
+        -0.0002500000000000002,
+        0.0,
+        0.0
+      ],
+      "reward": -0.005022143222508663,
+      "is_success": false,
+      "is_safety_failure": false,
+      "is_action_rejected": false,
+      "termination_reason": null,
+      "terminated": false,
+      "truncated": false,
+      "physics_steps": 25
+    },
+    {
+      "mode": "distance",
+      "step": 1,
+      "action": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "previous_achieved_goal": [
+        0.005616691094786186,
+        -0.00014515865649906284,
+        1.060227293451642
+      ],
+      "achieved_goal": [
+        0.005616691094786186,
+        -0.00014515865649906284,
+        1.060227293451642
+      ],
+      "desired_goal": [
+        0.010616691094786187,
+        -0.00014515865649906284,
+        1.060227293451642
+      ],
+      "initial_distance_m": 0.005000000000000001,
+      "current_distance_m": 0.005000000000000001,
+      "actual_displacement_m": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "command_displacement_m": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "reward": -0.005000000000000001,
+      "is_success": false,
+      "is_safety_failure": false,
+      "is_action_rejected": false,
+      "termination_reason": null,
+      "terminated": false,
+      "truncated": false,
+      "physics_steps": 25
+    },
+    {
+      "mode": "distance",
+      "step": 1,
+      "action": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "previous_achieved_goal": [
+        0.005616691094786186,
+        -0.00014515865649906284,
+        1.060227293451642
+      ],
+      "achieved_goal": [
+        0.0056388280949446895,
+        -0.00014532594602727789,
+        1.0602348363323117
+      ],
+      "desired_goal": [
+        0.0006166910947861858,
+        -0.00014515865649906284,
+        1.060227293451642
+      ],
+      "initial_distance_m": 0.005,
+      "current_distance_m": 0.005022142667367748,
+      "actual_displacement_m": [
+        2.2137000158503617e-05,
+        -1.672895282150424e-07,
+        7.542880669841878e-06
+      ],
+      "command_displacement_m": [
+        0.0002500000000000002,
+        0.0,
+        0.0
+      ],
+      "reward": -0.005022142667367748,
+      "is_success": false,
+      "is_safety_failure": false,
+      "is_action_rejected": false,
+      "termination_reason": null,
+      "terminated": false,
+      "truncated": false,
+      "physics_steps": 25
+    },
+    {
+      "mode": "distance",
+      "step": 1,
+      "action": [
+        -1.0,
+        0.0,
+        0.0
+      ],
+      "previous_achieved_goal": [
+        0.005616691094786186,
+        -0.00014515865649906284,
+        1.060227293451642
+      ],
+      "achieved_goal": [
+        0.005594553542065908,
+        -0.000144991479631386,
+        1.060219748851032
+      ],
+      "desired_goal": [
+        0.0006166910947861858,
+        -0.00014515865649906284,
+        1.060227293451642
+      ],
+      "initial_distance_m": 0.005,
+      "current_distance_m": 0.004977868167497421,
+      "actual_displacement_m": [
+        -2.213755272027773e-05,
+        1.6717686767683598e-07,
+        -7.544600609810104e-06
+      ],
+      "command_displacement_m": [
+        -0.0002500000000000002,
+        0.0,
+        0.0
+      ],
+      "reward": -0.004977868167497421,
+      "is_success": false,
+      "is_safety_failure": false,
+      "is_action_rejected": false,
+      "termination_reason": null,
+      "terminated": false,
+      "truncated": false,
+      "physics_steps": 25
+    },
+    {
+      "mode": "distance",
+      "step": 1,
+      "action": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "previous_achieved_goal": [
+        0.005616691094786186,
+        -0.00014515865649906284,
+        1.060227293451642
+      ],
+      "achieved_goal": [
+        0.005616691094786186,
+        -0.00014515865649906284,
+        1.060227293451642
+      ],
+      "desired_goal": [
+        0.0006166910947861858,
+        -0.00014515865649906284,
+        1.060227293451642
+      ],
+      "initial_distance_m": 0.005,
+      "current_distance_m": 0.005,
+      "actual_displacement_m": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "command_displacement_m": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "reward": -0.005,
+      "is_success": false,
+      "is_safety_failure": false,
+      "is_action_rejected": false,
+      "termination_reason": null,
+      "terminated": false,
+      "truncated": false,
+      "physics_steps": 25
+    },
+    {
+      "mode": "safe_dense",
+      "step": 1,
+      "action": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "previous_achieved_goal": [
+        0.005616691094786186,
+        -0.00014515865649906284,
+        1.060227293451642
+      ],
+      "achieved_goal": [
+        0.0056388280949446895,
+        -0.00014532594602727789,
+        1.0602348363323117
+      ],
+      "desired_goal": [
+        0.010616691094786187,
+        -0.00014515865649906284,
+        1.060227293451642
+      ],
+      "initial_distance_m": 0.005000000000000001,
+      "current_distance_m": 0.004977868717455852,
+      "actual_displacement_m": [
+        2.2137000158503617e-05,
+        -1.672895282150424e-07,
+        7.542880669841878e-06
+      ],
+      "command_displacement_m": [
+        0.0002500000000000002,
+        0.0,
+        0.0
+      ],
+      "reward": -0.2488934358727926,
+      "is_success": false,
+      "is_safety_failure": false,
+      "is_action_rejected": false,
+      "termination_reason": null,
+      "terminated": false,
+      "truncated": false,
+      "physics_steps": 25
+    },
+    {
+      "mode": "safe_dense",
+      "step": 1,
+      "action": [
+        -1.0,
+        0.0,
+        0.0
+      ],
+      "previous_achieved_goal": [
+        0.005616691094786186,
+        -0.00014515865649906284,
+        1.060227293451642
+      ],
+      "achieved_goal": [
+        0.005594553542065908,
+        -0.000144991479631386,
+        1.060219748851032
+      ],
+      "desired_goal": [
+        0.010616691094786187,
+        -0.00014515865649906284,
+        1.060227293451642
+      ],
+      "initial_distance_m": 0.005000000000000001,
+      "current_distance_m": 0.005022143222508663,
+      "actual_displacement_m": [
+        -2.213755272027773e-05,
+        1.6717686767683598e-07,
+        -7.544600609810104e-06
+      ],
+      "command_displacement_m": [
+        -0.0002500000000000002,
+        0.0,
+        0.0
+      ],
+      "reward": -0.25110716112543313,
+      "is_success": false,
+      "is_safety_failure": false,
+      "is_action_rejected": false,
+      "termination_reason": null,
+      "terminated": false,
+      "truncated": false,
+      "physics_steps": 25
+    },
+    {
+      "mode": "safe_dense",
+      "step": 1,
+      "action": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "previous_achieved_goal": [
+        0.005616691094786186,
+        -0.00014515865649906284,
+        1.060227293451642
+      ],
+      "achieved_goal": [
+        0.005616691094786186,
+        -0.00014515865649906284,
+        1.060227293451642
+      ],
+      "desired_goal": [
+        0.010616691094786187,
+        -0.00014515865649906284,
+        1.060227293451642
+      ],
+      "initial_distance_m": 0.005000000000000001,
+      "current_distance_m": 0.005000000000000001,
+      "actual_displacement_m": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "command_displacement_m": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "reward": -0.25000000000000006,
+      "is_success": false,
+      "is_safety_failure": false,
+      "is_action_rejected": false,
+      "termination_reason": null,
+      "terminated": false,
+      "truncated": false,
+      "physics_steps": 25
+    },
+    {
+      "mode": "safe_dense",
+      "step": 1,
+      "action": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "previous_achieved_goal": [
+        0.005616691094786186,
+        -0.00014515865649906284,
+        1.060227293451642
+      ],
+      "achieved_goal": [
+        0.0056388280949446895,
+        -0.00014532594602727789,
+        1.0602348363323117
+      ],
+      "desired_goal": [
+        0.0006166910947861858,
+        -0.00014515865649906284,
+        1.060227293451642
+      ],
+      "initial_distance_m": 0.005,
+      "current_distance_m": 0.005022142667367748,
+      "actual_displacement_m": [
+        2.2137000158503617e-05,
+        -1.672895282150424e-07,
+        7.542880669841878e-06
+      ],
+      "command_displacement_m": [
+        0.0002500000000000002,
+        0.0,
+        0.0
+      ],
+      "reward": -0.2511071333683874,
+      "is_success": false,
+      "is_safety_failure": false,
+      "is_action_rejected": false,
+      "termination_reason": null,
+      "terminated": false,
+      "truncated": false,
+      "physics_steps": 25
+    },
+    {
+      "mode": "safe_dense",
+      "step": 1,
+      "action": [
+        -1.0,
+        0.0,
+        0.0
+      ],
+      "previous_achieved_goal": [
+        0.005616691094786186,
+        -0.00014515865649906284,
+        1.060227293451642
+      ],
+      "achieved_goal": [
+        0.005594553542065908,
+        -0.000144991479631386,
+        1.060219748851032
+      ],
+      "desired_goal": [
+        0.0006166910947861858,
+        -0.00014515865649906284,
+        1.060227293451642
+      ],
+      "initial_distance_m": 0.005,
+      "current_distance_m": 0.004977868167497421,
+      "actual_displacement_m": [
+        -2.213755272027773e-05,
+        1.6717686767683598e-07,
+        -7.544600609810104e-06
+      ],
+      "command_displacement_m": [
+        -0.0002500000000000002,
+        0.0,
+        0.0
+      ],
+      "reward": -0.24889340837487106,
+      "is_success": false,
+      "is_safety_failure": false,
+      "is_action_rejected": false,
+      "termination_reason": null,
+      "terminated": false,
+      "truncated": false,
+      "physics_steps": 25
+    },
+    {
+      "mode": "safe_dense",
+      "step": 1,
+      "action": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "previous_achieved_goal": [
+        0.005616691094786186,
+        -0.00014515865649906284,
+        1.060227293451642
+      ],
+      "achieved_goal": [
+        0.005616691094786186,
+        -0.00014515865649906284,
+        1.060227293451642
+      ],
+      "desired_goal": [
+        0.0006166910947861858,
+        -0.00014515865649906284,
+        1.060227293451642
+      ],
+      "initial_distance_m": 0.005,
+      "current_distance_m": 0.005,
+      "actual_displacement_m": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "command_displacement_m": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "reward": -0.25,
+      "is_success": false,
+      "is_safety_failure": false,
+      "is_action_rejected": false,
+      "termination_reason": null,
+      "terminated": false,
+      "truncated": false,
+      "physics_steps": 25
+    },
+    {
+      "mode": "reach_shaped_v1",
+      "step": 1,
+      "action": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "previous_achieved_goal": [
+        0.005616691094786186,
+        -0.00014515865649906284,
+        1.060227293451642
+      ],
+      "achieved_goal": [
+        0.0056388280949446895,
+        -0.00014532594602727789,
+        1.0602348363323117
+      ],
+      "desired_goal": [
+        0.010616691094786187,
+        -0.00014515865649906284,
+        1.060227293451642
+      ],
+      "initial_distance_m": 0.005000000000000001,
+      "current_distance_m": 0.004977868717455852,
+      "actual_displacement_m": [
+        2.2137000158503617e-05,
+        -1.672895282150424e-07,
+        7.542880669841878e-06
+      ],
+      "command_displacement_m": [
+        0.0002500000000000002,
+        0.0,
+        0.0
+      ],
+      "reward": 0.007936824004559861,
+      "is_success": false,
+      "is_safety_failure": false,
+      "is_action_rejected": false,
+      "termination_reason": null,
+      "terminated": false,
+      "truncated": false,
+      "physics_steps": 25
+    },
+    {
+      "mode": "reach_shaped_v1",
+      "step": 1,
+      "action": [
+        -1.0,
+        0.0,
+        0.0
+      ],
+      "previous_achieved_goal": [
+        0.005616691094786186,
+        -0.00014515865649906284,
+        1.060227293451642
+      ],
+      "achieved_goal": [
+        0.005594553542065908,
+        -0.000144991479631386,
+        1.060219748851032
+      ],
+      "desired_goal": [
+        0.010616691094786187,
+        -0.00014515865649906284,
+        1.060227293451642
+      ],
+      "initial_distance_m": 0.005000000000000001,
+      "current_distance_m": 0.005022143222508663,
+      "actual_displacement_m": [
+        -2.213755272027773e-05,
+        1.6717686767683598e-07,
+        -7.544600609810104e-06
+      ],
+      "command_displacement_m": [
+        -0.0002500000000000002,
+        0.0,
+        0.0
+      ],
+      "reward": 0.0047118566439939835,
+      "is_success": false,
+      "is_safety_failure": false,
+      "is_action_rejected": false,
+      "termination_reason": null,
+      "terminated": false,
+      "truncated": false,
+      "physics_steps": 25
+    },
+    {
+      "mode": "reach_shaped_v1",
+      "step": 1,
+      "action": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "previous_achieved_goal": [
+        0.005616691094786186,
+        -0.00014515865649906284,
+        1.060227293451642
+      ],
+      "achieved_goal": [
+        0.005616691094786186,
+        -0.00014515865649906284,
+        1.060227293451642
+      ],
+      "desired_goal": [
+        0.010616691094786187,
+        -0.00014515865649906284,
+        1.060227293451642
+      ],
+      "initial_distance_m": 0.005000000000000001,
+      "current_distance_m": 0.005000000000000001,
+      "actual_displacement_m": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "command_displacement_m": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "reward": 0.006321205588285639,
+      "is_success": false,
+      "is_safety_failure": false,
+      "is_action_rejected": false,
+      "termination_reason": null,
+      "terminated": false,
+      "truncated": false,
+      "physics_steps": 25
+    },
+    {
+      "mode": "reach_shaped_v1",
+      "step": 1,
+      "action": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "previous_achieved_goal": [
+        0.005616691094786186,
+        -0.00014515865649906284,
+        1.060227293451642
+      ],
+      "achieved_goal": [
+        0.0056388280949446895,
+        -0.00014532594602727789,
+        1.0602348363323117
+      ],
+      "desired_goal": [
+        0.0006166910947861858,
+        -0.00014515865649906284,
+        1.060227293451642
+      ],
+      "initial_distance_m": 0.005,
+      "current_distance_m": 0.005022142667367748,
+      "actual_displacement_m": [
+        2.2137000158503617e-05,
+        -1.672895282150424e-07,
+        7.542880669841878e-06
+      ],
+      "command_displacement_m": [
+        0.0002500000000000002,
+        0.0,
+        0.0
+      ],
+      "reward": 0.004711896901849033,
+      "is_success": false,
+      "is_safety_failure": false,
+      "is_action_rejected": false,
+      "termination_reason": null,
+      "terminated": false,
+      "truncated": false,
+      "physics_steps": 25
+    },
+    {
+      "mode": "reach_shaped_v1",
+      "step": 1,
+      "action": [
+        -1.0,
+        0.0,
+        0.0
+      ],
+      "previous_achieved_goal": [
+        0.005616691094786186,
+        -0.00014515865649906284,
+        1.060227293451642
+      ],
+      "achieved_goal": [
+        0.005594553542065908,
+        -0.000144991479631386,
+        1.060219748851032
+      ],
+      "desired_goal": [
+        0.0006166910947861858,
+        -0.00014515865649906284,
+        1.060227293451642
+      ],
+      "initial_distance_m": 0.005,
+      "current_distance_m": 0.004977868167497421,
+      "actual_displacement_m": [
+        -2.213755272027773e-05,
+        1.6717686767683598e-07,
+        -7.544600609810104e-06
+      ],
+      "command_displacement_m": [
+        -0.0002500000000000002,
+        0.0,
+        0.0
+      ],
+      "reward": 0.007936864241309904,
+      "is_success": false,
+      "is_safety_failure": false,
+      "is_action_rejected": false,
+      "termination_reason": null,
+      "terminated": false,
+      "truncated": false,
+      "physics_steps": 25
+    },
+    {
+      "mode": "reach_shaped_v1",
+      "step": 1,
+      "action": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "previous_achieved_goal": [
+        0.005616691094786186,
+        -0.00014515865649906284,
+        1.060227293451642
+      ],
+      "achieved_goal": [
+        0.005616691094786186,
+        -0.00014515865649906284,
+        1.060227293451642
+      ],
+      "desired_goal": [
+        0.0006166910947861858,
+        -0.00014515865649906284,
+        1.060227293451642
+      ],
+      "initial_distance_m": 0.005,
+      "current_distance_m": 0.005,
+      "actual_displacement_m": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "command_displacement_m": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "reward": 0.006321205588285528,
+      "is_success": false,
+      "is_safety_failure": false,
+      "is_action_rejected": false,
+      "termination_reason": null,
+      "terminated": false,
+      "truncated": false,
+      "physics_steps": 25
+    }
+  ]
+}

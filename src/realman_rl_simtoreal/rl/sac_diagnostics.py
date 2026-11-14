@@ -12,7 +12,7 @@ from stable_baselines3 import SAC
 
 from ..envs.reach_env import ReachEnv
 from .common.baselines import rule_action
-from .common.observation import ReachTransform
+from .common.observation import checkpoint_transform, require_legacy, validate_model_observation
 from .common.artifacts import write_json
 
 
@@ -30,12 +30,15 @@ def fingerprint(model):
 def load_bundle(path, *, replay=False):
     path = Path(path).resolve()
     config = json.loads((path.parent/'config.json').read_text())
+    require_legacy(config['environment'], 'SAC diagnostics')
+    transform = checkpoint_transform(config)
     torch.set_num_threads(1)
     model = SAC.load(path, device='cpu')
+    validate_model_observation(model, transform)
     if replay:
         with gzip.open(path.parent/'replay_buffer.pkl.gz', 'rb') as file:
             model.load_replay_buffer(io.BytesIO(file.read()))
-    return model, ReachTransform(config['observation_transform']), config
+    return model, transform, config
 
 
 def distribution(values):
@@ -60,6 +63,7 @@ def direction(delta, error):
 
 def trace_policy(name, seeds, *, model=None, transform=None, config=None):
     """All positions are SI/world. Rate-capped ctrl FK uses independent data."""
+    require_legacy(config or {}, 'SAC command/reference trajectory diagnostics')
     if name not in ('sac', 'rule', 'idle', 'outward'):
         raise ValueError('Unknown diagnostic policy')
     before = fingerprint(model) if model is not None else None

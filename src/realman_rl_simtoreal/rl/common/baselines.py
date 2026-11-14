@@ -11,6 +11,9 @@ def rule_action(observation, action_scale):
     leaves margin for coupled wrist motion under the existing joint rate cap.
     Only public observations are read; all motion goes through env.step.
     """
+    if np.asarray(observation['observation']).shape != (27,):
+        raise ValueError("Legacy command-lag rule baseline requires observation_mode='legacy'; "
+                         "fetch_like_v1 has no command position")
     if not np.isfinite(action_scale) or action_scale <= 0:
         raise ValueError("action_scale must be positive")
     actual = observation['achieved_goal']

@@ -9,11 +9,12 @@ from torch import nn
 from stable_baselines3.common.distributions import SquashedDiagGaussianDistribution
 from stable_baselines3.common.torch_layers import CombinedExtractor
 
-from ..rl.common.observation import FEATURE_KEYS
+from ..rl.common.observation import FEATURE_KEYS, require_legacy
 from .bc import load_policy, weight_digest
 
 
 def validate_compatibility(model, reference, transform):
+    require_legacy(dict(observation_mode=transform.observation_mode), 'BC to SAC initialization')
     if reference.transform.config != transform.config:
         raise ValueError('BC preprocessing does not match SAC/environment preprocessing')
     observation = model.observation_space
