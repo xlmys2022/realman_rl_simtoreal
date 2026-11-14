@@ -10,6 +10,43 @@
 - 独立 BC 示范采集、训练和推理；保留历史 BC→SAC Actor 初始化、边界对照与 Q/TD 诊断。
 - 自动化回归测试、环境探针及只读训练曲线绘图。
 
+## 随机起点与连续多目标 Reach
+
+任务 `random_start_multi_reach_20cm` 每回合从一个经过 IK 和碰撞预检的随机姿态开始，初始速度为零，并连续执行 5 个目标。起点和目标均位于以 home 为中心、半径 20 cm 的可达区域，连续目标的计划间距至少为 10 mm。完整目标计划在 reset 时用 Gymnasium RNG 生成，同一 seed 对应相同的起点和目标计划。
+
+实际末端进入当前目标的 1 mm 范围后即切换下一目标，关节位置、速度、控制量与仿真时间保持连续。每个目标的时间上限为 1000 步，一条 5 目标轨迹最多 5000 步；任一目标失败或超时会结束当前轨迹。运行时 IK 求解预算为 600 次迭代，姿态跟踪容差为 5°。起点姿态的初始化发生在回合 reset 中。
+
+该任务启用 `track_issued_command`：笛卡尔命令跟随实际发出的限速参考点，避免累计尚未执行的位移；增量 IK 失败时最多尝试 6 次缩短步长。运行时 DLS 阻尼为 0.001、初值正则权重为 0.000001，求解结果仍须通过固定姿态、关节限位、速率及碰撞检查。目标采样分布保持不变。
+
+观测使用 `goal_relative_v3`。到点的那个 transition 按已到达的目标计算进度与成功奖励，返回的 observation 包含下一目标；`info.transition_desired_goal` 保存本步奖励所用的目标，`compute_reward` 和批量重算读取该上下文。`info.is_goal_success` 表示单个目标到达，`info.is_success` 表示整条轨迹完成。
+
+本次从 20 cm 单目标 PPO 权重开始，先训练 32768 步，再修复连续运动中的命令累计及 IK 数值问题，追加 16384 步，共新增 49152 步多目标训练。最终开发集 180000–180003 完成 4/4 条轨迹、20/20 个目标，零安全终止。actor 和 critic 均有更新，训练配置、来源权重和当前源码资源核对通过，全部 364 项回归测试通过。见[训练记录](outputs/rl/ppo_reach/random_start_multi_20cm_seed2027_continue/summary.json)与[训练核对](outputs/rl/ppo_reach/random_start_multi_20cm_seed2027_continue/training_verification.json)。
+
+冻结最终模型后，独立测试 191000–191019 完成 **12/20 条完整轨迹**，成功 **72/100 个计划目标**。实际尝试 80 个目标，单目标成功率为 72/80（90%）；提前结束后未尝试的 20 个目标计入计划目标完成率的分母。8 条失败轨迹中，7 条因求解出的关节目标触及限位而停止，1 条超时，碰撞、数值失败及 IK 失败均为 0。当前仍未达到全部随机连续轨迹成功。
+
+72 个成功目标平均实际误差为 0.794 mm，最大为 0.996 mm。20 个随机起点距 home 6.39–19.74 cm，100 个计划目标距 home 4.83–19.94 cm，覆盖八个空间象限。全部 60 次目标切换均保留非零速度，切换前后的关节位置、速度、控制量和时间逐项相同。原始数据见[独立评估](outputs/rl/ppo_reach/random_start_multi_20cm_seed2027_continue/heldout_191000_191019.json)、[逐目标分析](outputs/rl/ppo_reach/random_start_multi_20cm_seed2027_continue/heldout_191000_191019_analysis.json)、[连续性核对](outputs/rl/ppo_reach/random_start_multi_20cm_seed2027_continue/heldout_verification.json)与[失败明细](outputs/rl/ppo_reach/random_start_multi_20cm_seed2027_continue/heldout_failures.json)。
+
+使用本次模型继续训练，可在 `realman_rl` 环境运行以下命令，输出目录需为新目录。
+
+```bash
+conda activate realman_rl
+python -I scripts/train/train_ppo_reach.py --task random_start_multi_reach_20cm \
+  --init-model outputs/rl/ppo_reach/random_start_multi_20cm_seed2027_continue/final/model.zip \
+  --timesteps 16384 --seed 2027 --eval-every 8192 --eval-episodes 4 \
+  --eval-seed-start 180000 --checkpoint-every 8192 --tensorboard \
+  --run-dir outputs/rl/ppo_reach/random_start_multi_20cm_next
+```
+
+独立评估中的 `--episodes 20` 表示 20 条轨迹，共计划 100 个目标。`sequence_success_rate` 为整条轨迹完成率，`goal_success_rate` 为成功目标数除以实际尝试目标数，`goal_completion_rate` 为成功目标数除以计划目标数。逐回合 `goal_results` 记录每个目标的动作、位置、结束原因及起止物理状态，成功目标的 `end_state` 与下一目标的 `start_state` 可逐项核对。
+
+```bash
+python -I scripts/evaluate/evaluate_ppo_reach.py \
+  --model outputs/rl/ppo_reach/random_start_multi_20cm_seed2027_continue/final/model.zip \
+  --episodes 20 --seed-start 191000 --json /tmp/realman_multi_goal_evaluation.json
+```
+
+训练日志增加 `training_goals.jsonl`，TensorBoard 记录单目标事件与轨迹完成率。保存配置通过 `envs.factory.make_reach_env` 自动还原随机起点、多目标环境。分析脚本将轨迹拆成各目标段，距离分组统计每段实际行程，目标区域半径单独统计。
+
 ## 20 cm 随机 Reach 续训
 
 任务 `random_reach_20cm` 在以 home 为中心、半径 20 cm 的球体内采样目标，最小采样半径为 5 mm，采样按体积均匀分布，再经过固定末端姿态的 IK、模型关节限位和碰撞预检。每回合从 home 开始，实际末端误差进入 1 mm 即成功，回合上限 600 步。实际可采到的位置受机械臂当前 home 和固定姿态的可达性约束。

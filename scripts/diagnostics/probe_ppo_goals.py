@@ -17,6 +17,8 @@ def probe(model_path,*,task='axis_pair_reach',distance_mm=5.):
     if task not in ('axis_pair_reach','axis_six_reach'):raise ValueError('Expected an axis curriculum task')
     if not np.isfinite(distance_mm) or distance_mm<=0:raise ValueError('Distance must be finite and positive')
     model,transform,saved=load_ppo(model_path)
+    if 'goals_per_episode' in saved['environment']:
+        raise ValueError('Axis reset probes require a single-goal task; evaluate saved multi-goal sequences instead')
     # Inside the ordinary observation these slices depend on the goal.
     # Both residuals (goal-ee and goal-command) agree at the home reset.
     goal_slice = {'legacy': slice(15, 18), 'fetch_like_v1': slice(0, 0),

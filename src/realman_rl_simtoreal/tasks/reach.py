@@ -28,6 +28,11 @@ TASKS = {
                                           (0.,-.005,0.),(0.,0.,.005),(0.,0.,-.005))),
 }
 
+TASKS['random_start_multi_reach_20cm']=dict(TASKS['random_reach_20cm'],start_mode='random',
+    goals_per_episode=5,min_goal_distance=.01,max_episode_steps=1000,control_ik_iterations=600,
+    track_issued_command=True,control_ik_damping=.001,control_ik_seed_weight=1e-6,
+    reward_progress_parameters=dict(TASKS['random_reach_20cm']['reward_progress_parameters'],distance_scale=.4))
+
 
 def task_environment(task, base, *, reward_mode=None, action_scale=None, observation_mode=None,
                      reward_progress_parameters=None):

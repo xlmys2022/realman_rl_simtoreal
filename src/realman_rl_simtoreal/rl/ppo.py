@@ -10,7 +10,7 @@ from stable_baselines3 import PPO
 from stable_baselines3.common.callbacks import BaseCallback
 
 from .common.metrics import MotionStats
-from ..tasks.reach import task_environment, ENV_CONFIG, OBSERVATION_MODES
+from ..tasks.reach import task_environment, ENV_CONFIG, OBSERVATION_MODES, TASKS
 from ..tasks.rewards import REWARD_COMPONENT_KEYS, validate_checkpoint_reward
 from .common.observation import checkpoint_transform, validate_model_observation
 from .common.evaluation import evaluate, summarize_episodes
@@ -27,14 +27,14 @@ TRAIN_METRICS=('policy_gradient_loss','value_loss','entropy_loss','approx_kl','c
 def environment_config(task='fixed_reach',reward_mode=None,action_scale=None,
                        observation_mode=None, reward_progress_parameters=None):
     if observation_mode is None:
-        observation_mode = ('goal_relative_v3' if task == 'random_reach_20cm' else
+        observation_mode = ('goal_relative_v3' if TASKS.get(task,{}).get('target_radius',0)>.01 else
                             'legacy' if task == 'fixed_reach' else 'goal_relative_v1')
     if observation_mode not in OBSERVATION_MODES:
         raise ValueError('Unknown observation_mode: '+str(observation_mode))
     if reward_mode is None:
         reward_mode = 'reach_progress_v1' if observation_mode.startswith('goal_relative_') else 'reach_shaped_v1'
     if action_scale is None:
-        action_scale = .001 if task == 'random_reach_20cm' else .00025
+        action_scale = TASKS.get(task,{}).get('action_scale',.00025)
     return task_environment(task,dict(ENV_CONFIG,boundary_mode='terminate'),
                             reward_mode=reward_mode,action_scale=action_scale,
                             observation_mode=None if observation_mode=='legacy' else observation_mode,
@@ -119,6 +119,7 @@ class PPOAudit(BaseCallback):
         self.motion=MotionStats();self.clipping=ActionClipStats();self.rollout_clipping=ActionClipStats()
         self.complete_rollouts=0;self.abort_reason=None;self.partial_rejections=0;self.rejections=0
         self.reward_component_totals={};self.reward_component_steps=0
+        self.goal_results=[]
 
     def _on_rollout_start(self):
         self.rollout_clipping=ActionClipStats()
@@ -139,7 +140,7 @@ class PPOAudit(BaseCallback):
         before=np.asarray(old['achieved_goal'][0]);after=np.asarray(next_obs['achieved_goal']).reshape(-1,3)[0]
         goal=old['desired_goal'][0]
         command=np.asarray(info['attempted_position_m'])-applied*self.action_scale
-        self.motion.observe(before,after,goal,command,info['command_position_m'],applied,done)
+        self.motion.observe(before,after,goal,command,info['command_position_m'],applied,done or info.get('goal_changed',False))
         self.partial_rewards.append(reward);self.partial_actions.append(float(np.linalg.norm(applied)))
         rejected=bool(info.get('is_action_rejected',False));self.rejections+=int(rejected);self.partial_rejections+=int(rejected)
         action_record=dict(step=int(self.model.num_timesteps),
@@ -151,6 +152,14 @@ class PPOAudit(BaseCallback):
             is_safety_failure=info['is_safety_failure'],is_action_rejected=rejected,
             terminated=done and not bool(info.get('TimeLimit.truncated',False)),
             truncated=bool(info.get('TimeLimit.truncated',False)))
+        if 'goals_planned' in info:
+            action_record.update(goal_changed=info['goal_changed'],is_goal_success=info['is_goal_success'],
+                goal_index_before=info['transition_goal_index'],goal_index_after=info['goal_index'],
+                goals_completed=info['goals_completed'],goals_planned=info['goals_planned'])
+        if info.get('goal_result') is not None:
+            goal_record=dict(info['goal_result'],episode_index=len(self.episodes),end_training_step=int(self.model.num_timesteps))
+            self.goal_results.append(goal_record)
+            append_json(self.folder/'training_goals.jsonl',goal_record)
         if 'reward_components' in info:
             components=info['reward_components']
             if sum(components[k] for k in REWARD_COMPONENT_KEYS)!=reward or components['total_reward']!=reward:
@@ -167,6 +176,9 @@ class PPOAudit(BaseCallback):
                 success=bool(info['is_success']),safety_failure=bool(info['is_safety_failure']),
                 reason=info['termination_reason'],final_distance_m=info['distance_m'],
                 rejected_actions=self.partial_rejections,mean_action_norm=float(np.mean(self.partial_actions)))
+            if 'goals_planned' in info:
+                row.update(goals_planned=info['goals_planned'],goals_completed=info['goals_completed'],
+                           goals_attempted=info['transition_goal_index']+1)
             self.episodes.append(row);append_json(self.folder/'training_episodes.jsonl',row)
             self.partial_rewards=[];self.partial_actions=[];self.partial_rejections=0
         if info['termination_reason'] in ('collision','numerical_failure'):
@@ -189,10 +201,16 @@ class PPOAudit(BaseCallback):
         if self.reward_component_steps:
             result.update(reward_component_steps=self.reward_component_steps,
                           reward_component_totals=self.reward_component_totals.copy())
+        if self.goal_results:
+            completed=sum(r['success'] for r in self.goal_results)
+            result.update(goal_events=len(self.goal_results),successful_goal_events=completed,
+                          goal_event_success_rate=completed/len(self.goal_results))
         return result
 
     def record_scalars(self):
         summary=self.summary();tail=self.episodes[-100:]
+        for key in ('goal_events','successful_goal_events','goal_event_success_rate'):
+            if key in summary:self.logger.record('training/'+key,summary[key])
         for key,total in self.reward_component_totals.items():
             self.logger.record('training/reward_components/'+key+'_mean_per_step',total/self.reward_component_steps)
         if tail:
@@ -260,6 +278,10 @@ def evaluate_ppo(model,transform,environment,seeds):
         end=offset+episode['length'];stats=ActionClipStats()
         episode['raw_actions']=raw_actions[offset:end]
         episode['actual_positions_before_m']=actual_positions[offset:end]
+        for leg in episode.get('goal_results',[]):
+            begin,stop=leg['start_step'],leg['end_step']
+            leg['raw_actions']=episode['raw_actions'][begin:stop]
+            leg['actual_positions_before_m']=episode['actual_positions_before_m'][begin:stop]
         stats.observe(episode['raw_actions'],episode['actions'],model.action_space.low,model.action_space.high)
         episode['box_clipping']=stats.summary();offset=end
     if offset!=len(raw_actions):raise ValueError('PPO evaluation action/episode records disagree')
@@ -267,6 +289,9 @@ def evaluate_ppo(model,transform,environment,seeds):
     if environment['target_mode']=='fixed':scope='one fixed target; repeated seeds do not test target generalization'
     elif environment['target_mode']=='discrete':
         scope=f"one episode per discrete candidate ({len(measured['episodes'])} unique positions); reset seeds are not random-position generalization"
+    if environment.get('goals_per_episode',1)>1:
+        scope=(f"independent seeded sequences with {environment['goals_per_episode']} goals each; "
+               'random validated starts, preserved physical state between goals')
     measured.update(box_clipping=clipping.summary(),parameters_unchanged=True,goal_scope=scope)
     return measured
 

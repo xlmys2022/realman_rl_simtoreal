@@ -3,7 +3,7 @@ from collections import Counter
 from time import perf_counter
 import numpy as np
 
-from ...envs.reach_env import ReachEnv
+from ...envs.factory import make_reach_env
 from ...tasks.reach import ENV_CONFIG
 from .baselines import rule_action
 from .metrics import MotionStats
@@ -19,7 +19,7 @@ REASONS = ('success', 'workspace_limit', 'joint_limit', 'ik_failure', 'orientati
 def summarize_episodes(episodes):
     counts = Counter(e['reason'] for e in episodes)
     successful = [e for e in episodes if e['success']]
-    return dict(episodes=len(episodes), success_rate=len(successful)/len(episodes) if episodes else None,
+    result = dict(episodes=len(episodes), success_rate=len(successful)/len(episodes) if episodes else None,
                 mean_return=float(np.mean([e['return_'] for e in episodes])) if episodes else None,
                 mean_discounted_return=float(np.mean([e['discounted_return'] for e in episodes])) if episodes else None,
                 mean_episode_length=float(np.mean([e['length'] for e in episodes])) if episodes else None,
@@ -28,6 +28,15 @@ def summarize_episodes(episodes):
                 safety_failures=sum(e['safety_failure'] for e in episodes),
                 rejected_actions=sum(e.get('rejected_actions',0) for e in episodes),
                 termination_counts={k: counts[k] for k in dict.fromkeys((*REASONS, *counts))})
+    if any('goals_planned' in e for e in episodes):
+        planned=sum(e.get('goals_planned',1) for e in episodes)
+        completed=sum(e.get('goals_completed',int(e['success'])) for e in episodes)
+        attempted=sum(e.get('goals_attempted',1) for e in episodes)
+        result.update(sequence_success_rate=result['success_rate'],goals_planned=planned,
+                      goals_completed=completed,goals_attempted=attempted,
+                      goal_success_rate=completed/attempted if attempted else None,
+                      goal_completion_rate=completed/planned if planned else None)
+    return result
 
 
 def evaluate(name, seeds, *, model=None, transform=None, config=None, action_seed=2026, gamma=.99,
@@ -42,7 +51,7 @@ def evaluate(name, seeds, *, model=None, transform=None, config=None, action_see
     episodes, step_times, reference_errors = [], [], []
     motion=MotionStats() if collect_motion else None
     start_total = perf_counter()
-    with ReachEnv(**(ENV_CONFIG if config is None else config)) as env:
+    with make_reach_env(ENV_CONFIG if config is None else config) as env:
         expected_transform = ReachTransform.from_env(env).config
         if transform is not None and transform.config != expected_transform:
             raise ValueError('Saved transform does not match this model/home and units')
@@ -57,10 +66,11 @@ def evaluate(name, seeds, *, model=None, transform=None, config=None, action_see
             rng = np.random.default_rng([action_seed, int(seed)])
             rewards, actions = [], []
             reward_components=[]
+            goal_results=[]
             rejected_actions, rejection_reasons = 0, Counter()
             physics_steps = 0
             episode_motion=MotionStats() if discrete and collect_motion else None
-            for _ in range(env.max_episode_steps):
+            for _ in range(getattr(env,'episode_step_limit',env.max_episode_steps)):
                 if name in ('sac','ppo'):
                     action, _ = model.predict(transform.encode(obs), deterministic=True)
                     if reference_policy is not None:
@@ -77,7 +87,7 @@ def evaluate(name, seeds, *, model=None, transform=None, config=None, action_see
                 obs, reward, terminated, truncated, info = env.step(action)
                 if motion is not None:
                     motion.observe(before_obs['achieved_goal'],obs['achieved_goal'],before_obs['desired_goal'],
-                        command_before,info['command_position_m'],action,terminated or truncated)
+                        command_before,info['command_position_m'],action,terminated or truncated or info.get('goal_changed',False))
                 if episode_motion is not None:
                     episode_motion.observe(before_obs['achieved_goal'],obs['achieved_goal'],before_obs['desired_goal'],
                         command_before,info['command_position_m'],action,terminated or truncated)
@@ -95,11 +105,15 @@ def evaluate(name, seeds, *, model=None, transform=None, config=None, action_see
                         raise ValueError('Evaluation reward component sum mismatch')
                     reward_components.append(components.copy())
                 actions.append(action.tolist())
+                if info.get('goal_result') is not None:
+                    goal_results.append(dict(info['goal_result']))
                 rejected_actions += int(info.get('is_action_rejected', False))
                 if info.get('is_action_rejected', False):
                     rejection_reasons[info['rejection_reason']] += 1
                 if terminated or truncated:
                     break
+            if not (terminated or truncated):
+                raise RuntimeError('Reach episode exceeded its declared step limit without ending')
             episodes.append(dict(seed=int(seed), target_position_m=goal.tolist(), initial_position_m=initial.tolist(),
                                  goal_sampling=reset_info['goal_sampling'], return_=float(sum(rewards)),
                                  discounted_return=float(np.dot(rewards, gamma**np.arange(len(rewards)))),
@@ -111,6 +125,17 @@ def evaluate(name, seeds, *, model=None, transform=None, config=None, action_see
                                  rejected_actions=rejected_actions, rejection_reasons=dict(rejection_reasons),
                                  near_zero_action_fraction=float(np.mean(np.linalg.norm(actions, axis=1) < .01)),
                                  physics_steps=physics_steps, episode_wall_s=perf_counter()-started, actions=actions))
+            if 'goals_planned' in reset_info:
+                for goal_result in goal_results:
+                    begin,end=goal_result['start_step'],goal_result['end_step']
+                    leg_rewards=rewards[begin:end]
+                    goal_result.update(actions=actions[begin:end],return_=float(sum(leg_rewards)),
+                        discounted_return=float(np.dot(leg_rewards,gamma**np.arange(len(leg_rewards)))))
+                episodes[-1].update(initial_target_position_m=goal.tolist(),
+                    target_position_m=obs['desired_goal'].tolist(),goal_results=goal_results,
+                    goals_completed=info['goals_completed'],goals_planned=info['goals_planned'],
+                    goals_attempted=len(goal_results),goal_plan_m=reset_info['goal_plan_m'],
+                    start_sampling=reset_info['start_sampling'],workspace_center_m=reset_info['workspace_center_m'])
             if reward_components:
                 episodes[-1]['reward_components']=reward_components
                 episodes[-1]['reward_component_totals']={k:float(sum(r[k] for r in reward_components))
@@ -151,6 +176,9 @@ def record_evaluation(logger, evaluation):
         logger.record('evaluation/reward_components/'+key+'_mean_per_step',
                       total/sum(e['length'] for e in evaluation['episodes']))
     summary=evaluation['summary']
+    for key in ('sequence_success_rate','goal_success_rate','goal_completion_rate','goals_completed','goals_planned'):
+        if summary.get(key) is not None:
+            logger.record('evaluation/'+key,summary[key])
     for tag,key in [('success_rate','success_rate'),('episode_length_mean','mean_episode_length'),
                     ('episode_reward_mean','mean_return'),('success_steps_mean','mean_success_steps'),
                     ('safety_failures','safety_failures')]:

@@ -3,13 +3,13 @@ import numpy as np
 from stable_baselines3.common.monitor import Monitor
 from stable_baselines3.common.vec_env import DummyVecEnv, VecCheckNan
 
-from ...envs.reach_env import ReachEnv
+from ...envs.factory import make_reach_env
 from .observation import ReachTransform, ScaledReachObservation
 
 
 def make_probe(environment, seeds):
     """Public reset observations only; no BC, experts, actions or training time."""
-    with ReachEnv(**environment) as env:
+    with make_reach_env(environment) as env:
         observations=[env.reset(seed=int(s))[0] for s in seeds]
         transform=ReachTransform.from_env(env)
     return {key:np.stack([obs[key] for obs in observations])
@@ -17,7 +17,7 @@ def make_probe(environment, seeds):
 
 
 def training_env(config, monitor_file=None):
-    raw = ReachEnv(**config)
+    raw = make_reach_env(config)
     wrapped = ScaledReachObservation(raw)
     transform = wrapped.transform
     monitored = Monitor(wrapped, filename=None if monitor_file is None else str(monitor_file),

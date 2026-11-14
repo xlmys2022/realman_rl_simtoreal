@@ -84,7 +84,23 @@ def analyze(document,*,min_samples=10):
     if min_samples<1:raise ValueError('min_samples must be positive')
     episodes=document.get('episodes')
     if not isinstance(episodes,list) or not episodes:raise ValueError('Expected nonempty per-episode evaluation JSON')
+    sequence=any('goal_results' in e for e in episodes)
+    if sequence:
+        goals=[]
+        for episode in episodes:
+            records=episode['goal_results']
+            for before,after in zip(records,records[1:]):
+                if not before['success'] or before['end_state']!=after['start_state']:
+                    raise ValueError('Physical state is discontinuous between sequence goals')
+            for record in records:
+                goal=dict(record)
+                index=goal.pop('goal_index')
+                goal.update(seed=f"{episode['seed']}/{index}",sequence_seed=episode['seed'],
+                            sequence_goal_index=index,workspace_center_m=episode['workspace_center_m'])
+                goals.append(goal)
+        episodes=goals
     target_radius=document.get('environment',{}).get('target_radius',.005)
+    if sequence:target_radius*=2
     wide=target_radius>.01
     edges=np.linspace(0,target_radius,5) if wide else None
     radius_labels=[f'{100*a:g}-{100*b:g}cm' for a,b in zip(edges[:-1],edges[1:])] if wide else ['3-4mm','4-5mm']
@@ -133,6 +149,15 @@ def analyze(document,*,min_samples=10):
         targets=[dict(seed=e['seed'],offset_mm=(np.array(e['_offset'])*1000).tolist(),radius_mm=e['_radius_m']*1000,
                       octant=e['_octant'],radius_bin=e['_radius_bin'],success=e['success'],reason=e['reason'],
                       final_distance_mm=e['final_distance_m']*1000,steps=e['length']) for e in rows])
+    if sequence:
+        goal_radii=np.array([np.linalg.norm(np.array(e['target_position_m'])-e['workspace_center_m']) for e in rows])
+        result.update(evaluation_unit='goal',sequence_summary=document['summary'],physical_handover_verified=True,
+                      reference='World XYZ displacement from each goal\'s actual starting position.')
+        result['target_distribution'].update(goal_radius_from_home_min_mm=float(goal_radii.min()*1000),
+                                             goal_radius_from_home_max_mm=float(goal_radii.max()*1000))
+        result['notes'].append('Sequence radius groups measure travel between goals, up to twice the target-region radius.')
+        for target,row in zip(result['targets'],rows):
+            target.update(sequence_seed=row['sequence_seed'],sequence_goal_index=row['sequence_goal_index'])
     if any('goal_index' in e for e in rows):
         indices=[e['goal_index'] for e in rows]
         if len(set(indices))!=len(indices):raise ValueError('Repeated discrete candidates are not independent target evaluations')

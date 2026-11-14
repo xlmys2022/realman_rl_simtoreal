@@ -188,14 +188,14 @@ def main():
     p.add_argument('--run-dir',type=Path,required=True)
     p.add_argument('--task',choices=list(TASKS),default='fixed_reach')
     p.add_argument('--observation-mode',choices=OBSERVATION_MODES,
-                   help='Task defaults: legacy for fixed, goal_relative_v1 for local random, goal_relative_v3 for 20cm')
+                   help='Task defaults: legacy for fixed, goal_relative_v1 for local random, goal_relative_v3 for 20cm tasks')
     p.add_argument('--reward-mode',choices=REWARD_MODES,
                    help='Defaults to reach_progress_v1 with goal-relative observations, otherwise reach_shaped_v1')
     p.add_argument('--action-scale',type=float,help='Metres per axis; defaults to .001 for 20cm, .00025 otherwise')
     p.add_argument('--init-model',type=Path,help='Initialize actor, critic and log-std from a saved goal-relative PPO')
     p.add_argument('--timesteps',type=int,default=16384);p.add_argument('--seed',type=int,default=2026)
     p.add_argument('--eval-every',type=int,default=2048)
-    p.add_argument('--eval-episodes',type=int,help='Default: one for legacy tasks; all distinct candidates for discrete tasks')
+    p.add_argument('--eval-episodes',type=int,help='Number of episodes or multi-goal sequences; default one, or all discrete candidates')
     p.add_argument('--eval-seed-start',type=int,default=87000)
     p.add_argument('--checkpoint-every',type=int,default=2048);p.add_argument('--tensorboard',action='store_true')
     p.add_argument('--n-steps',type=int,default=512);p.add_argument('--batch-size',type=int,default=64)

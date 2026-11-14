@@ -39,7 +39,9 @@ class ReachEnv(gym.Env):
                  observation_mode="legacy", reward_progress_parameters=None,
                  workspace_radius=MAX_TRANSLATION, max_home_joint_delta=np.deg2rad(5),
                  target_min_radius=None, synchronized_joint_rate=False,
-                 max_orientation_error=MAX_ACTUAL_ORIENTATION_ERROR, cartesian_rate_limit=False):
+                 max_orientation_error=MAX_ACTUAL_ORIENTATION_ERROR, cartesian_rate_limit=False,
+                 control_ik_iterations=150, track_issued_command=False,
+                 control_ik_damping=.01, control_ik_seed_weight=1e-4):
         if observation_mode not in OBSERVATION_MODES:
             raise ValueError(f"observation_mode must be one of {OBSERVATION_MODES}")
         self.observation_mode = observation_mode
@@ -81,6 +83,14 @@ class ReachEnv(gym.Env):
             raise ValueError("synchronized_joint_rate must be boolean")
         if not isinstance(cartesian_rate_limit, bool):
             raise ValueError("cartesian_rate_limit must be boolean")
+        if not isinstance(track_issued_command,bool) or (track_issued_command and not cartesian_rate_limit):
+            raise ValueError('track_issued_command must be boolean and requires cartesian_rate_limit when enabled')
+        if (isinstance(control_ik_iterations,bool) or not isinstance(control_ik_iterations,(int,np.integer))
+                or not 1<=control_ik_iterations<=1000):
+            raise ValueError('control_ik_iterations must be an integer in [1, 1000]')
+        if (not np.isfinite(control_ik_damping) or control_ik_damping<1e-6
+                or not np.isfinite(control_ik_seed_weight) or control_ik_seed_weight<0):
+            raise ValueError('Control IK requires finite damping >= 1e-6 and seed weight >= 0')
         if not np.isfinite(max_orientation_error) or not 0 < max_orientation_error <= np.pi:
             raise ValueError("max_orientation_error must be finite and in (0, pi] radians")
         if not np.isfinite(target_radius) or not success_threshold < target_radius <= workspace_radius:
@@ -94,6 +104,10 @@ class ReachEnv(gym.Env):
         self.synchronized_joint_rate = synchronized_joint_rate
         self.max_orientation_error = float(max_orientation_error)
         self.cartesian_rate_limit = cartesian_rate_limit
+        self.track_issued_command = track_issued_command
+        self.control_ik_iterations = int(control_ik_iterations)
+        self.control_ik_damping = float(control_ik_damping)
+        self.control_ik_seed_weight = float(control_ik_seed_weight)
         if (not isinstance(max_target_attempts, (int, np.integer))
                 or isinstance(max_target_attempts, bool) or not 1 <= max_target_attempts <= 1000):
             raise ValueError("max_target_attempts must be an integer in [1, 1000]")
@@ -186,9 +200,25 @@ class ReachEnv(gym.Env):
                             max_home_delta=self.max_home_joint_delta)
 
     def _solve_control_ik(self, target):
+        result,waypoint=self._solve_rate_limited_ik(target)
+        if result.success or not self.track_issued_command:
+            return result,waypoint
+        # A Cartesian increment can cross a local IK boundary even when a
+        # shorter, rate-limited step remains valid. Backtrack in private IK
+        # data; each accepted pose still passes the original motion checks.
+        origin=self.kinematics.fk(self._joint_reference)[0]
+        for fraction in (.5,.25,.125,.0625,.03125,.015625):
+            candidate,point=self._solve_rate_limited_ik(origin+fraction*(target-origin))
+            if candidate.success:
+                return candidate,point
+        return result,waypoint
+
+    def _solve_rate_limited_ik(self, target):
         kin=self.kinematics
         seed=self._joint_reference
-        result=kin.solve_ik(target,seed,kin.home_rotation)
+        parameters=dict(max_iterations=self.control_ik_iterations,damping=self.control_ik_damping,
+                        seed_weight=self.control_ik_seed_weight)
+        result=kin.solve_ik(target,seed,kin.home_rotation,**parameters)
         if not self.cartesian_rate_limit or not result.success:
             return result,target
         try:
@@ -204,7 +234,7 @@ class ReachEnv(gym.Env):
         # joint solution directly can distort the tool orientation between poses.
         for _ in range(16):
             waypoint=origin+fraction*(target-origin)
-            candidate=kin.solve_ik(waypoint,seed,kin.home_rotation,position_tolerance=1e-6)
+            candidate=kin.solve_ik(waypoint,seed,kin.home_rotation,position_tolerance=1e-6,**parameters)
             if candidate.success and np.max(np.abs(candidate.q-seed))<=maximum+1e-12:
                 return candidate,waypoint
             fraction*=.5
@@ -567,7 +597,7 @@ class ReachEnv(gym.Env):
                             reason = "collision" if "collision" in str(exc).lower() else "ik_failure"
                             detail = str(exc)
                     if reason is None and rejected is None:
-                        advance(result.q, target)
+                        advance(result.q, control_target if self.track_issued_command else target)
         if rejected is not None:
             # Reject the NEW task command, never clip an IK result. Keep the
             # last legal Cartesian reference and issued joint ctrl reference;

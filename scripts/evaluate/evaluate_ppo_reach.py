@@ -18,6 +18,8 @@ def run(model_path,*,episodes=None,seed_start=88000,observation_mode=None):
     result.update(model=str(Path(model_path).resolve()),seeds=list(range(seed_start,seed_start+episodes)),
                   model_actual_timesteps=int(model.num_timesteps),environment=config['environment'],
                   observation_mode=transform.observation_mode,features_dim=transform.features_dim)
+    if 'goals_per_episode' in config['environment']:
+        result.update(evaluation_unit='sequence',goals_per_episode=config['environment']['goals_per_episode'])
     return result
 
 
@@ -26,7 +28,7 @@ def main():
     p.add_argument('--model',type=Path,required=True)
     p.add_argument('--observation-mode',choices=OBSERVATION_MODES,
                    help='Defaults to checkpoint mode; an explicit mismatch is rejected')
-    p.add_argument('--episodes',type=int,help='Default one for legacy tasks; all candidates for discrete tasks; repeats rejected')
+    p.add_argument('--episodes',type=int,help='Number of episodes or multi-goal sequences; discrete tasks enumerate all candidates')
     p.add_argument('--seed-start',type=int,default=88000);p.add_argument('--json',type=Path)
     a=p.parse_args()
     try:

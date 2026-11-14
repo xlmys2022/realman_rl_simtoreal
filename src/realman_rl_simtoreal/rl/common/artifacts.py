@@ -28,7 +28,8 @@ def versions():
 def asset_hashes():
     files = [p for p in (PROJECT_ROOT/'assets/robots/rml63').rglob('*') if p.is_file()]
     files += [PROJECT_ROOT/'src/realman_rl_simtoreal'/name for name in
-              ('envs/reach_env.py', 'simulation/kinematics.py', 'simulation/control.py', 'simulation/model.py')]
+              ('envs/reach_env.py', 'envs/sequence_reach_env.py', 'envs/factory.py',
+               'simulation/kinematics.py', 'simulation/control.py', 'simulation/model.py')]
     return {str(p.relative_to(PROJECT_ROOT)): hashlib.sha256(p.read_bytes()).hexdigest() for p in files}
 
 
