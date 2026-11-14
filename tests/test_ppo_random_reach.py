@@ -240,7 +240,7 @@ def step(env,action):
 mujoco.mj_step=mj_step;ReachEnv.step=step
 spec=importlib.util.spec_from_file_location('random_ppo_driver',PROJECT_ROOT/'scripts/train/train_ppo_reach.py')
 driver=importlib.util.module_from_spec(spec);spec.loader.exec_module(driver)
-folder=Path(sys.argv[1]);s=driver.train(folder,timesteps=512,task='random_reach',seed=2026,observation_mode='legacy',
+folder=Path(sys.argv[1]);s=driver.train(folder,timesteps=512,task='random_reach',seed=2026,
  eval_every=512,eval_episodes=2,eval_seed_start=86000,checkpoint_every=512,
  tensorboard=importlib.util.find_spec('tensorboard') is not None)
 assert s['status']=='completed',s['error']
@@ -254,12 +254,18 @@ assert s['actual_timesteps']==512 and s['completed_rollout_updates']==1
         cls.summary=json.loads((cls.folder/'summary.json').read_text());cls.config=json.loads((cls.folder/'config.json').read_text())
 
     def test_single_random_rollout_real_actor_value_update_and_physics(self):
+        from realman_rl_simtoreal.rl.ppo import environment_config
         s=self.summary
         self.assertEqual(s['actual_timesteps'],512);self.assertEqual(s['completed_rollout_updates'],1)
         self.assertEqual(s['epoch_updates'],10);self.assertEqual(s['optimizer_steps'],80)
         self.assertTrue(s['actor_updated'] and s['critic_updated'])
-        self.assertEqual(self.config['environment'],CONFIG);self.assertEqual(self.config['init_mode'],'scratch')
-        self.assertTrue(json.loads((self.folder/'test_verification.json').read_text())['no_live_qpos_writes'])
+        self.assertEqual(self.config['environment'],environment_config('random_reach'))
+        self.assertEqual(self.config['environment']['observation_mode'],'goal_relative_v1')
+        self.assertEqual(self.config['environment']['reward_mode'],'reach_progress_v1')
+        self.assertEqual(self.config['init_mode'],'scratch')
+        self.assertEqual(self.config['features_dim'],12)
+        evidence=json.loads((self.folder/'test_verification.json').read_text())
+        self.assertTrue(evidence['no_live_qpos_writes'] and evidence['no_experts'])
         rows=[json.loads(x) for x in (self.folder/'actions.jsonl').read_text().splitlines()]
         self.assertGreater(len(set(tuple(x['goal_m']) for x in rows)),1)
         for a,b in zip(rows,rows[1:]):
@@ -267,6 +273,7 @@ assert s['actual_timesteps']==512 and s['completed_rollout_updates']==1
             else:self.assertEqual(a['goal_m'],b['goal_m'])
         with np.load(self.folder/'final/last_rollout.npz') as buf:
             for name in buf.files:self.assertTrue(np.isfinite(buf[name]).all())
+            self.assertEqual(buf['observation_observation'].shape[-1],6)
 
     def test_evaluation_records_raw_actions_and_correct_episode_slices(self):
         measured=json.loads((self.folder/'checkpoints/step_000512/evaluation.json').read_text())
@@ -281,13 +288,29 @@ assert s['actual_timesteps']==512 and s['completed_rollout_updates']==1
 
     def test_twenty_target_api_and_frozen_loaded_policy(self):
         from realman_rl_simtoreal.rl.ppo import load_ppo,evaluate_ppo,parameter_hashes
-        model,transform,_=load_ppo(self.folder/'final/model.zip');before=parameter_hashes(model)
+        model,transform,config=load_ppo(self.folder/'final/model.zip');before=parameter_hashes(model)
         # Interface test only; H=1 is explicitly NOT the production evaluation.
-        result=evaluate_ppo(model,transform,dict(CONFIG,max_episode_steps=1),range(86020,86040))
+        result=evaluate_ppo(model,transform,dict(config['environment'],max_episode_steps=1),range(86020,86040))
         self.assertEqual(result['summary']['episodes'],20)
         self.assertEqual(len(set(tuple(e['target_position_m']) for e in result['episodes'])),20)
         self.assertEqual(parameter_hashes(model),before);self.assertEqual(model.num_timesteps,512)
         self.assertTrue(result['parameters_unchanged'])
+
+    def test_independent_cli_uses_saved_random_task(self):
+        destination=self.folder/'independent_random_evaluation.json'
+        if not destination.exists():
+            result=subprocess.run([sys.executable,'-I',str(PROJECT_ROOT/'scripts/evaluate/evaluate_ppo_reach.py'),
+                '--model',str(self.folder/'final/model.zip'),'--episodes','2','--seed-start','86050',
+                '--json',str(destination)],capture_output=True,text=True,timeout=120)
+            self.assertEqual(result.returncode,0,result.stdout+result.stderr)
+        measured=json.loads(destination.read_text())
+        self.assertEqual(measured['environment'],self.config['environment'])
+        self.assertEqual(measured['observation_mode'],'goal_relative_v1')
+        self.assertEqual(measured['features_dim'],12)
+        self.assertEqual(measured['model_actual_timesteps'],512)
+        self.assertTrue(measured['parameters_unchanged'])
+        self.assertEqual(measured['seeds'],[86050,86051])
+        self.assertEqual(len({tuple(e['target_position_m']) for e in measured['episodes']}),2)
 
     def test_tensorboard_and_saved_policy_metadata(self):
         if not self.config['tensorboard']:self.skipTest('TensorBoard absent')

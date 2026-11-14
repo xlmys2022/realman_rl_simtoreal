@@ -16,20 +16,26 @@
 
 种子 2026 的 PPO 从头训练 16384 步后，在旧模型的同一组 100 个目标（92000–92099）上从 1/100 提高到 100/100，另一组新目标（110000–110099）也达到 100/100。两组合计平均 12.44 步，终止时平均实际误差 0.857 mm，零超时、零安全终止。冻结同一策略单独复测 ±X 5 mm，两个方向均为 18 步。以上为 MuJoCo 仿真结果。
 
-用工作区中已训练的模型复测第一组目标：
+补充的 1000 个新目标（120000–120999）全部成功，平均 12.138 步，终止时平均实际误差 0.859 mm，零超时、零安全终止。目标覆盖全部八个空间象限，每个象限有 105–141 个样本且全部成功，两个距离分组 3–4 mm 与 4–5 mm 也全部成功。原始位置、动作、奖励和结束原因见[逐回合结果](outputs/rl/ppo_reach/random_goal_relative_seed2026/heldout_120000_120999.json)，分方向统计见[目标覆盖分析](outputs/rl/ppo_reach/random_goal_relative_seed2026/heldout_120000_120999_analysis.json)。
+
+当前代码从头训练的种子 2027、2028 模型各完成 16384 步，在相同 1000 个目标上分别成功 1000/1000，零超时、零安全终止；平均分别为 12.157、12.106 步，终止时平均实际误差分别为 0.862、0.859 mm。三个训练种子共计 3000 回合评估，八个象限均全部成功。新模型、环境资源哈希、配置与 TensorBoard 记录保存在各自的训练目录，评估原始记录见[种子 2027](outputs/rl/ppo_reach/random_goal_relative_seed2027/heldout_120000_120999.json)和[种子 2028](outputs/rl/ppo_reach/random_goal_relative_seed2028/heldout_120000_120999.json)。
+
+种子 2026 也已在当前源码下重新训练 16384 步，初始、4096、8192、12288、16384 步五个检查点的网络参数均与历史运行逐项一致。此次重跑记录的环境源码和机器人资源哈希与当前工作区匹配，另用 121000–121019 的 20 个新目标复测，成功 20/20。记录见[复现训练](outputs/rl/ppo_reach/random_goal_relative_seed2026_verified/summary.json)和[复现模型独立评估](outputs/rl/ppo_reach/random_goal_relative_seed2026_verified/heldout_121000_121019.json)。随机 Reach 回归测试覆盖默认训练配置、真实物理步进、模型重载和独立 CLI 推理，共 17 项通过。
+
+用工作区中按当前代码训练的种子 2027 模型复测这 1000 个目标：
 
 ```bash
 conda activate realman_rl
 python -I scripts/evaluate/evaluate_ppo_reach.py \
-  --model outputs/rl/ppo_reach/random_goal_relative_seed2026/final/model.zip \
-  --episodes 100 --seed-start 92000 --json /tmp/realman_random_reach_eval.json
+  --model outputs/rl/ppo_reach/random_goal_relative_seed2027/final/model.zip \
+  --episodes 1000 --seed-start 120000 --json /tmp/realman_random_reach_eval.json
 ```
 
 从干净检出重新训练可执行以下命令。训练和评估均须使用新的输出位置。评估自己训练的模型时，将上面的 `--model` 换成对应目录下的 `final/model.zip`。
 
 ```bash
 python -I scripts/train/train_ppo_reach.py --task random_reach \
-  --timesteps 16384 --seed 2026 --eval-every 4096 --eval-episodes 8 \
+  --timesteps 16384 --seed 2027 --eval-every 4096 --eval-episodes 20 \
   --checkpoint-every 4096 --run-dir outputs/rl/ppo_reach/random_goal_relative_retrain
 ```
 

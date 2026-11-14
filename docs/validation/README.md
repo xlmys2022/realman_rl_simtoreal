@@ -2,6 +2,7 @@
 
 以下历史报告保留原始实验数据、结论和旧版路径；历史命令对应报告当时的结构。04-F2及后续报告使用重构后的入口。当前运行入口见 [README](../../README.md)，完整路径对照见 [重构报告](PROJECT_ORGANIZATION_REFACTOR.md)。
 
+- [三维随机 Reach 当前验收及复现命令](../../README.md#运行三维随机-reach)采用 goal_relative_v1 观测与 reach_progress_v1 奖励。训练种子 2026、2027、2028 的模型在相同 1000 个新目标上分别成功 1000/1000，共计 3000 回合，八个空间象限均通过，平均实际末端误差 0.859–0.862 mm，零超时、零安全终止。
 - [项目结构重构（本次）](PROJECT_ORGANIZATION_REFACTOR.md)
 - [初始模型检查](VALIDATION.md)
 - [动力学](DYNAMICS_VALIDATION.md)
