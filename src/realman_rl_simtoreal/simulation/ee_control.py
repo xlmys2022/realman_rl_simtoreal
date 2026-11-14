@@ -10,14 +10,16 @@ MAX_TRANSLATION = 0.010
 MAX_ACTUAL_POSITION_ERROR = 0.005
 MAX_ACTUAL_ORIENTATION_ERROR = np.deg2rad(1.0)
 
-def check_motion(model, data, joint_ids, actuator_ids, kin, result, target):
+def check_motion(model, data, joint_ids, actuator_ids, kin, result, target, *,
+                 max_translation=MAX_TRANSLATION, max_home_delta=np.deg2rad(5)):
     """Reject failed IK and unsafe demo goals before any integration or ctrl write."""
     control.require(result.success and result.q is not None, f"IK failed; no motion: {result.reason}")
     target = np.asarray(target, dtype=float)
     control.require(target.shape == (3,) and np.isfinite(target).all(), "Expected a finite XYZ target")
-    control.require(np.linalg.norm(target - kin.home_position) <= MAX_TRANSLATION + 1e-12,
-                    "Demo translation exceeds 10 mm from home")
-    q = control.validate_target(model, joint_ids, kin.home_q, result.q)
+    control.require(np.isfinite(max_translation) and max_translation > 0, "Invalid translation envelope")
+    control.require(np.linalg.norm(target - kin.home_position) <= max_translation + 1e-12,
+                    f"Demo translation exceeds {1000 * max_translation:g} mm from home")
+    q = control.validate_target(model, joint_ids, kin.home_q, result.q, max_home_delta=max_home_delta)
     theoretical_position, theoretical_rotation = kin.fk(q)
     control.require(np.linalg.norm(theoretical_position - target) <= 1e-5
                     and np.linalg.norm(rotation_vector(kin.home_rotation, theoretical_rotation)) <= 1e-4,
@@ -28,7 +30,8 @@ def check_motion(model, data, joint_ids, actuator_ids, kin, result, target):
     probe.qpos[:] = data.qpos  # Preserve accessory configuration in combined models.
     start = data.qpos[kin.qadr].copy()
     max_rotation_drift = 0.0
-    for alpha in np.linspace(0, 1, 51):
+    samples = max(51, int(np.ceil(np.max(np.abs(q - start)) / np.deg2rad(1))) + 1)
+    for alpha in np.linspace(0, 1, samples):
         angles = start + alpha * (q - start)
         probe.qpos[kin.qadr] = angles
         mujoco.mj_forward(model, probe)

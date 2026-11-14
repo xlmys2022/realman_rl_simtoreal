@@ -20,7 +20,8 @@ def probe(model_path,*,task='axis_pair_reach',distance_mm=5.):
     # Inside the ordinary observation these slices depend on the goal.
     # Both residuals (goal-ee and goal-command) agree at the home reset.
     goal_slice = {'legacy': slice(15, 18), 'fetch_like_v1': slice(0, 0),
-                  'goal_relative_v1': slice(0, 3)}[transform.observation_mode]
+                  'goal_relative_v1': slice(0, 3), 'goal_relative_v2': slice(0, 3),
+                  'goal_relative_v3': slice(0, 3)}[transform.observation_mode]
     environment=task_environment(task,saved['environment'])
     # This explicit diagnostic distance never changes a training task/default.
     environment['target_offsets']=(np.array(environment['target_offsets'])*distance_mm/5).tolist()

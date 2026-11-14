@@ -9,11 +9,12 @@ MAX_ERROR_DEG = 0.5
 MAX_TAIL_RANGE_DEG = 0.05
 MAX_TAIL_SPEED_DEG_S = 0.1
 
-def validate_target(model, joint_ids, home, target):
+def validate_target(model, joint_ids, home, target, *, max_home_delta=np.deg2rad(5)):
     target = np.asarray(target, dtype=float)
     require(target.shape == (6,) and np.isfinite(target).all(), "Target must contain six finite angles")
-    require(np.max(np.abs(target - home)) <= np.deg2rad(5) + 1e-12,
-            "Demo targets must stay within 5 degrees of home")
+    require(np.isfinite(max_home_delta) and max_home_delta > 0, "Invalid home joint envelope")
+    require(np.max(np.abs(target - home)) <= max_home_delta + 1e-12,
+            f"Demo targets must stay within {np.rad2deg(max_home_delta):g} degrees of home")
     ranges = model.jnt_range[joint_ids]
     require(np.all(target > ranges[:, 0]) and np.all(target < ranges[:, 1]), "Target violates joint limits")
     return target
@@ -186,7 +187,7 @@ def advance_synchronized_cycle(model, data, joint_ids, actuator_ids, target, gri
 
 def advance_control_cycle(model, data, joint_ids, actuator_ids, target, *,
                           physics_steps=25, max_joint_delta=np.deg2rad(0.5),
-                          max_joint_speed=np.deg2rad(30)):
+                          max_joint_speed=np.deg2rad(30), synchronized=False):
     """Advance one bounded position-servo cycle, without resetting live state.
 
     Unlike run_segment, this has no settling phase or final convergence test.
@@ -250,6 +251,9 @@ def advance_control_cycle(model, data, joint_ids, actuator_ids, target, *,
         fail("joint_limit", "Previous control reference is invalid")
     # This bounds a valid command's rate; it does not repair an illegal IK result.
     command = start + np.clip(target-start, -max_joint_delta, max_joint_delta)
+    if synchronized:
+        delta = target - start
+        command = start + delta * min(1., max_joint_delta / max(float(np.abs(delta).max()), 1e-30))
     check_state()
     try:
         for step in range(physics_steps):

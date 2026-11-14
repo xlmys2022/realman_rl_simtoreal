@@ -24,21 +24,24 @@ TRAIN_METRICS=('policy_gradient_loss','value_loss','entropy_loss','approx_kl','c
                'explained_variance','std','loss','learning_rate','clip_range')
 
 
-def environment_config(task='fixed_reach',reward_mode=None,action_scale=.00025,
+def environment_config(task='fixed_reach',reward_mode=None,action_scale=None,
                        observation_mode=None, reward_progress_parameters=None):
     if observation_mode is None:
-        observation_mode = 'legacy' if task == 'fixed_reach' else 'goal_relative_v1'
+        observation_mode = ('goal_relative_v3' if task == 'random_reach_20cm' else
+                            'legacy' if task == 'fixed_reach' else 'goal_relative_v1')
     if observation_mode not in OBSERVATION_MODES:
         raise ValueError('Unknown observation_mode: '+str(observation_mode))
     if reward_mode is None:
-        reward_mode = 'reach_progress_v1' if observation_mode == 'goal_relative_v1' else 'reach_shaped_v1'
+        reward_mode = 'reach_progress_v1' if observation_mode.startswith('goal_relative_') else 'reach_shaped_v1'
+    if action_scale is None:
+        action_scale = .001 if task == 'random_reach_20cm' else .00025
     return task_environment(task,dict(ENV_CONFIG,boundary_mode='terminate'),
                             reward_mode=reward_mode,action_scale=action_scale,
                             observation_mode=None if observation_mode=='legacy' else observation_mode,
                             reward_progress_parameters=reward_progress_parameters)
 
 
-def make_ppo(env,seed,*,n_steps=512,batch_size=64,n_epochs=10):
+def make_ppo(env,seed,*,n_steps=512,batch_size=64,n_epochs=10,initial_model=None):
     if seed<0 or min(n_steps,batch_size)<2 or n_epochs<1 or n_steps%batch_size:
         raise ValueError('Nonnegative seed, n_steps/batch>=2, positive epochs and full minibatches required')
     if env.num_envs!=1:raise ValueError('This experiment currently audits one environment')
@@ -46,6 +49,20 @@ def make_ppo(env,seed,*,n_steps=512,batch_size=64,n_epochs=10):
     parameters.update(n_steps=n_steps,batch_size=batch_size,n_epochs=n_epochs)
     model = PPO('MultiInputPolicy',env,seed=seed,verbose=0,**parameters)
     model.reach_observation_mode = env.get_attr('observation_mode')[0]
+    if initial_model is not None:
+        source, source_transform, source_config = load_ppo(initial_model)
+        modes = ('goal_relative_v1', 'goal_relative_v2', 'goal_relative_v3')
+        if source_transform.observation_mode not in modes or model.reach_observation_mode not in modes:
+            raise ValueError('PPO transfer requires matching goal-relative feature semantics')
+        model.policy.load_state_dict(source.policy.state_dict(), strict=True)
+        model.reach_transfer_configuration = dict(
+            model=str(Path(initial_model).resolve()),
+            model_sha256=hashlib.sha256(Path(initial_model).read_bytes()).hexdigest(),
+            source_timesteps=int(source.num_timesteps), source_seed=source_config.get('seed',source.seed),
+            source_parameter_hashes=parameter_hashes(source),
+            source_observation_transform=source_transform.config,
+            optimizer_reset=True, rollout_reset=True)
+        model.set_random_seed(seed)
     return model, parameters
 
 

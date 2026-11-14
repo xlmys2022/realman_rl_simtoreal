@@ -107,12 +107,12 @@ class ReachTaskTests(unittest.TestCase):
     def test_rejected_collision_candidates_are_retried_and_recorded(self):
         env = self.make_env(target_mode='random', max_target_attempts=20)
         calls = 0
-        def screen(*args):
+        def screen(*args, **kwargs):
             nonlocal calls
             calls += 1
             if calls <= 2:
                 raise ValueError('Joint interpolation has an unexpected collision')
-            return check_motion(*args)
+            return check_motion(*args, **kwargs)
         with patch('realman_rl_simtoreal.envs.reach_env.check_motion', side_effect=screen):
             _, info = env.reset(seed=10)
         self.assertGreaterEqual(info['goal_sampling']['attempts'], 3)

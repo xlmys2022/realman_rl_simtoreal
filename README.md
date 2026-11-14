@@ -10,7 +10,36 @@
 - 独立 BC 示范采集、训练和推理；保留历史 BC→SAC Actor 初始化、边界对照与 Q/TD 诊断。
 - 自动化回归测试、环境探针及只读训练曲线绘图。
 
-## 运行三维随机 Reach
+## 20 cm 随机 Reach 续训
+
+任务 `random_reach_20cm` 在以 home 为中心、半径 20 cm 的球体内采样目标，最小采样半径为 5 mm，采样按体积均匀分布，再经过固定末端姿态的 IK、模型关节限位和碰撞预检。每回合从 home 开始，实际末端误差进入 1 mm 即成功，回合上限 600 步。实际可采到的位置受机械臂当前 home 和固定姿态的可达性约束。
+
+该配置使用 1 mm 的每轴动作尺度、22 cm 命令范围和 5° 实际姿态跟踪容差。控制器沿笛卡尔路径求解满足每周期关节速率限制的参考点，关节命令速率为 10°/s，真实速度上限为 30°/s，执行过程检查驱动力、限位和碰撞。`goal_relative_v3` 将目标与命令、命令与实际位置的两个三维差值变换为 `asinh(delta / 0.001)`，GoalEnv 的目标字段以米为单位。
+
+本次由种子 2027 的 5 mm PPO 权重开始迁移，先完成 32768 步大范围训练，再使用上述观测和参考轨迹追加 16384 步，20 cm 任务共新增 49152 步。两阶段权重哈希与父模型记录相符，actor 和 critic 均有更新。最终模型在开发集 130000–130011 上成功 12/12；独立测试 140000–140099 成功 **97/100**，另有 2 次超时、1 次 IK 失败，碰撞与数值失败为 0。
+
+独立目标的实际半径为 3.19–19.99 cm，八个空间象限均有样本，15–20 cm 分组成功 52/55。100 回合平均最终误差为 2.692 mm；97 个成功回合的平均误差为 0.773 mm，平均 241.47 步到达。三个失败目标均位于 +X 方向，IK 失败记录为迭代次数耗尽，两个超时回合在 600 步结束时的误差为 53.68、45.21 mm。完整数据见[独立评估](outputs/rl/ppo_reach/random_20cm_seed2027_continue/heldout_140000_140099.json)、[方向与距离分组](outputs/rl/ppo_reach/random_20cm_seed2027_continue/heldout_140000_140099_analysis.json)及[失败复核](outputs/rl/ppo_reach/random_20cm_seed2027_continue/heldout_failures.json)。全部 351 项回归测试通过。
+
+在 `realman_rl` 环境中使用已训练权重继续训练，可执行以下命令。`--run-dir` 需选择新的目录。
+
+```bash
+conda activate realman_rl
+python -I scripts/train/train_ppo_reach.py --task random_reach_20cm \
+  --init-model outputs/rl/ppo_reach/random_20cm_seed2027_continue/final/model.zip \
+  --timesteps 16384 --seed 2027 --eval-every 4096 --eval-episodes 12 \
+  --eval-seed-start 130000 --checkpoint-every 4096 --tensorboard \
+  --run-dir outputs/rl/ppo_reach/random_20cm_seed2027_next
+```
+
+`--init-model` 加载 PPO 的 actor、critic 和 log-std 权重，为本次任务创建优化器、RolloutBuffer 和计数器。配置记录来源模型哈希、来源训练步数和观测变换；`--timesteps` 表示本次新增训练步数。训练完成后，可独立复测 100 个新目标，`--json` 需使用新路径。
+
+```bash
+python -I scripts/evaluate/evaluate_ppo_reach.py \
+  --model outputs/rl/ppo_reach/random_20cm_seed2027_continue/final/model.zip \
+  --episodes 100 --seed-start 140000 --json /tmp/realman_20cm_evaluation.json
+```
+
+## 5 mm 三维随机 Reach 验证
 
 在 `realman_rl` 环境中，`random_reach` 每回合从距 home 3–5 mm 的球壳中采样一个通过逆运动学与安全预检的目标。实际末端进入目标的 1 mm 球内即成功，每回合上限 200 步。
 

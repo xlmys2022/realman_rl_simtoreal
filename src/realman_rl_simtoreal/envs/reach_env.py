@@ -10,7 +10,7 @@ import numpy as np
 
 from ..simulation.control import advance_control_cycle, ControlCycleError, validate_target
 from ..simulation.ee_control import check_motion, MAX_TRANSLATION, MAX_ACTUAL_ORIENTATION_ERROR
-from ..simulation.kinematics import Kinematics, rotation_vector
+from ..simulation.kinematics import Kinematics, IKResult, rotation_vector
 from ..simulation.model import load_model, initialize
 from ..tasks.reach import OBSERVATION_MODES
 from ..tasks.rewards import REWARD_MODES, REWARD_COMPONENT_KEYS, progress_parameters
@@ -36,7 +36,10 @@ class ReachEnv(gym.Env):
                  target_radius=0.005, max_target_attempts=64, reward_mode=None,
                  boundary_mode="terminate", rejection_penalty=1.0,
                  reward_sigma_m=0.005, reward_gamma=0.99,target_offsets=None,
-                 observation_mode="legacy", reward_progress_parameters=None):
+                 observation_mode="legacy", reward_progress_parameters=None,
+                 workspace_radius=MAX_TRANSLATION, max_home_joint_delta=np.deg2rad(5),
+                 target_min_radius=None, synchronized_joint_rate=False,
+                 max_orientation_error=MAX_ACTUAL_ORIENTATION_ERROR, cartesian_rate_limit=False):
         if observation_mode not in OBSERVATION_MODES:
             raise ValueError(f"observation_mode must be one of {OBSERVATION_MODES}")
         self.observation_mode = observation_mode
@@ -70,8 +73,27 @@ class ReachEnv(gym.Env):
         if (not isinstance(max_episode_steps, (int, np.integer))
                 or isinstance(max_episode_steps, bool) or max_episode_steps < 1):
             raise ValueError("max_episode_steps must be a positive integer")
-        if not np.isfinite(target_radius) or not success_threshold < target_radius <= MAX_TRANSLATION:
-            raise ValueError("target_radius must exceed success_threshold and be at most 10 mm")
+        if not np.isfinite(workspace_radius) or workspace_radius <= 0:
+            raise ValueError("workspace_radius must be finite and positive")
+        if not np.isfinite(max_home_joint_delta) or not 0 < max_home_joint_delta <= 2 * np.pi:
+            raise ValueError("max_home_joint_delta must be finite and in (0, 2*pi] radians")
+        if not isinstance(synchronized_joint_rate, bool):
+            raise ValueError("synchronized_joint_rate must be boolean")
+        if not isinstance(cartesian_rate_limit, bool):
+            raise ValueError("cartesian_rate_limit must be boolean")
+        if not np.isfinite(max_orientation_error) or not 0 < max_orientation_error <= np.pi:
+            raise ValueError("max_orientation_error must be finite and in (0, pi] radians")
+        if not np.isfinite(target_radius) or not success_threshold < target_radius <= workspace_radius:
+            raise ValueError("target_radius must exceed success_threshold and fit workspace_radius")
+        minimum = (success_threshold + target_radius) / 2 if target_min_radius is None else target_min_radius
+        if not np.isfinite(minimum) or not success_threshold < minimum <= target_radius:
+            raise ValueError("target_min_radius must exceed success_threshold and fit target_radius")
+        self.workspace_radius = float(workspace_radius)
+        self.max_home_joint_delta = float(max_home_joint_delta)
+        self.target_min_radius = float(minimum)
+        self.synchronized_joint_rate = synchronized_joint_rate
+        self.max_orientation_error = float(max_orientation_error)
+        self.cartesian_rate_limit = cartesian_rate_limit
         if (not isinstance(max_target_attempts, (int, np.integer))
                 or isinstance(max_target_attempts, bool) or not 1 <= max_target_attempts <= 1000):
             raise ValueError("max_target_attempts must be an integer in [1, 1000]")
@@ -104,7 +126,7 @@ class ReachEnv(gym.Env):
                 raise ValueError('Shaped terminal scale is unbounded for this gamma/horizon')
             terminal = np.exp(exponent)*1.01
             self.shaped_terminal_value = float(terminal)
-        self.reward_distance_scale = 2*MAX_TRANSLATION
+        self.reward_distance_scale = 2*self.workspace_radius
         self._goal_sampling = dict(attempts=0, rejections={})
         self.model, self.joint_ids, self.actuator_ids = load_model(gravity_compensation=gravity_compensation)
         dt = float(self.model.opt.timestep)
@@ -128,8 +150,7 @@ class ReachEnv(gym.Env):
             self._goal=self._goal_candidates[0].copy()
         else:
             goal_result = self.kinematics.solve_ik(self._goal, self.kinematics.home_q)
-            check_motion(self.model, self.data, self.joint_ids, self.actuator_ids,
-                         self.kinematics, goal_result, self._goal)
+            self._check_motion(goal_result, self._goal)
         self.action_space = spaces.Box(-1.0, 1.0, shape=(3,), dtype=np.float32)
         # Unbounded spaces keep terminal safety states representable; values are
         # checked for finiteness separately. Bounds are not physical guarantees.
@@ -155,6 +176,42 @@ class ReachEnv(gym.Env):
     def candidate_validation(self):
         return copy.deepcopy(self._candidate_validation)
 
+    def _validate_joint_target(self, target):
+        return validate_target(self.model, self.joint_ids, self.kinematics.home_q, target,
+                               max_home_delta=self.max_home_joint_delta)
+
+    def _check_motion(self, result, target):
+        return check_motion(self.model, self.data, self.joint_ids, self.actuator_ids,
+                            self.kinematics, result, target, max_translation=self.workspace_radius,
+                            max_home_delta=self.max_home_joint_delta)
+
+    def _solve_control_ik(self, target):
+        kin=self.kinematics
+        seed=self._joint_reference
+        result=kin.solve_ik(target,seed,kin.home_rotation)
+        if not self.cartesian_rate_limit or not result.success:
+            return result,target
+        try:
+            self._validate_joint_target(result.q)
+        except ValueError:
+            return result,target
+        maximum=np.deg2rad(10)*self.control_period
+        fraction=min(1.,maximum/max(float(np.max(np.abs(result.q-seed))),1e-30))
+        if fraction==1.:
+            return result,target
+        origin=kin.fk(seed)[0]
+        # Solve each issued pose on the Cartesian path. Limiting a distant
+        # joint solution directly can distort the tool orientation between poses.
+        for _ in range(16):
+            waypoint=origin+fraction*(target-origin)
+            candidate=kin.solve_ik(waypoint,seed,kin.home_rotation,position_tolerance=1e-6)
+            if candidate.success and np.max(np.abs(candidate.q-seed))<=maximum+1e-12:
+                return candidate,waypoint
+            fraction*=.5
+        failure=IKResult(False,None,result.iterations,result.position_error,result.orientation_error,
+                         'No Cartesian IK step satisfies the joint command rate')
+        return failure,target
+
     def _validate_candidates(self):
         self._goal_candidates=self.kinematics.home_position+self._target_offsets
         failures=[]
@@ -165,8 +222,8 @@ class ReachEnv(gym.Env):
                         orientation_error_rad=result.orientation_error,valid=False)
             try:
                 if not result.success or result.q is None:raise ValueError(result.reason or 'IK returned no legal target')
-                validate_target(self.model,self.joint_ids,self.kinematics.home_q,result.q)
-                check_motion(self.model,self.data,self.joint_ids,self.actuator_ids,self.kinematics,result,goal)
+                self._validate_joint_target(result.q)
+                self._check_motion(result, goal)
                 record.update(valid=True,joint_target_rad=result.q.tolist())
             except ValueError as exc:
                 record['reason']=str(exc)
@@ -178,7 +235,7 @@ class ReachEnv(gym.Env):
         if self.observation_mode == "legacy":
             return self._legacy_observation()
         p = self.data.site_xpos[self.kinematics.site_id].copy()
-        if self.observation_mode == "goal_relative_v1":
+        if self.observation_mode in ("goal_relative_v1", "goal_relative_v2", "goal_relative_v3"):
             ordinary = np.concatenate([self._goal - self._command_position, self._command_position - p])
         else:
             # World-frame site Jacobian, with one column per generalized velocity.
@@ -264,7 +321,7 @@ class ReachEnv(gym.Env):
         Only np_random is consumed; all FK/IK and path probes use private data.
         With defaults the shell is 3..5 mm from home, outside the success ball.
         """
-        minimum = (self.success_threshold+self.target_radius)/2
+        minimum = self.target_min_radius
         rejected = Counter()
         for attempt in range(1, self.max_target_attempts+1):
             direction = self.np_random.normal(size=3)
@@ -280,13 +337,12 @@ class ReachEnv(gym.Env):
                 rejected['ik_failure'] += 1
                 continue
             try:
-                validate_target(self.model, self.joint_ids, self.kinematics.home_q, result.q)
+                self._validate_joint_target(result.q)
             except ValueError:
                 rejected['joint_limit'] += 1
                 continue
             try:
-                check_motion(self.model, self.data, self.joint_ids, self.actuator_ids,
-                             self.kinematics, result, target)
+                self._check_motion(result, target)
             except ValueError as exc:
                 rejected['collision' if 'collision' in str(exc).lower() else 'pose_check'] += 1
                 continue
@@ -445,13 +501,14 @@ class ReachEnv(gym.Env):
                 cycle = advance_control_cycle(self.model, self.data, self.joint_ids,
                                               self.actuator_ids, reference,
                                               physics_steps=self.physics_steps,
-                                              max_joint_delta=np.deg2rad(10)*self.control_period)
+                                              max_joint_delta=np.deg2rad(10)*self.control_period,
+                                              synchronized=self.synchronized_joint_rate)
                 if command is not None:
                     self._command_position = command.copy()
                 self._joint_reference = self.data.ctrl[self.actuator_ids].copy()
                 actual_r = self.data.site_xmat[self.kinematics.site_id].reshape(3, 3)
-                if np.linalg.norm(rotation_vector(self.kinematics.home_rotation, actual_r)) > MAX_ACTUAL_ORIENTATION_ERROR:
-                    reason, detail = "orientation_limit", "Actual orientation exceeded the 1 degree envelope"
+                if np.linalg.norm(rotation_vector(self.kinematics.home_rotation, actual_r)) > self.max_orientation_error:
+                    reason, detail = "orientation_limit", f"Actual orientation exceeded the {np.rad2deg(self.max_orientation_error):g} degree envelope"
             except ControlCycleError as exc:
                 reason, detail, cycle = exc.reason, str(exc), exc.summary
         actual_q = self.data.qpos[self.kinematics.qadr]
@@ -461,8 +518,8 @@ class ReachEnv(gym.Env):
         elif (np.any(actual_q < self.kinematics.limits[:, 0]-1e-4)
               or np.any(actual_q > self.kinematics.limits[:, 1]+1e-4)):
             reason, detail = "joint_limit", "Actual joint position exceeded the model limit tolerance"
-        elif np.linalg.norm(target-self.kinematics.home_position) > MAX_TRANSLATION+1e-12:
-            detail = "Outside the 10 mm experimental command envelope"
+        elif np.linalg.norm(target-self.kinematics.home_position) > self.workspace_radius+1e-12:
+            detail = f"Outside the {1000 * self.workspace_radius:g} mm experimental command envelope"
             if self.boundary_mode == 'reject_and_hold':
                 rejected = 'workspace_limit'
             else:
@@ -471,22 +528,23 @@ class ReachEnv(gym.Env):
             reason, detail = "unreachable_target", "Outside the conservative geometric reach bound"
         else:
             try:
-                validate_target(self.model, self.joint_ids, self.kinematics.home_q, self._joint_reference)
+                self._validate_joint_target(self._joint_reference)
             except ValueError as exc:
                 reason, detail = "joint_limit", str(exc)
             if reason is None:
-                result = self.kinematics.solve_ik(target, self._joint_reference,
-                                                self.kinematics.home_rotation)
+                result, control_target = self._solve_control_ik(target)
                 ik_info = dict(success=result.success, iterations=result.iterations,
                                position_error_m=result.position_error, orientation_error_rad=result.orientation_error,
                                reason=result.reason, joint_target_rad=None if result.q is None else result.q.copy())
+                if self.cartesian_rate_limit:
+                    ik_info['control_target_m']=control_target.copy()
                 if not result.success or result.q is None:
                     reason = ("unreachable_target" if result.reason == "Target exceeds conservative reach bound"
                               else "ik_failure")
                     detail = result.reason
                 else:
                     try:
-                        validate_target(self.model, self.joint_ids, self.kinematics.home_q, result.q)
+                        self._validate_joint_target(result.q)
                     except ValueError as exc:
                         legal_model_q = False
                         if self.boundary_mode == 'reject_and_hold':
@@ -498,14 +556,13 @@ class ReachEnv(gym.Env):
                             except (TypeError,ValueError):
                                 pass
                         if (self.boundary_mode == 'reject_and_hold' and legal_model_q
-                                and np.max(np.abs(q-self.kinematics.home_q)) > np.deg2rad(5)+1e-12):
+                                and np.max(np.abs(q-self.kinematics.home_q)) > self.max_home_joint_delta+1e-12):
                             rejected, detail = 'joint_command_limit', str(exc)
                         else:
                             reason, detail = "joint_limit", str(exc)
                     if reason is None and rejected is None:
                         try:
-                            check_motion(self.model, self.data, self.joint_ids, self.actuator_ids,
-                                         self.kinematics, result, target)
+                            self._check_motion(result, control_target)
                         except ValueError as exc:
                             reason = "collision" if "collision" in str(exc).lower() else "ik_failure"
                             detail = str(exc)
@@ -516,7 +573,7 @@ class ReachEnv(gym.Env):
             # last legal Cartesian reference and issued joint ctrl reference;
             # the unchanged controller audits/advances exactly one real cycle.
             try:
-                validate_target(self.model, self.joint_ids, self.kinematics.home_q, self._joint_reference)
+                self._validate_joint_target(self._joint_reference)
             except ValueError as exc:
                 reason, detail = 'joint_limit', str(exc)
             if reason is None:

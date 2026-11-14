@@ -31,13 +31,14 @@ from realman_rl_simtoreal.rl.common.observation import observation_metadata, val
 
 
 def train(folder,*,timesteps=16384,seed=2026,task='fixed_reach',reward_mode=None,
-          action_scale=.00025,eval_every=2048,eval_episodes=None,checkpoint_every=2048,
+          action_scale=None,eval_every=2048,eval_episodes=None,checkpoint_every=2048,
           eval_seed_start=87000,tensorboard=False,n_steps=512,batch_size=64,n_epochs=10,
-          observation_mode=None, reward_progress_parameters=None):
+          observation_mode=None, reward_progress_parameters=None, initial_model=None):
     folder=Path(folder).resolve()
     if folder.exists() and any(folder.iterdir()):raise ValueError('Run directory must be empty; never overwrite')
     environment=environment_config(task,reward_mode,action_scale,observation_mode,reward_progress_parameters)
     reward_mode = environment['reward_mode']
+    action_scale = environment['action_scale']
     candidate_count=len(environment['target_offsets']) if environment['target_mode']=='discrete' else None
     if eval_episodes is None:eval_episodes=candidate_count or 1
     if candidate_count is not None and eval_episodes!=candidate_count:
@@ -51,14 +52,16 @@ def train(folder,*,timesteps=16384,seed=2026,task='fixed_reach',reward_mode=None
     torch.set_num_threads(1);torch.use_deterministic_algorithms(True)
     folder.mkdir(parents=True,exist_ok=True)
     env,transform=training_env(environment,folder/'train.monitor.csv')
-    model,parameters=make_ppo(env,seed,n_steps=n_steps,batch_size=batch_size,n_epochs=n_epochs)
+    model,parameters=make_ppo(env,seed,n_steps=n_steps,batch_size=batch_size,n_epochs=n_epochs,
+                             initial_model=initial_model)
     if environment.get('reward_gamma',model.gamma)!=model.gamma:
         env.close();raise ValueError('PPO and reward shaping gamma must match')
     model.set_logger(configure(str(folder/'sb3'),['csv','json']+(['tensorboard'] if tensorboard else [])))
     rounded_budget=math.ceil(timesteps/n_steps)*n_steps
     raw=env.venv.envs[0].unwrapped
     validate_model_observation(model, transform)
-    config=dict(schema=2,algorithm='PPO',policy='MultiInputPolicy',pure_rl=True,init_mode='scratch',
+    config=dict(schema=2,algorithm='PPO',policy='MultiInputPolicy',pure_rl=True,
+        init_mode='scratch' if initial_model is None else 'ppo_transfer',
         seed=seed,training_task=task,environment=environment,ppo=parameters,
         requested_timesteps=timesteps,planned_complete_rollout_timesteps=rounded_budget,n_envs=1,
         torch_num_threads=1,deterministic_algorithms=True,tensorboard=tensorboard,
@@ -80,6 +83,11 @@ def train(folder,*,timesteps=16384,seed=2026,task='fixed_reach',reward_mode=None
         checkpoint_note='Independent random run. No BC/SAC weights, expert data, replay prefill or implicit resume. '
                         'One complete rollout per learn call, constant learning rate/clip range; policy and env stay alive.')
     config.update(observation_metadata(raw, transform))
+    if initial_model is not None:
+        config['transfer'] = model.reach_transfer_configuration
+        config['checkpoint_note'] = ('PPO policy/value/log-std weights transferred from the recorded model. '
+            'New optimizer, rollout buffer, counters and environment; requested timesteps are additional training steps. '
+            'Observation and action scales follow this run configuration.')
     if reward_mode=='reach_progress_v1':
         # Stock SB3 serializes this plain metadata; no policy/optimizer change.
         model.reach_reward_configuration=dict(mode=reward_mode,parameters=config['reward_parameters'].copy())
@@ -180,10 +188,11 @@ def main():
     p.add_argument('--run-dir',type=Path,required=True)
     p.add_argument('--task',choices=list(TASKS),default='fixed_reach')
     p.add_argument('--observation-mode',choices=OBSERVATION_MODES,
-                   help='Defaults to legacy for fixed_reach and goal_relative_v1 for varying targets')
+                   help='Task defaults: legacy for fixed, goal_relative_v1 for local random, goal_relative_v3 for 20cm')
     p.add_argument('--reward-mode',choices=REWARD_MODES,
-                   help='Defaults to reach_progress_v1 with goal_relative_v1, otherwise reach_shaped_v1')
-    p.add_argument('--action-scale',type=float,default=.00025)
+                   help='Defaults to reach_progress_v1 with goal-relative observations, otherwise reach_shaped_v1')
+    p.add_argument('--action-scale',type=float,help='Metres per axis; defaults to .001 for 20cm, .00025 otherwise')
+    p.add_argument('--init-model',type=Path,help='Initialize actor, critic and log-std from a saved goal-relative PPO')
     p.add_argument('--timesteps',type=int,default=16384);p.add_argument('--seed',type=int,default=2026)
     p.add_argument('--eval-every',type=int,default=2048)
     p.add_argument('--eval-episodes',type=int,help='Default: one for legacy tasks; all distinct candidates for discrete tasks')
@@ -196,7 +205,8 @@ def main():
         result=train(a.run_dir,timesteps=a.timesteps,seed=a.seed,task=a.task,reward_mode=a.reward_mode,
             action_scale=a.action_scale,eval_every=a.eval_every,eval_episodes=a.eval_episodes,
             checkpoint_every=a.checkpoint_every,eval_seed_start=a.eval_seed_start,tensorboard=a.tensorboard,
-            n_steps=a.n_steps,batch_size=a.batch_size,n_epochs=a.n_epochs,observation_mode=a.observation_mode)
+            n_steps=a.n_steps,batch_size=a.batch_size,n_epochs=a.n_epochs,observation_mode=a.observation_mode,
+            initial_model=a.init_model)
         print(f"status={result['status']} requested={result['requested_timesteps']} actual={result['actual_timesteps']} error={result['error']}")
         return 0 if result['status']=='completed' else 1
     except (ValueError,RuntimeError,OSError,ImportError) as exc:

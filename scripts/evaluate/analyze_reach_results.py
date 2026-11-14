@@ -84,6 +84,11 @@ def analyze(document,*,min_samples=10):
     if min_samples<1:raise ValueError('min_samples must be positive')
     episodes=document.get('episodes')
     if not isinstance(episodes,list) or not episodes:raise ValueError('Expected nonempty per-episode evaluation JSON')
+    target_radius=document.get('environment',{}).get('target_radius',.005)
+    wide=target_radius>.01
+    edges=np.linspace(0,target_radius,5) if wide else None
+    radius_labels=[f'{100*a:g}-{100*b:g}cm' for a,b in zip(edges[:-1],edges[1:])] if wide else ['3-4mm','4-5mm']
+    outside='outside_target_radius' if wide else 'outside_3-5mm'
     rows=[];seeds=[]
     for item in episodes:
         e=dict(item)
@@ -96,6 +101,9 @@ def analyze(document,*,min_samples=10):
         e['_offset']=offset.tolist();e['_radius_m']=radius
         e['_octant']=''.join('+' if x>0 else '-' for x in offset) if np.all(offset!=0) else 'on_coordinate_plane'
         e['_radius_bin']='3-4mm' if .003-1e-12<=radius<.004 else '4-5mm' if .004<=radius<=.005+1e-12 else 'outside_3-5mm'
+        if wide:
+            index=int(np.searchsorted(edges[1:-1],radius,side='right'))
+            e['_radius_bin']=radius_labels[index] if 0<=radius<=target_radius+1e-12 else outside
         seeds.append(e['seed']);rows.append(e)
     if len(set(seeds))!=len(seeds) and not all('goal_index' in e for e in rows):
         raise ValueError('Repeated evaluation seeds; cannot count them as independent targets')
@@ -105,7 +113,7 @@ def analyze(document,*,min_samples=10):
              for signs in product('+-',repeat=3)}
     octants['on_coordinate_plane']=group_summary([e for e in rows if e['_octant']=='on_coordinate_plane'],min_samples)
     radii={key:group_summary([e for e in rows if e['_radius_bin']==key],min_samples)
-           for key in ('3-4mm','4-5mm','outside_3-5mm')}
+           for key in (*radius_labels,outside)}
     assert sum(x['samples'] for x in octants.values())==len(rows)
     offsets=np.asarray([e['_offset'] for e in rows]);distances=np.asarray([e['_radius_m'] for e in rows])
     result=dict(schema=1,policy=document.get('policy'),deterministic=document.get('deterministic'),

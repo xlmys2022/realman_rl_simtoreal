@@ -7,7 +7,7 @@ import numpy as np
 
 
 FEATURE_KEYS = ('achieved_goal', 'desired_goal', 'observation')
-OBSERVATION_DIMS = dict(legacy=27, fetch_like_v1=6, goal_relative_v1=6)
+OBSERVATION_DIMS = dict(legacy=27, fetch_like_v1=6, goal_relative_v1=6, goal_relative_v2=6, goal_relative_v3=6)
 
 
 def observation_fields(mode):
@@ -22,7 +22,7 @@ def observation_fields(mode):
     elif mode == 'fetch_like_v1':
         ordinary = ([f'ee_{a}_world_m' for a in 'xyz']
                     + [f'ee_velocity_{a}_world_times_control_period_m' for a in 'xyz'])
-    elif mode == 'goal_relative_v1':
+    elif mode in ('goal_relative_v1', 'goal_relative_v2', 'goal_relative_v3'):
         ordinary = ([f'goal_minus_command_{a}_m' for a in 'xyz']
                     + [f'command_minus_ee_{a}_m' for a in 'xyz'])
     else:
@@ -39,13 +39,16 @@ class ReachTransform:
     Legacy schema=2 is preserved byte-for-byte in generated configuration.
     Fetch-like schema=3 centres ee position on home and scales both XYZ and
     velocity*control_period by .01m. Goal-relative schema=4 expresses both
-    residuals in millimetres. Goal keys stay SI float64 for compute_reward.
+    residuals in millimetres. Schema=5 uses 5mm affine residuals; schema=6
+    applies asinh to millimetre residuals for centimetre-scale tasks.
+    Goal keys stay SI float64 for compute_reward.
     SB3 itself casts network tensors to float32. Nothing is clipped or sent to IK.
     """
     def __init__(self, config):
         self.observation_mode = config.get('observation_mode', 'legacy')
         if ((config.get('schema'), self.observation_mode)
-                not in ((2, 'legacy'), (3, 'fetch_like_v1'), (4, 'goal_relative_v1'))):
+                not in ((2, 'legacy'), (3, 'fetch_like_v1'), (4, 'goal_relative_v1'),
+                        (5, 'goal_relative_v2'), (6, 'goal_relative_v3'))):
             raise ValueError('Unsupported observation transform')
         self.config = copy.deepcopy(config)
         self.offset = {k: np.asarray(v, dtype=np.float64) for k, v in config['offset'].items()}
@@ -70,22 +73,28 @@ class ReachTransform:
                     or np.any(self.offset['observation'][3:] != 0)
                     or np.any(self.scale['observation'] != .01)):
                 raise ValueError('Invalid fetch_like_v1 fixed normalization/motion units')
-        if self.observation_mode == 'goal_relative_v1':
-            if (config.get('method') != 'fixed_affine_observation_keep_si_goals'
+        if self.observation_mode.startswith('goal_relative_'):
+            position_scale = .005 if self.observation_mode == 'goal_relative_v2' else .001
+            method = ('asinh_observation_keep_si_goals' if self.observation_mode == 'goal_relative_v3'
+                      else 'fixed_affine_observation_keep_si_goals')
+            if (config.get('method') != method
                     or config.get('clipping') is not False or config.get('reward_normalization') is not False
-                    or np.any(self.offset['observation'] != 0) or np.any(self.scale['observation'] != .001)):
-                raise ValueError('goal_relative_v1 uses zero offsets and millimetre-scale relative features')
+                    or np.any(self.offset['observation'] != 0) or np.any(self.scale['observation'] != position_scale)):
+                raise ValueError('Invalid fixed goal-relative observation scale')
 
     @classmethod
     def from_env(cls, env):
         q, p = env.kinematics.home_q, env.kinematics.home_position
-        if env.observation_mode == 'goal_relative_v1':
-            return cls(dict(schema=4, observation_mode=env.observation_mode,
-                method='fixed_affine_observation_keep_si_goals',
+        if env.observation_mode.startswith('goal_relative_'):
+            position_scale = .005 if env.observation_mode == 'goal_relative_v2' else .001
+            return cls(dict(schema={'goal_relative_v1':4,'goal_relative_v2':5,'goal_relative_v3':6}[env.observation_mode],
+                observation_mode=env.observation_mode,
+                method='asinh_observation_keep_si_goals' if env.observation_mode == 'goal_relative_v3'
+                       else 'fixed_affine_observation_keep_si_goals',
                 output_dtype=dict(observation='float32', achieved_goal='float64', desired_goal='float64'),
                 clipping=False, reward_normalization=False,
                 offset=dict(observation=[0.]*6, achieved_goal=[0.]*3, desired_goal=[0.]*3),
-                scale=dict(observation=[.001]*6, achieved_goal=[1.]*3, desired_goal=[1.]*3)))
+                scale=dict(observation=[position_scale]*6, achieved_goal=[1.]*3, desired_goal=[1.]*3)))
         if env.observation_mode == 'fetch_like_v1':
             return cls(dict(schema=3, observation_mode='fetch_like_v1',
                 method='fixed_affine_observation_keep_si_goals',
@@ -118,6 +127,9 @@ class ReachTransform:
             batch_shape = value.shape[:-1]
         result = {k: ((np.asarray(observation[k])-self.offset[k])/self.scale[k]).astype(self.config['output_dtype'][k])
                   for k in self.offset}
+        if self.observation_mode == 'goal_relative_v3':
+            result['observation'] = np.arcsinh(np.asarray(observation['observation'],dtype=np.float64)
+                                              /self.scale['observation']).astype(np.float32)
         if not all(np.isfinite(x).all() for x in result.values()):
             raise ValueError('Non-finite policy input')
         return result
