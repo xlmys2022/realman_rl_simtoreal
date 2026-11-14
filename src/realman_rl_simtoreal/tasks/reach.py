@@ -2,6 +2,7 @@
 from .rewards import progress_parameters
 
 
+OBSERVATION_MODES = ('legacy', 'fetch_like_v1', 'goal_relative_v1')
 ENV_CONFIG = dict(target_mode='random', reward_mode='safe_dense', action_scale=.001,
                   control_period=.05, max_episode_steps=200, success_threshold=.001,
                   gravity_compensation=True)
@@ -28,7 +29,7 @@ def task_environment(task, base, *, reward_mode=None, action_scale=None, observa
     if reward_mode is not None:result['reward_mode']=reward_mode
     if action_scale is not None:result['action_scale']=action_scale
     if observation_mode is not None:
-        if observation_mode not in ('legacy', 'fetch_like_v1'):
+        if observation_mode not in OBSERVATION_MODES:
             raise ValueError('Unknown observation_mode: '+str(observation_mode))
         result['observation_mode']=observation_mode
     if result['reward_mode']=='reach_shaped_v1':

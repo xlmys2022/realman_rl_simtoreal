@@ -7,7 +7,7 @@ import numpy as np
 
 
 FEATURE_KEYS = ('achieved_goal', 'desired_goal', 'observation')
-OBSERVATION_DIMS = dict(legacy=27, fetch_like_v1=6)
+OBSERVATION_DIMS = dict(legacy=27, fetch_like_v1=6, goal_relative_v1=6)
 
 
 def observation_fields(mode):
@@ -22,6 +22,9 @@ def observation_fields(mode):
     elif mode == 'fetch_like_v1':
         ordinary = ([f'ee_{a}_world_m' for a in 'xyz']
                     + [f'ee_velocity_{a}_world_times_control_period_m' for a in 'xyz'])
+    elif mode == 'goal_relative_v1':
+        ordinary = ([f'goal_minus_command_{a}_m' for a in 'xyz']
+                    + [f'command_minus_ee_{a}_m' for a in 'xyz'])
     else:
         raise ValueError('Unknown observation_mode: '+str(mode))
     return dict(observation=ordinary, achieved_goal=[f'ee_{a}_world_m' for a in 'xyz'],
@@ -35,13 +38,14 @@ class ReachTransform:
     Angles use original 5deg local command envelope, velocity uses 30deg/s.
     Legacy schema=2 is preserved byte-for-byte in generated configuration.
     Fetch-like schema=3 centres ee position on home and scales both XYZ and
-    velocity*control_period by .01m. Goal keys stay SI float64 for compute_reward.
+    velocity*control_period by .01m. Goal-relative schema=4 expresses both
+    residuals in millimetres. Goal keys stay SI float64 for compute_reward.
     SB3 itself casts network tensors to float32. Nothing is clipped or sent to IK.
     """
     def __init__(self, config):
         self.observation_mode = config.get('observation_mode', 'legacy')
         if ((config.get('schema'), self.observation_mode)
-                not in ((2, 'legacy'), (3, 'fetch_like_v1'))):
+                not in ((2, 'legacy'), (3, 'fetch_like_v1'), (4, 'goal_relative_v1'))):
             raise ValueError('Unsupported observation transform')
         self.config = copy.deepcopy(config)
         self.offset = {k: np.asarray(v, dtype=np.float64) for k, v in config['offset'].items()}
@@ -66,10 +70,22 @@ class ReachTransform:
                     or np.any(self.offset['observation'][3:] != 0)
                     or np.any(self.scale['observation'] != .01)):
                 raise ValueError('Invalid fetch_like_v1 fixed normalization/motion units')
+        if self.observation_mode == 'goal_relative_v1':
+            if (config.get('method') != 'fixed_affine_observation_keep_si_goals'
+                    or config.get('clipping') is not False or config.get('reward_normalization') is not False
+                    or np.any(self.offset['observation'] != 0) or np.any(self.scale['observation'] != .001)):
+                raise ValueError('goal_relative_v1 uses zero offsets and millimetre-scale relative features')
 
     @classmethod
     def from_env(cls, env):
         q, p = env.kinematics.home_q, env.kinematics.home_position
+        if env.observation_mode == 'goal_relative_v1':
+            return cls(dict(schema=4, observation_mode=env.observation_mode,
+                method='fixed_affine_observation_keep_si_goals',
+                output_dtype=dict(observation='float32', achieved_goal='float64', desired_goal='float64'),
+                clipping=False, reward_normalization=False,
+                offset=dict(observation=[0.]*6, achieved_goal=[0.]*3, desired_goal=[0.]*3),
+                scale=dict(observation=[.001]*6, achieved_goal=[1.]*3, desired_goal=[1.]*3)))
         if env.observation_mode == 'fetch_like_v1':
             return cls(dict(schema=3, observation_mode='fetch_like_v1',
                 method='fixed_affine_observation_keep_si_goals',
@@ -133,7 +149,7 @@ def features(encoded):
             or ordinary.shape[-1] not in OBSERVATION_DIMS.values()
             or any(np.asarray(encoded[k]).shape != ordinary.shape[:-1]+(3,)
                    for k in ('achieved_goal', 'desired_goal'))):
-        raise ValueError('Expected a complete legacy (33) or fetch_like_v1 (12) Dict')
+        raise ValueError('Expected a complete Reach observation Dict with 33 or 12 features')
     result = np.concatenate([encoded[k] for k in FEATURE_KEYS], axis=-1).astype(np.float32)
     if not np.isfinite(result).all():
         raise ValueError('Expected finite processed Dict features')
@@ -158,6 +174,11 @@ def validate_model_observation(model, transform):
     space = model.observation_space
     if not isinstance(space, spaces.Dict) or tuple(space.spaces) != FEATURE_KEYS:
         raise ValueError('Model observation Dict field order differs')
+    # Older checkpoints predate goal_relative_v1. Their only six-component
+    # ordinary observation was fetch_like_v1. New PPO zips store the mode.
+    historical_mode = 'fetch_like_v1' if space['observation'].shape == (6,) else 'legacy'
+    if getattr(model, 'reach_observation_mode', historical_mode) != transform.observation_mode:
+        raise ValueError('Model observation_space and transform observation_mode mismatch')
     for key in FEATURE_KEYS:
         box = space[key]
         if (not isinstance(box, spaces.Box) or box.shape != transform.offset[key].shape
@@ -206,4 +227,4 @@ def require_legacy(environment, consumer):
     """Fail before a legacy-only consumer reads fixed observation indices."""
     if environment.get('observation_mode', 'legacy') != 'legacy':
         raise ValueError(f"{consumer} supports only observation_mode='legacy' (33 dimensions); "
-                         "fetch_like_v1 is supported by the PPO training/evaluation path")
+                         "use the PPO training/evaluation path for other modes")

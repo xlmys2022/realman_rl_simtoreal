@@ -10,7 +10,32 @@
 - 独立 BC 示范采集、训练和推理；保留历史 BC→SAC Actor 初始化、边界对照与 Q/TD 诊断。
 - 自动化回归测试、环境探针及只读训练曲线绘图。
 
-## 当前状态
+## 运行三维随机 Reach
+
+在 `realman_rl` 环境中，`random_reach` 每回合从距 home 3–5 mm 的球壳中采样一个通过逆运动学与安全预检的目标。实际末端进入目标的 1 mm 球内即成功，每回合上限 200 步。
+
+种子 2026 的 PPO 从头训练 16384 步后，在旧模型的同一组 100 个目标（92000–92099）上从 1/100 提高到 100/100，另一组新目标（110000–110099）也达到 100/100。两组合计平均 12.44 步，终止时平均实际误差 0.857 mm，零超时、零安全终止。冻结同一策略单独复测 ±X 5 mm，两个方向均为 18 步。以上为 MuJoCo 仿真结果。
+
+用工作区中已训练的模型复测第一组目标：
+
+```bash
+conda activate realman_rl
+python -I scripts/evaluate/evaluate_ppo_reach.py \
+  --model outputs/rl/ppo_reach/random_goal_relative_seed2026/final/model.zip \
+  --episodes 100 --seed-start 92000 --json /tmp/realman_random_reach_eval.json
+```
+
+从干净检出重新训练可执行以下命令。训练和评估均须使用新的输出位置。评估自己训练的模型时，将上面的 `--model` 换成对应目录下的 `final/model.zip`。
+
+```bash
+python -I scripts/train/train_ppo_reach.py --task random_reach \
+  --timesteps 16384 --seed 2026 --eval-every 4096 --eval-episodes 8 \
+  --checkpoint-every 4096 --run-dir outputs/rl/ppo_reach/random_goal_relative_retrain
+```
+
+变目标 PPO 默认使用 `goal_relative_v1` 观测与 `reach_progress_v1` 奖励。策略每步获得两个世界坐标系下的三维差值，即「目标位置 − 已发命令位置」和「已发命令位置 − 实际末端位置」。策略输入按 1 mm 缩放，GoalEnv 的目标字段、逆运动学和奖励计算使用的位置均以米为单位。训练从随机权重开始，动作由 PPO 产生。评估自动加载模型保存的观测和奖励配置。
+
+## 历史实验
 
 用户已将12维 `fetch_like_v1` 随机Reach从头训练到131072步：完成256个Rollout，独立100目标成功1%、99次超时、0次安全失败，平均最终距离4.571mm。固定20目标开发集从32768步起连续13个检查点均0成功；99次超时末端集中在Home相对位移约[+0.61,-1.20,+2.08]mm，首动作仍固定偏向-X,-Y,+Z。实际Actor/Critic输入均为12维，增加预算尚未带来可靠的目标条件Reach。训练曲线、落点图、方向探针及预算判断见[Fetch观测验证报告](docs/validation/REACH_FETCH_OBSERVATION_VALIDATION.md)。
 
@@ -90,7 +115,7 @@ PPO 保留官方 512 步 Rollout、64 样本 minibatch、10 个 epoch；评估�
 conda activate realman_rl
 cd /home/mr-beaver/Documents/robot/realman_rl_simtoreal
 python -I scripts/train/train_ppo_reach.py \
-  --task random_reach --reward-mode reach_shaped_v1 --action-scale 0.00025 \
+  --task random_reach --observation-mode legacy --reward-mode reach_shaped_v1 --action-scale 0.00025 \
   --timesteps 16384 --seed 2026 --run-dir outputs/rl/ppo_reach/random_seed2026_pilot_04f2 \
   --eval-every 4096 --eval-episodes 20 --eval-seed-start 87000 \
   --checkpoint-every 4096 --tensorboard
@@ -121,7 +146,7 @@ python -I scripts/evaluate/analyze_reach_results.py \
 conda activate realman_rl
 cd /home/mr-beaver/Documents/robot/realman_rl_simtoreal
 python -I scripts/train/train_ppo_reach.py \
-  --task axis_pair_reach --reward-mode reach_shaped_v1 --action-scale 0.00025 \
+  --task axis_pair_reach --observation-mode legacy --reward-mode reach_shaped_v1 --action-scale 0.00025 \
   --timesteps 16384 --seed 2026 --run-dir outputs/rl/ppo_reach/axis_pair_seed2026_pilot_04f3 \
   --eval-every 2048 --eval-episodes 2 --eval-seed-start 87000 \
   --checkpoint-every 2048 --tensorboard
@@ -178,7 +203,7 @@ python -I scripts/train/train_ppo_reach.py \
 
 ## Reach 观测模式
 
-默认 `legacy` 完整保留原 `27+3+3=33` 维观测及固定预处理。PPO 可显式选择
+原始 ReachEnv 和固定目标 PPO 默认使用 `legacy` 的 `27+3+3=33` 维观测及固定预处理。PPO 可显式选择
 `--observation-mode fetch_like_v1`：普通 observation 为实际末端世界位置和
 `末端世界线速度 × control_period`，各 3 维；加上 achieved_goal 和 desired_goal，
 官方 MultiInputPolicy 实际输入共 12 维。运动特征单位为米，包装器将普通位置相对

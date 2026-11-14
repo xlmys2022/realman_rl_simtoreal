@@ -10,7 +10,7 @@ from stable_baselines3 import PPO
 from stable_baselines3.common.callbacks import BaseCallback
 
 from .common.metrics import MotionStats
-from ..tasks.reach import task_environment, ENV_CONFIG
+from ..tasks.reach import task_environment, ENV_CONFIG, OBSERVATION_MODES
 from ..tasks.rewards import REWARD_COMPONENT_KEYS, validate_checkpoint_reward
 from .common.observation import checkpoint_transform, validate_model_observation
 from .common.evaluation import evaluate, summarize_episodes
@@ -24,10 +24,14 @@ TRAIN_METRICS=('policy_gradient_loss','value_loss','entropy_loss','approx_kl','c
                'explained_variance','std','loss','learning_rate','clip_range')
 
 
-def environment_config(task='fixed_reach',reward_mode='reach_shaped_v1',action_scale=.00025,
-                       observation_mode='legacy', reward_progress_parameters=None):
-    if observation_mode not in ('legacy', 'fetch_like_v1'):
+def environment_config(task='fixed_reach',reward_mode=None,action_scale=.00025,
+                       observation_mode=None, reward_progress_parameters=None):
+    if observation_mode is None:
+        observation_mode = 'legacy' if task == 'fixed_reach' else 'goal_relative_v1'
+    if observation_mode not in OBSERVATION_MODES:
         raise ValueError('Unknown observation_mode: '+str(observation_mode))
+    if reward_mode is None:
+        reward_mode = 'reach_progress_v1' if observation_mode == 'goal_relative_v1' else 'reach_shaped_v1'
     return task_environment(task,dict(ENV_CONFIG,boundary_mode='terminate'),
                             reward_mode=reward_mode,action_scale=action_scale,
                             observation_mode=None if observation_mode=='legacy' else observation_mode,
@@ -40,7 +44,9 @@ def make_ppo(env,seed,*,n_steps=512,batch_size=64,n_epochs=10):
     if env.num_envs!=1:raise ValueError('This experiment currently audits one environment')
     parameters=copy.deepcopy(PPO_CONFIG)
     parameters.update(n_steps=n_steps,batch_size=batch_size,n_epochs=n_epochs)
-    return PPO('MultiInputPolicy',env,seed=seed,verbose=0,**parameters),parameters
+    model = PPO('MultiInputPolicy',env,seed=seed,verbose=0,**parameters)
+    model.reach_observation_mode = env.get_attr('observation_mode')[0]
+    return model, parameters
 
 
 def parameter_hashes(model):

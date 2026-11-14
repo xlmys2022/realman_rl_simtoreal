@@ -12,10 +12,8 @@ from ..simulation.control import advance_control_cycle, ControlCycleError, valid
 from ..simulation.ee_control import check_motion, MAX_TRANSLATION, MAX_ACTUAL_ORIENTATION_ERROR
 from ..simulation.kinematics import Kinematics, rotation_vector
 from ..simulation.model import load_model, initialize
+from ..tasks.reach import OBSERVATION_MODES
 from ..tasks.rewards import REWARD_MODES, REWARD_COMPONENT_KEYS, progress_parameters
-
-
-OBSERVATION_MODES = ("legacy", "fetch_like_v1")
 
 
 class ReachEnv(gym.Env):
@@ -25,7 +23,8 @@ class ReachEnv(gym.Env):
     legacy observation: [q(6), qvel(6), ee(3), goal-ee(3), command_xyz(3), ctrl(6)].
     fetch_like_v1 observation: [ee_world_m(3), ee_world_velocity * control_period(3)].
     The latter motion feature is displacement per control period in metres,
-    not unscaled m/s. Both raw observation modes are float64.
+    not unscaled m/s. goal_relative_v1 observation: [goal-command, command-ee]
+    in world-frame metres. All raw observation modes are float64.
     Goal fields are world XYZ metres. No SDK, scripts or Viewer are imported.
     """
 
@@ -178,16 +177,16 @@ class ReachEnv(gym.Env):
     def _observation(self):
         if self.observation_mode == "legacy":
             return self._legacy_observation()
-        # MuJoCo's positional site Jacobian is world-frame, with one column
-        # per generalized velocity (nv), not per qpos coordinate (nq).
-        # Use the full qvel vector; no assumption about arm DOF contiguity.
-        # This query neither advances time nor modifies simulation state.
         p = self.data.site_xpos[self.kinematics.site_id].copy()
-        jacp = np.empty((3, self.model.nv), dtype=np.float64)
-        mujoco.mj_jacSite(self.model, self.data, jacp, None, self.kinematics.site_id)
-        displacement = (jacp @ self.data.qvel) * self.control_period
-        result = dict(observation=np.concatenate([p, displacement]),
-                      achieved_goal=p, desired_goal=self._goal.copy())
+        if self.observation_mode == "goal_relative_v1":
+            ordinary = np.concatenate([self._goal - self._command_position, self._command_position - p])
+        else:
+            # World-frame site Jacobian, with one column per generalized velocity.
+            jacp = np.empty((3, self.model.nv), dtype=np.float64)
+            mujoco.mj_jacSite(self.model, self.data, jacp, None, self.kinematics.site_id)
+            displacement = (jacp @ self.data.qvel) * self.control_period
+            ordinary = np.concatenate([p, displacement])
+        result = dict(observation=ordinary, achieved_goal=p, desired_goal=self._goal.copy())
         if not all(np.isfinite(v).all() for v in result.values()):
             raise ValueError("Non-finite environment observation")
         return result

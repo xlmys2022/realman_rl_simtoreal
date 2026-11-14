@@ -143,7 +143,7 @@ def step(env,a):
 mujoco.mj_step=mj_step;ReachEnv.step=step
 spec=importlib.util.spec_from_file_location('axis_driver',PROJECT_ROOT/'scripts/train/train_ppo_reach.py')
 driver=importlib.util.module_from_spec(spec);spec.loader.exec_module(driver)
-p=Path(sys.argv[1]);s=driver.train(p,timesteps=512,task='axis_pair_reach',seed=2026,
+p=Path(sys.argv[1]);s=driver.train(p,timesteps=512,task='axis_pair_reach',seed=2026,observation_mode='legacy',
  eval_every=512,checkpoint_every=512,tensorboard=importlib.util.find_spec('tensorboard') is not None)
 assert s['status']=='completed',s['error']
 assert s['completed_rollout_updates']==1 and s['actual_timesteps']==512

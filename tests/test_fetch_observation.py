@@ -47,7 +47,7 @@ class ObservationPhysicsTests(unittest.TestCase):
     def test_a_shapes_spaces_defaults_and_all_task_distributions(self):
         for task in ('fixed_reach', 'axis_pair_reach', 'easy_random_reach', 'random_reach'):
             base = task_environment(task, ENV_CONFIG)
-            for mode, size in [('legacy', 27), ('fetch_like_v1', 6)]:
+            for mode, size in [('legacy', 27), ('fetch_like_v1', 6), ('goal_relative_v1', 6)]:
                 with self.subTest(task=task, mode=mode), ReachEnv(**base, observation_mode=mode) as env:
                     obs, _ = env.reset(seed=2026)
                     self.assertEqual(set(obs), set(FEATURE_KEYS))
@@ -61,7 +61,7 @@ class ObservationPhysicsTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'observation_mode'):ReachEnv(observation_mode='fetch')
 
     def test_a_official_gym_checker_raw_and_wrapped(self):
-        for mode in ('legacy', 'fetch_like_v1'):
+        for mode in ('legacy', 'fetch_like_v1', 'goal_relative_v1'):
             with ReachEnv(observation_mode=mode) as env:check_env(env, skip_render_check=True)
             with ScaledReachObservation(ReachEnv(observation_mode=mode)) as env:
                 obs, _ = env.reset(seed=2026)
@@ -174,6 +174,22 @@ class ObservationPhysicsTests(unittest.TestCase):
             encoded_b = features(ReachTransform.from_env(env).encode(b))
             self.assertEqual(np.flatnonzero(encoded_a != encoded_b).tolist(), [3])
 
+    def test_goal_relative_tracks_command_and_measured_lag_in_millimetres(self):
+        config = task_environment('axis_pair_reach', ENV_CONFIG, observation_mode='goal_relative_v1')
+        with ScaledReachObservation(ReachEnv(**config)) as env:
+            for index, sign in enumerate([1, -1]):
+                obs, _ = env.reset(options={'goal_index': index})
+                np.testing.assert_array_equal(obs['observation'], [5 * sign, 0, 0, 0, 0, 0])
+                obs, reward, terminated, truncated, info = env.step([.25 * sign, -.1, .1])
+                self.assertFalse(terminated or truncated)
+                command = info['command_position_m']
+                ee = env.unwrapped.data.site_xpos[env.unwrapped.kinematics.site_id]
+                np.testing.assert_array_equal(obs['achieved_goal'], ee)
+                np.testing.assert_allclose(obs['observation'][:3], (obs['desired_goal'] - command) * 1000)
+                np.testing.assert_allclose(obs['observation'][3:], (command - ee) * 1000)
+                self.assertGreater(np.linalg.norm(obs['observation'][3:]), .05)
+                self.assertEqual(reward, env.compute_reward(obs['achieved_goal'], obs['desired_goal'], info))
+
     def compare_physics(self, config, actions):
         with ReachEnv(**config, observation_mode='legacy') as old, \
              ReachEnv(**config, observation_mode='fetch_like_v1') as new:
@@ -219,6 +235,16 @@ class ObservationPhysicsTests(unittest.TestCase):
 
 @unittest.skipUnless(importlib.util.find_spec('stable_baselines3'), 'Optional SB3 absent')
 class ObservationPolicyTests(unittest.TestCase):
+    def test_ppo_defaults_to_relative_feedback_for_varying_targets(self):
+        from realman_rl_simtoreal.rl.ppo import environment_config
+        for task in ('axis_pair_reach', 'easy_random_reach', 'random_reach'):
+            config = environment_config(task)
+            self.assertEqual(config['observation_mode'], 'goal_relative_v1')
+            self.assertEqual(config['reward_mode'], 'reach_progress_v1')
+        self.assertEqual(environment_config()['reward_mode'], 'reach_shaped_v1')
+        old = environment_config('random_reach', observation_mode='fetch_like_v1')
+        self.assertEqual(old['reward_mode'], 'reach_shaped_v1')
+
     def test_c_actual_stock_combined_extractor_actor_critic_and_valid_action(self):
         import torch
         from torch import nn
@@ -227,7 +253,7 @@ class ObservationPolicyTests(unittest.TestCase):
         from realman_rl_simtoreal.rl.common.env_factory import training_env
         from realman_rl_simtoreal.rl.ppo import make_ppo, PPO_CONFIG
         torch.set_num_threads(1)
-        for mode, size in [('legacy', 33), ('fetch_like_v1', 12)]:
+        for mode, size in [('legacy', 33), ('fetch_like_v1', 12), ('goal_relative_v1', 12)]:
             env, transform = training_env(dict(observation_mode=mode))
             self.addCleanup(env.close)
             model, parameters = make_ppo(env, 2026)
@@ -282,6 +308,30 @@ class ObservationPolicyTests(unittest.TestCase):
             broken = copy.deepcopy(config);broken['environment']['control_period'] = .1
             with self.assertRaisesRegex(ValueError, 'control_period'):checkpoint_transform(broken)
             with self.assertRaises(ValueError):checkpoint_transform(config, observation_mode='legacy')
+
+    def test_same_size_fetch_and_relative_models_cannot_exchange_configs(self):
+        from realman_rl_simtoreal.rl.common.env_factory import training_env
+        from realman_rl_simtoreal.rl.ppo import make_ppo, load_ppo, save_ppo_checkpoint
+        env, transform = training_env(dict(observation_mode='goal_relative_v1'))
+        self.addCleanup(env.close)
+        model, _ = make_ppo(env, 2026)
+        raw = env.venv.envs[0].unwrapped
+        def config(raw, transform):
+            return dict(schema=2, algorithm='PPO', torch_num_threads=1,
+                        environment=dict(observation_mode=raw.observation_mode),
+                        observation_transform=transform.config, **observation_metadata(raw, transform))
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder)
+            save_ppo_checkpoint(model, path, config(raw, transform), 0, completed_stage=False)
+            loaded, saved, _ = load_ppo(path/'model.zip')
+            self.assertEqual(saved.observation_mode, 'goal_relative_v1')
+            obs = env.reset()
+            np.testing.assert_array_equal(loaded.predict(obs, deterministic=True)[0],
+                                          model.predict(obs, deterministic=True)[0])
+            with ReachEnv(observation_mode='fetch_like_v1') as fetch:
+                (path/'config.json').write_text(json.dumps(config(fetch, ReachTransform.from_env(fetch))))
+            with self.assertRaisesRegex(ValueError, 'observation_mode mismatch'):
+                load_ppo(path/'model.zip')
 
     def test_legacy_only_consumers_refuse_new_mode_clearly(self):
         from realman_rl_simtoreal.rl.common.baselines import rule_action
