@@ -113,7 +113,7 @@ class Gripper:
         """Read actual pad sites using independent calculation data (no live cache writes)."""
         require(np.isfinite(self.data.qpos).all(), 'Non-finite gripper calculation state')
         self._probe.qpos[:] = self.data.qpos
-        mujoco.mj_forward(self.model, self._probe)
+        mujoco.mj_kinematics(self.model, self._probe)
         return self._probe.site_xpos[self.left].copy(), self._probe.site_xpos[self.right].copy()
 
     def get_width(self):
@@ -143,11 +143,14 @@ class Gripper:
         error = float(np.max(np.abs(q-self.signs*q[0])))
         self.max_mimic_error = max(self.max_mimic_error, error)
         require(error <= .001, 'Gripper mimic constraint drift exceeds .001 rad')
-        for contact in d.contact:
-            self.min_contact_distance = min(self.min_contact_distance, float(contact.dist))
+        if d.ncon:
+            distances=d.contact.dist
+            self.min_contact_distance=min(self.min_contact_distance,float(distances.min()))
             if self.contact_policy is None:
-                require(np.isfinite(contact.dist) and contact.dist >= -.0001,
-                        f'Unexpected collision: {tuple(m.geom(int(i)).name for i in contact.geom)}, {contact.dist:.6g}m')
+                bad=np.flatnonzero(~np.isfinite(distances)|(distances < -.0001))
+                if len(bad):
+                    contact=d.contact[int(bad[0])]
+                    raise ValueError(f'Unexpected collision: {tuple(m.geom(int(i)).name for i in contact.geom)}, {contact.dist:.6g}m')
         if self.contact_policy is not None:
             self.contact_policy.check(d)
 

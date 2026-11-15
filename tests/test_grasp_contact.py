@@ -143,6 +143,28 @@ class ContactModelTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'left_pad_target'):
             self.p.check(d)
 
+    def test_native_contact_views_enforce_every_category_and_finite_geometry(self):
+        control.advance_synchronized_cycle(self.m,self.d,self.j,self.a,self.d.ctrl[self.a].copy(),
+                                           self.g,physics_steps=1)
+        self.assertGreater(self.d.ncon,0)
+        c=self.d.contact[0]
+        old_geom,old_distance,old_position=c.geom.copy(),float(c.dist),c.pos.copy()
+        try:
+            cases=[('left_pad_0','target_box',.0003,'left_pad_target'),
+                   ('support_top','target_box',.0002,'target_support'),
+                   ('support_top','4C2_Link5_collision',.0001,'robot_support'),
+                   ('4C2_Link5_collision','4C2_Link6_collision',.0001,'robot_internal')]
+            for one,two,limit,label in cases:
+                c.geom[:]=[self.m.geom(one).id,self.m.geom(two).id]
+                c.dist=-limit+1e-8
+                self.p.check(self.d)
+                c.dist=-limit-1e-8
+                with self.subTest(category=label),self.assertRaisesRegex(ValueError,label):self.p.check(self.d)
+            c.dist=0.;c.pos[0]=np.nan
+            with self.assertRaisesRegex(ValueError,'Non-finite contact geometry'):self.p.check(self.d)
+        finally:
+            c.geom[:]=old_geom;c.dist=old_distance;c.pos[:]=old_position
+
     def test_support_contact_has_own_bound(self):
         c = self.fake_contact('support_top', 'target_box', -.00015)
         d = SimpleNamespace(qvel=self.d.qvel.copy(), contact=[c])

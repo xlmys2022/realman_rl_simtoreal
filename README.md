@@ -7,8 +7,57 @@
 - 六轴动力学、关节与末端控制、FK / DLS IK、厂家离线 FK / IK 对照。
 - EG2-4C2 夹爪模型、同步控制和接触 / 抬升 / 释放案例。
 - 固定及随机目标 ReachEnv，PPO、SAC 训练、独立评估、checkpoint 和 TensorBoard。
+- 四维 PPO 局部夹取与抬升训练、课程 checkpoint 和独立评估。
 - 独立 BC 示范采集、训练和推理；保留历史 BC→SAC Actor 初始化、边界对照与 Q/TD 诊断。
 - 自动化回归测试、环境探针及只读训练曲线绘图。
+
+## PPO 夹取与抬升学习
+
+训练入口为 `scripts/train/train_ppo_grasp_lift.py`，独立评估入口为 `scripts/evaluate/evaluate_ppo_grasp_lift.py`。PPO 的 MLP 同时输出 XYZ 位移和夹爪开口四个动作，使用 41 维状态的固定毫米尺度变换；动作由网络独立产生。训练使用实际接触、目标横向误差、离台高度、稳定保持与成功奖励，固定奖励缩放为 0.01。开口奖励在远处鼓励保留接近空间、在近处鼓励夹紧，避免过早闭合；它只改变奖励。成功判定沿用物理环境，完整任务仍要求离台至少 28 mm、双侧夹持且稳定保持 2 秒。
+
+课程包含张开起点下的近距离夹持、小距离接近、抬升精度、更高抬升和完整接近。课程 reset 中物体始终由支撑面承托；夹取和离台由 PPO 动作经执行器产生。起始开口、接近距离、高度、容差与保持时间均保存在 checkpoint 配置中，独立评估可用 `--stage full` 强制验证 20 mm 接近、60 mm 初始开口、30 mm 抬升和 2 秒保持。
+
+**当前通过独立测试的 PPO 模型使用 12 mm 起点距离、60 mm 初始开口、30 mm 抬升目标和 2 秒保持。** 物体为 20 mm、10 g 方块，位置在支撑面内随机偏移最多 2 mm。冻结模型后，独立种子 270000–270019 成功 **20/20**，平均离台间隙 33.344 mm、世界竖直抬升 29.136 mm、平均 245.1 步，最短连续保持 2.000 秒，零安全终止。评估中的网络参数、优化器和训练计数均保持不变。模型见 [checkpoint](outputs/rl/ppo_grasp/pick_lift_12mm_seed2027/final/model.zip)，数据见 [逐回合评估](outputs/rl/ppo_grasp/pick_lift_12mm_seed2027/heldout_270000_270019.json)，实际 PPO 控制见 [动图](outputs/rl/ppo_grasp/pick_lift_12mm_seed2027/learned_pick_lift.gif)。
+
+选中模型的来源链共包含 86016 步 PPO 更新，actor 和 critic 在每个选中阶段都有更新；模型来源、完整更新状态、网络参数、当前训练源码和仿真资源哈希核对通过，见 [核对记录](outputs/rl/ppo_grasp/pick_lift_12mm_seed2027/verification.json)及[开发集选择记录](outputs/rl/ppo_grasp/pick_lift_12mm_seed2027/selection.json)。这些步数只统计实际继承的 checkpoint，不包含未选中的探索试验。
+
+当前全套 **396 项回归测试通过**，涵盖四维 PPO 的真实更新、模型重载、奖励与固定观测变换、课程 reset、迁移参数变换、只读独立推理及碰撞保护；[测试结果](outputs/rl/ppo_grasp/pick_lift_12mm_seed2027/regression.json)和[完整日志](outputs/rl/ppo_grasp/pick_lift_12mm_seed2027/regression.log)已保存。
+
+**原默认 20 mm 起点尚未被 PPO 解决。** 对该冻结模型强制 `--stage full`，开发集 240000–240001 为 0/2，均因指爪与支撑台碰撞保护终止；[失败原始数据](outputs/rl/ppo_grasp/pick_lift_12mm_seed2027/development_full_240000_240001.json)已保留。下文分阶段控制器的 20/20 成绩属于另一种控制方式，不能作为 PPO 的完整任务成绩。
+
+复测已训练模型时省略 `--stage`，由 checkpoint 还原上述 12 mm 配置：
+
+```bash
+conda activate realman_rl
+python -I scripts/evaluate/evaluate_ppo_grasp_lift.py \
+  --model outputs/rl/ppo_grasp/pick_lift_12mm_seed2027/final/model.zip \
+  --episodes 20 --seed-start 270000 --json /tmp/realman_ppo_pick_lift_eval.json
+```
+
+在当前已验证配置下继续训练，可执行以下命令，输出目录需为新目录：
+
+```bash
+python -I scripts/train/train_ppo_grasp_lift.py --stage approach --approach-distance .012 \
+  --init-model outputs/rl/ppo_grasp/pick_lift_12mm_seed2027/final/model.zip \
+  --learning-rate .00001 --timesteps 16384 --n-envs 8 --n-steps 128 \
+  --eval-every 4096 --eval-episodes 4 --tensorboard \
+  --run-dir outputs/rl/ppo_grasp/pick_lift_12mm_next
+```
+
+从零训练近距离课程的示例命令如下，输出目录需为新目录。XYZ 探索标准差为 0.1，开口为 0.3；`--gripper-mean -0.75` 是随机策略的常量开口均值初始化，具体初始化和全部网络参数哈希会保存。
+
+```bash
+conda activate realman_rl
+python -I scripts/train/train_ppo_grasp_lift.py --stage pinch --gripper-mean -0.75 \
+  --timesteps 32768 --n-envs 8 --tensorboard \
+  --run-dir outputs/rl/ppo_grasp/pinch_new
+```
+
+下一阶段使用 `--init-model 上一阶段/model.zip` 迁移 PPO 的 actor、critic 和动作分布参数，重建优化器、RolloutBuffer 和计数器；`--timesteps` 为该次新增步数。课程可依次使用 `easy`、`precision`、`lift`、`lift_full`、`approach`、`full`，根据独立开发集选择已完成更新的 checkpoint。显式改变训练奖励需使用 `--allow-reward-change`，来源奖励和变更记录会一同保存。每个完整 PPO 更新点保存模型、状态、训练回合、原始/执行动作及 TensorBoard 指标；中断和不完整更新有单独标记。
+
+`--approach-distance` 可细化课程起点距离，`--learning-rate` 可降低迁移阶段的更新幅度。也可先用 `approach_easy` 学习完整接近与 5 mm 精确抬升，再增加高度和保持时间。`--randomize-approach` 将训练 reset 距离在 5 mm 与当前课程最大值之间采样；`--randomize-height` 将训练高度在 5 mm 与课程最大值之间采样并按比例缩放容差。两者使用独立且可复现的 reset RNG，每回合实际配置均记录在训练日志中，固定任务独立评估不启用这些训练采样。
+
+显式指定 `--reset-exploration` 时，只重新初始化动作分布的 log-std；`--reset-gripper-bias --gripper-mean 0.5` 则只重设第四动作的输出偏置。所有这些权重变换均写入 `config.transfer.transformed_parameters`，其余已学权重保持继承，后续通过 PPO 更新。训练和评估均不调用分阶段控制器、不使用示范，也不在 step 中设置物体位置。
 
 ## 夹取与抬升
 
@@ -373,4 +422,4 @@ SAC、BC 分别使用 `scripts/evaluate/evaluate_sac_reach.py`、`scripts/evalua
 
 ## 已知限制
 
-Reach 仍是 home 附近的小范围三维平移任务；没有 GraspEnv、视觉观测、HER 或真机通信。训练入口保留同进程分段训练，不提供跨进程完整续训。实物代际、TCP、零位、惯量和碰撞几何尚需校准；厂家 SDK 与 MuJoCo 模型不完全一致，仿真重力补偿精度不代表真机精度。历史实验细节和失败结论保存在文档中。
+PPO 夹取抬升当前验证范围为上述 12 mm 起点的局部方块任务，默认 20 mm 起点尚未通过。尚未接入视觉观测、HER 或真机通信。训练入口支持权重迁移并重建优化器，不提供跨进程完整续训。实物代际、TCP、零位、惯量和碰撞几何尚需校准；厂家 SDK 与 MuJoCo 模型不完全一致，仿真重力补偿精度不代表真机精度。历史实验细节和失败结论保存在文档中。

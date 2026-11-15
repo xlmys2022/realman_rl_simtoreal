@@ -30,6 +30,10 @@ class ContactPolicy:
             self.pads[model.geom('4C2_Link5_collision').id] = 'left'
             self.pads[model.geom('4C2_Link6_collision').id] = 'right'
         self.object_dof = int(model.joint('target_free').dofadr[0])
+        self._limits=np.full((model.ngeom,model.ngeom),UNEXPECTED_PENETRATION)
+        for pad in self.pads:
+            self._limits[self.target,pad]=self._limits[pad,self.target]=PAD_PENETRATION
+        self._limits[self.target,self.support]=self._limits[self.support,self.target]=SUPPORT_PENETRATION
 
     def classify(self, geom1, geom2):
         pair = {int(geom1), int(geom2)}
@@ -49,15 +53,30 @@ class ContactPolicy:
         v = data.qvel[self.object_dof:self.object_dof+6]
         require(np.isfinite(v).all() and np.linalg.norm(v[:3]) <= 1 and np.linalg.norm(v[3:]) <= 30,
                 'Dynamic object velocity/numerical safety limit')
+        if hasattr(data.contact,'dist'):
+            # Native MuJoCo contact views: batch the same finite/penetration
+            # checks instead of formatting an error for every valid contact.
+            require(np.isfinite(data.contact.pos).all() and np.isfinite(data.contact.frame).all(),
+                    'Non-finite contact geometry')
+            pairs=data.contact.geom
+            limits=self._limits[pairs[:,0],pairs[:,1]]
+            distances=data.contact.dist
+            bad=np.flatnonzero(~np.isfinite(distances)|(distances < -limits))
+            if not len(bad):return
+            contact=data.contact[int(bad[0])]
+            category=self.classify(*contact.geom)
+            limit=float(limits[int(bad[0])])
+            raise ValueError(f'{category}: penetration {contact.dist:.9g}m exceeds {limit:g}m; '
+                             f'{tuple(self.model.geom(int(g)).name for g in contact.geom)}')
         for contact in data.contact:
             require(np.isfinite(contact.pos).all() and np.isfinite(contact.frame).all(),
                     'Non-finite contact geometry')
             category = self.classify(*contact.geom)
             limit = (PAD_PENETRATION if category.endswith('_pad_target') else
                      SUPPORT_PENETRATION if category == 'target_support' else UNEXPECTED_PENETRATION)
-            require(np.isfinite(contact.dist) and contact.dist >= -limit,
-                    f'{category}: penetration {contact.dist:.9g}m exceeds {limit:g}m; '
-                    f'{tuple(self.model.geom(int(g)).name for g in contact.geom)}')
+            if not np.isfinite(contact.dist) or contact.dist < -limit:
+                raise ValueError(f'{category}: penetration {contact.dist:.9g}m exceeds {limit:g}m; '
+                                 f'{tuple(self.model.geom(int(g)).name for g in contact.geom)}')
 
 
 def contact_force_on_target(contact, force, target_geom):
@@ -140,7 +159,7 @@ class ContactRecorder:
     def __call__(self, data):
         m, p = self.model, self.policy
         self.probe.qpos[:] = data.qpos
-        mujoco.mj_forward(m, self.probe)  # never overwrite the live force cache
+        mujoco.mj_kinematics(m, self.probe)  # geometry only; never overwrite the live force cache
         g = self.gripper
         left, right = self.probe.site_xpos[g.left], self.probe.site_xpos[g.right]
         rotation = self.probe.xmat[g.base].reshape(3, 3)
@@ -163,21 +182,21 @@ class ContactRecorder:
                    gripper_total_drive_nm=data.qfrc_actuator[g.vadr].tolist(),
                    arm_target_rad=data.ctrl[g.arm_monitor.aids].tolist(),
                    arm_actual_rad=data.qpos[m.jnt_qposadr[g.arm_monitor.jids]].tolist(),
-                   max_penetration_m=max([0.]+[-float(c.dist) for c in data.contact]),
+                   max_penetration_m=max(0.,-float(data.contact.dist.min())) if data.ncon else 0.,
                    left_normal_n=0., right_normal_n=0., left_tangent_n=0., right_tangent_n=0.,
                    support_normal_n=0., contact_count=int(data.ncon), contacts=[], contacts_sampled=False)
-        categories = {p.classify(*c.geom) for c in data.contact}
+        contact_categories=[p.classify(*c.geom) for c in data.contact]
+        categories = set(contact_categories)
         # Scalars/forces at every physics tick; full contact vectors/points at 20Hz
         # and each category's first appearance. Avoid enormous redundant logs.
         detailed = self.steps % self.sample_every == 0 or bool(categories-self._seen_categories)
         self._seen_categories.update(categories)
         row['contacts_sampled'] = detailed
-        for index, c in enumerate(data.contact):
-            category = p.classify(*c.geom)
+        for index, (c,category) in enumerate(zip(data.contact,contact_categories)):
             force = np.zeros(6)
             mujoco.mj_contactForce(m, data, index, force)
             require(np.isfinite(force).all(), 'Non-finite contact force')
-            world = contact_force_on_target(c, force, p.target) if p.target in c.geom else None
+            world = contact_force_on_target(c, force, p.target) if detailed and p.target in c.geom else None
             if detailed:
                 row['contacts'].append(dict(category=category, geoms=[m.geom(int(i)).name for i in c.geom],
                                            bodies=[m.body(int(m.geom_bodyid[i])).name for i in c.geom],

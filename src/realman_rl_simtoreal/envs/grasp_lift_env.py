@@ -40,11 +40,12 @@ class GraspLiftEnv(gym.Env):
         except (TypeError,ValueError) as exc:
             raise ValueError('Grasp configuration must contain numeric scalars') from exc
         if finite.ndim!=1 or not np.isfinite(finite).all():raise ValueError('Grasp configuration must be finite scalars')
-        if not (0<=c['object_radius']<=.005 and .005<=c['approach_distance']<=.03
+        if not (0<=c['object_radius']<=.005 and 0<=c['approach_distance']<=.03
                 and .005<=c['lift_height']<=.04 and 0<c['height_tolerance']<c['lift_height']/2
                 and .1<=c['hold_seconds']<=10 and 0<c['action_scale']<=.002
                 and .03<=c['workspace_radius']<=.1 and 0<c['max_home_joint_delta']<=np.deg2rad(30)
                 and .0005<=c['physics_timestep']<=.002
+                and .021<=c['initial_width']<=MAX_WIDTH
                 and 0<c['gripper_reference_speed']<=.5):
             raise ValueError('Invalid local grasp bounds, height, timing or action scale')
         if (isinstance(c['max_episode_steps'],bool) or not isinstance(c['max_episode_steps'],(int,np.integer))
@@ -117,8 +118,8 @@ class GraspLiftEnv(gym.Env):
             self.data.qpos[kin.qadr]=solutions[0].q
             self.data.ctrl[self.actuator_ids]=solutions[0].q
             for name,sign in SIGNS.items():
-                self.data.qpos[self.model.joint(name).qposadr[0]]=sign*width_to_angle(.06)
-            self.data.ctrl[self.model.actuator('eg2_position').id]=width_to_angle(.06)
+                self.data.qpos[self.model.joint(name).qposadr[0]]=sign*width_to_angle(self.config['initial_width'])
+            self.data.ctrl[self.model.actuator('eg2_position').id]=width_to_angle(self.config['initial_width'])
             mujoco.mj_forward(self.model,self.data)
             try:self.contact_policy.check(self.data)
             except ValueError:continue
@@ -134,7 +135,7 @@ class GraspLiftEnv(gym.Env):
         self.pregrasp_reference=pre.copy()
         self.lift_reference=lifted.copy()
         self._command_position=kin.fk(solutions[0].q)[0]
-        self._requested_width=.06
+        self._requested_width=self.config['initial_width']
         self._elapsed_steps=self._stable_ticks=self._max_stable_ticks=self._lost_ticks=0
         self._hold_anchor=None
         self._ever_lifted=False
