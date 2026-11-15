@@ -148,7 +148,7 @@ def main():
     parser.add_argument('--viewer', action='store_true')
     parser.add_argument('--duration', type=float, help='Viewer wall time; early close is explicitly incomplete')
     parser.add_argument('--no-lift', action='store_true')
-    parser.add_argument('--json', type=Path, default=OUTPUTS/'grasp_contact/results.json')
+    parser.add_argument('--json', type=Path, default=OUTPUTS/'grasp/contact/results.json')
     args = parser.parse_args()
     if args.viewer and args.case == 'all':
         parser.error('Viewer requires a single --case')

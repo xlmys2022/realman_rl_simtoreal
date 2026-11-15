@@ -27,7 +27,7 @@ def main():
     p.add_argument('--no-lift',action='store_true',help='Negative control; an unsuccessful lift exits with status 1')
     p.add_argument('--record-physics',action='store_true')
     p.add_argument('--viewer',action='store_true')
-    p.add_argument('--json',type=Path,default=OUTPUTS/'grasp_lift/evaluation.json')
+    p.add_argument('--json',type=Path,default=OUTPUTS/'grasp/controller/evaluation.json')
     a=p.parse_args()
     if a.episodes<1 or a.seed_start<0:p.error('Positive episodes and nonnegative seeds required')
     if a.viewer and a.episodes!=1:p.error('Viewer requires exactly one episode')

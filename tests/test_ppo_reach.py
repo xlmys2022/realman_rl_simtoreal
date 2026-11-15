@@ -246,7 +246,7 @@ print(json.dumps(result['timing']))
         methods={n.name:hashlib.sha256(ast.dump(n,include_attributes=False).encode()).hexdigest()
                  for n in cls.body if isinstance(n,ast.FunctionDef) and n.name in frozen}
         self.assertEqual(methods,frozen)
-        baseline=PROJECT_ROOT/'outputs/rl/ppo_reach_validation/baseline_manifest.json'
+        baseline=PROJECT_ROOT/'outputs/validation/ppo_reach/baseline_manifest.json'
         if baseline.exists():
             # Optional developer integrity evidence; CI does not need old outputs.
             for name,digest in read(baseline).items():

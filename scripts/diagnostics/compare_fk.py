@@ -190,7 +190,7 @@ def main():
     parser.add_argument("--generation", choices=[*MODELS, "all"], default="II")
     parser.add_argument("--sensor", choices=[*SENSORS, "all"], default="SF", help="candidate, not confirmed 6F-V mapping")
     parser.add_argument("--model", type=Path, default=model_api.SCENE)
-    parser.add_argument("--json", type=Path, default=OUTPUTS / "fk_comparison.json")
+    parser.add_argument("--json", type=Path, default=OUTPUTS / "simulation/kinematics/fk_comparison.json")
     args = parser.parse_args()
     try:
         report = run_comparison(args.generation, args.sensor, args.model)

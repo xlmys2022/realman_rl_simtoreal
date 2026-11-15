@@ -315,7 +315,7 @@ def main():
     parser.add_argument("--sensor", choices=("SF", "ISFV", "both"), default="both")
     parser.add_argument("--repeats", type=int, default=5)
     parser.add_argument("--model", type=Path, default=model_api.SCENE)
-    parser.add_argument("--json", type=Path, default=OUTPUTS / "ik_comparison.json")
+    parser.add_argument("--json", type=Path, default=OUTPUTS / "simulation/kinematics/ik_comparison.json")
     args = parser.parse_args()
     try:
         report = run_comparison(args.repeats, ("SF", "ISFV") if args.sensor == "both" else (args.sensor,), args.model)

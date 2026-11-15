@@ -27,13 +27,15 @@ realman_rl_simtoreal/
 ├── tests/fixtures/reach_terminate_04a.json
 ├── tests/test_*.py
 ├── docs/{architecture.md,FILE_MAP.md,experiments/,validation/}
-├── outputs/
+├── outputs/{simulation,reach,grasp,imitation,validation}/
 ├── pyproject.toml
 ├── requirements{,-rl,-vendor}.txt
 └── README.md
 ```
 
 所有包目录具有轻量 `__init__.py`，不实例化模型、环境、SDK 或学习器。脚本目录不作为包，不需要额外 `__init__.py`。正式入口已迁移，不保留旧脚本副本或 `experiments.*` 转发层。
+
+实验产物统一从 [输出导航](../outputs/README.md) 查找；分类和路径对照见 [OUTPUTS](OUTPUTS.md)。训练 run 内的模型、配置、评估、TensorBoard 和课程来源记录一起保留。outputs 根目录只保留五个分类目录与 README；机器索引、旧路径映射和迁移审计集中在 `validation/output_organization/`，日常使用五类正式路径。
 
 ## 层次与依赖方向
 
@@ -167,6 +169,6 @@ PPO/SAC 保存官方 SB3 类和参数，配置以 JSON 保存；Replay 使用官
 
 夹取抬升任务已经由 `envs/grasp_lift_env.py`、`tasks/grasp_lift.py`、`simulation/grasp_controller.py` 和 `rl/grasp_lift.py` 实现，入口为 `scripts/demos/run_grasp_lift.py`。环境提供 41 维 Box 观测、XYZ 加绝对夹爪开口的 4 维动作，通过 `advance_synchronized_cycle` 让机械臂、夹爪和自由物体共享每步 50 次 1 ms 积分。阶段控制器只产生这个动作空间中的动作，使用双侧接触后的有界横向对中反馈；物体的运动由接触、摩擦和重力产生。
 
-成功计时在 1 ms 物理步后读取实际接触力和物体运动，要求持续离台、双侧夹持、低速度及有限滑移。`ContactRecorder` 可选择仅保留最近采样或保存完整物理历史，读取力缓存后才刷新实时几何；数值失败返回明确标记的最近有效观测。抓取评估保存在独立的 `outputs/grasp_lift/`，`rl/common` 的观测变换和训练记录仍服务于 Reach。视觉观测及真机适配需要独立验证，尚未实现。
+成功计时在 1 ms 物理步后读取实际接触力和物体运动，要求持续离台、双侧夹持、低速度及有限滑移。`ContactRecorder` 可选择仅保留最近采样或保存完整物理历史，读取力缓存后才刷新实时几何；数值失败返回明确标记的最近有效观测。抓取评估保存在独立的 `outputs/grasp/controller/`，`rl/common` 的观测变换和训练记录仍服务于 Reach。视觉观测及真机适配需要独立验证，尚未实现。
 
 旧版细节完整保存在 [历史架构快照](experiments/ARCHITECTURE_BEFORE_REFACTOR.md)；历史验证报告中的旧路径对应其原版本。现行命令以 README 和 FILE_MAP 为准。

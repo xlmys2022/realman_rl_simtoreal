@@ -227,7 +227,7 @@ def train(folder, *, timesteps=5000, seed=2026, eval_every=5000, eval_episodes=1
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--run-dir', type=Path,
-                        default=OUTPUTS/'rl/sac_reach'/datetime.now().strftime('run_%Y%m%d_%H%M%S'))
+                        default=OUTPUTS/'reach/sac'/datetime.now().strftime('run_%Y%m%d_%H%M%S'))
     parser.add_argument('--timesteps', type=int, default=5000)
     parser.add_argument('--seed', type=int, default=2026)
     parser.add_argument('--eval-every', type=int, default=5000)

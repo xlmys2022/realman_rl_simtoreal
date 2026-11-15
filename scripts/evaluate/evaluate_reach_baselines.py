@@ -191,7 +191,7 @@ def main():
     parser.add_argument('--max-steps', type=int, default=200)
     parser.add_argument('--target-radius-mm', type=float, default=5)
     parser.add_argument('--profile', action='store_true')
-    parser.add_argument('--json', type=Path, default=OUTPUTS/'reach_baselines.json')
+    parser.add_argument('--json', type=Path, default=OUTPUTS/'reach/baselines/reach_baselines.json')
     args = parser.parse_args()
     if args.episodes < 1 or args.max_steps < 1 or args.seed_start < 0 or args.action_seed < 0:
         parser.error('Episodes/max-steps must be positive and seeds nonnegative')

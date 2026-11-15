@@ -43,8 +43,8 @@ def development(model_path, seeds, folder, *, replay_path=None, prefix=None):
 
 def main():
     p=argparse.ArgumentParser(description=__doc__)
-    p.add_argument('--a',type=Path,default=OUTPUTS/'rl/sac_reach/formal_seed2026/checkpoints/step_010000/model.zip')
-    p.add_argument('--a-replay',type=Path,default=OUTPUTS/'rl/sac_reach/formal_seed2026/final/replay_buffer.pkl.gz')
+    p.add_argument('--a',type=Path,default=OUTPUTS/'reach/sac/formal_seed2026/checkpoints/step_010000/model.zip')
+    p.add_argument('--a-replay',type=Path,default=OUTPUTS/'reach/sac/formal_seed2026/final/replay_buffer.pkl.gz')
     p.add_argument('--b',type=Path,help='Existing frozen B model; omit to train B from scratch exactly 10000 steps')
     p.add_argument('--out',type=Path,required=True)
     p.add_argument('--seed',type=int,default=2026)

@@ -10,7 +10,7 @@ from realman_rl_simtoreal.rl.sac_diagnostics import load_bundle, trace_policy, t
 
 def main():
     p=argparse.ArgumentParser(description=__doc__)
-    p.add_argument('--model',type=Path,default=OUTPUTS/'rl/sac_reach/formal_seed2026/final/model.zip')
+    p.add_argument('--model',type=Path,default=OUTPUTS/'reach/sac/formal_seed2026/final/model.zip')
     p.add_argument('--out',type=Path,required=True)
     p.add_argument('--episodes',type=int,default=20)
     p.add_argument('--seed-start',type=int,default=10000)

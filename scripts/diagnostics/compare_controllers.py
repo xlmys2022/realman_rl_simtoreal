@@ -171,7 +171,7 @@ def print_summary(report):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--controller", choices=("both", "pd", "gravity"), default="both")
-    parser.add_argument("--json", type=Path, default=OUTPUTS / "control_comparison.json")
+    parser.add_argument("--json", type=Path, default=OUTPUTS / "simulation/gravity_compensation/control_comparison.json")
     args = parser.parse_args()
     try:
         modes = ("pd", "gravity") if args.controller == "both" else (args.controller,)

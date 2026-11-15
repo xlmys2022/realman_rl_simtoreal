@@ -1,5 +1,5 @@
 {
-  "path": "outputs/rl/ppo_reach_validation/smoke_seed2026/final/model.zip",
+  "path": "outputs/validation/ppo_reach/smoke_seed2026/final/model.zip",
   "model_sha256": "c4038d0d298a3749b2ee4c48be1bddd51c8e44f17ab3491e5517ad8f6513f0b6",
   "config_sha256": "b51cbf8bd34d5751558e0bda8d216cd5df288de7e0091d35781e8a09747ab2a9",
   "records": [

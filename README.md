@@ -2,6 +2,8 @@
 
 基于 MuJoCo 的 RealMan **RML63II-6F-V** 机械臂强化学习仿真项目，长期方向为 Reach → Grasp → 视觉 → 真机部署。当前采用 Python 3.11、Gymnasium、Stable-Baselines3 和 PyTorch；代码组织与算法实验分别维护。
 
+实验产物按仿真、Reach、抓取、模仿学习和验证分类。找模型、评估结果及动图，请先看 [outputs 导航](outputs/README.md)；目录约定与旧路径对照见 [输出目录说明](docs/OUTPUTS.md)。
+
 ## 已实现功能
 
 - 六轴动力学、关节与末端控制、FK / DLS IK、厂家离线 FK / IK 对照。
@@ -17,20 +19,20 @@
 
 课程包含张开起点下的近距离夹持、小距离接近、抬升精度、更高抬升和完整接近。课程 reset 中物体始终由支撑面承托；夹取和离台由 PPO 动作经执行器产生。起始开口、接近距离、高度、容差与保持时间均保存在 checkpoint 配置中，独立评估可用 `--stage full` 强制验证 20 mm 接近、60 mm 初始开口、30 mm 抬升和 2 秒保持。
 
-**当前通过独立测试的 PPO 模型使用 12 mm 起点距离、60 mm 初始开口、30 mm 抬升目标和 2 秒保持。** 物体为 20 mm、10 g 方块，位置在支撑面内随机偏移最多 2 mm。冻结模型后，独立种子 270000–270019 成功 **20/20**，平均离台间隙 33.344 mm、世界竖直抬升 29.136 mm、平均 245.1 步，最短连续保持 2.000 秒，零安全终止。评估中的网络参数、优化器和训练计数均保持不变。模型见 [checkpoint](outputs/rl/ppo_grasp/pick_lift_12mm_seed2027/final/model.zip)，数据见 [逐回合评估](outputs/rl/ppo_grasp/pick_lift_12mm_seed2027/heldout_270000_270019.json)，实际 PPO 控制见 [动图](outputs/rl/ppo_grasp/pick_lift_12mm_seed2027/learned_pick_lift.gif)。
+**当前通过独立测试的 PPO 模型使用 12 mm 起点距离、60 mm 初始开口、30 mm 抬升目标和 2 秒保持。** 物体为 20 mm、10 g 方块，位置在支撑面内随机偏移最多 2 mm。冻结模型后，独立种子 270000–270019 成功 **20/20**，平均离台间隙 33.344 mm、世界竖直抬升 29.136 mm、平均 245.1 步，最短连续保持 2.000 秒，零安全终止。评估中的网络参数、优化器和训练计数均保持不变。模型见 [checkpoint](outputs/grasp/ppo/pick_lift_12mm_seed2027/final/model.zip)，数据见 [逐回合评估](outputs/grasp/ppo/pick_lift_12mm_seed2027/heldout_270000_270019.json)，实际 PPO 控制见 [动图](outputs/grasp/ppo/pick_lift_12mm_seed2027/learned_pick_lift.gif)。
 
-选中模型的来源链共包含 86016 步 PPO 更新，actor 和 critic 在每个选中阶段都有更新；模型来源、完整更新状态、网络参数、当前训练源码和仿真资源哈希核对通过，见 [核对记录](outputs/rl/ppo_grasp/pick_lift_12mm_seed2027/verification.json)及[开发集选择记录](outputs/rl/ppo_grasp/pick_lift_12mm_seed2027/selection.json)。这些步数只统计实际继承的 checkpoint，不包含未选中的探索试验。
+选中模型的来源链共包含 86016 步 PPO 更新，actor 和 critic 在每个选中阶段都有更新；模型来源、完整更新状态、网络参数、当前训练源码和仿真资源哈希核对通过，见 [核对记录](outputs/grasp/ppo/pick_lift_12mm_seed2027/verification.json)及[开发集选择记录](outputs/grasp/ppo/pick_lift_12mm_seed2027/selection.json)。这些步数只统计实际继承的 checkpoint，不包含未选中的探索试验。
 
-当前全套 **396 项回归测试通过**，涵盖四维 PPO 的真实更新、模型重载、奖励与固定观测变换、课程 reset、迁移参数变换、只读独立推理及碰撞保护；[测试结果](outputs/rl/ppo_grasp/pick_lift_12mm_seed2027/regression.json)和[完整日志](outputs/rl/ppo_grasp/pick_lift_12mm_seed2027/regression.log)已保存。
+当前全套 **396 项回归测试通过**，涵盖四维 PPO 的真实更新、模型重载、奖励与固定观测变换、课程 reset、迁移参数变换、只读独立推理及碰撞保护；[测试结果](outputs/grasp/ppo/pick_lift_12mm_seed2027/regression.json)和[完整日志](outputs/grasp/ppo/pick_lift_12mm_seed2027/regression.log)已保存。
 
-**原默认 20 mm 起点尚未被 PPO 解决。** 对该冻结模型强制 `--stage full`，开发集 240000–240001 为 0/2，均因指爪与支撑台碰撞保护终止；[失败原始数据](outputs/rl/ppo_grasp/pick_lift_12mm_seed2027/development_full_240000_240001.json)已保留。下文分阶段控制器的 20/20 成绩属于另一种控制方式，不能作为 PPO 的完整任务成绩。
+**原默认 20 mm 起点尚未被 PPO 解决。** 对该冻结模型强制 `--stage full`，开发集 240000–240001 为 0/2，均因指爪与支撑台碰撞保护终止；[失败原始数据](outputs/grasp/ppo/pick_lift_12mm_seed2027/development_full_240000_240001.json)已保留。下文分阶段控制器的 20/20 成绩属于另一种控制方式，不能作为 PPO 的完整任务成绩。
 
 复测已训练模型时省略 `--stage`，由 checkpoint 还原上述 12 mm 配置：
 
 ```bash
 conda activate realman_rl
 python -I scripts/evaluate/evaluate_ppo_grasp_lift.py \
-  --model outputs/rl/ppo_grasp/pick_lift_12mm_seed2027/final/model.zip \
+  --model outputs/grasp/ppo/pick_lift_12mm_seed2027/final/model.zip \
   --episodes 20 --seed-start 270000 --json /tmp/realman_ppo_pick_lift_eval.json
 ```
 
@@ -38,10 +40,10 @@ python -I scripts/evaluate/evaluate_ppo_grasp_lift.py \
 
 ```bash
 python -I scripts/train/train_ppo_grasp_lift.py --stage approach --approach-distance .012 \
-  --init-model outputs/rl/ppo_grasp/pick_lift_12mm_seed2027/final/model.zip \
+  --init-model outputs/grasp/ppo/pick_lift_12mm_seed2027/final/model.zip \
   --learning-rate .00001 --timesteps 16384 --n-envs 8 --n-steps 128 \
   --eval-every 4096 --eval-episodes 4 --tensorboard \
-  --run-dir outputs/rl/ppo_grasp/pick_lift_12mm_next
+  --run-dir outputs/grasp/ppo/pick_lift_12mm_next
 ```
 
 从零训练近距离课程的示例命令如下，输出目录需为新目录。XYZ 探索标准差为 0.1，开口为 0.3；`--gripper-mean -0.75` 是随机策略的常量开口均值初始化，具体初始化和全部网络参数哈希会保存。
@@ -50,7 +52,7 @@ python -I scripts/train/train_ppo_grasp_lift.py --stage approach --approach-dist
 conda activate realman_rl
 python -I scripts/train/train_ppo_grasp_lift.py --stage pinch --gripper-mean -0.75 \
   --timesteps 32768 --n-envs 8 --tensorboard \
-  --run-dir outputs/rl/ppo_grasp/pinch_new
+  --run-dir outputs/grasp/ppo/pinch_new
 ```
 
 下一阶段使用 `--init-model 上一阶段/model.zip` 迁移 PPO 的 actor、critic 和动作分布参数，重建优化器、RolloutBuffer 和计数器；`--timesteps` 为该次新增步数。课程可依次使用 `easy`、`precision`、`lift`、`lift_full`、`approach`、`full`，根据独立开发集选择已完成更新的 checkpoint。显式改变训练奖励需使用 `--allow-reward-change`，来源奖励和变更记录会一同保存。每个完整 PPO 更新点保存模型、状态、训练回合、原始/执行动作及 TensorBoard 指标；中断和不完整更新有单独标记。
@@ -77,9 +79,9 @@ python -I scripts/demos/run_grasp_lift.py --episodes 1 --seed-start 2027 \
 
 RL 接口为 4 维 `Box(-1,1)`：前三维是世界 XYZ 增量，每轴最多 1 mm；第四维为绝对开口，-1 闭合、+1 达到模型最大开口约 66.2 mm。41 维 float32 观测包含机械臂状态、物体相对位置及速度、开口、双侧/支撑接触力和保持进度，可直接交给 SB3 `PPO("MlpPolicy", env)`。接口测试覆盖真实 Rollout、PPO 更新、模型保存和重载；本文演示结果来自分阶段控制器。
 
-独立测试种子 230000–230019 的 **20/20 个随机位置全部夹取抬升成功**，平均离台间隙 29.206 mm、世界竖直抬升 25.243 mm，最短连续保持 2.032 秒，零安全终止。447000 次物理积分的力矩、速度和时间记录核对通过，mimic 残差峰值为 0.0002174 rad，低于原 0.001 rad 保护阈值。全套 380 项回归通过；将抓取任务改为 1 ms 后，重新通过 16 项抓取专项和 24 项接触回归。见[逐回合结果](outputs/grasp_lift/validation_1ms_20/evaluation.json)、[核对记录](outputs/grasp_lift/validation_1ms_20/verification.json)及[实测动图](outputs/grasp_lift/pick_lift_1ms.gif)。
+独立测试种子 230000–230019 的 **20/20 个随机位置全部夹取抬升成功**，平均离台间隙 29.206 mm、世界竖直抬升 25.243 mm，最短连续保持 2.032 秒，零安全终止。447000 次物理积分的力矩、速度和时间记录核对通过，mimic 残差峰值为 0.0002174 rad，低于原 0.001 rad 保护阈值。全套 380 项回归通过；将抓取任务改为 1 ms 后，重新通过 16 项抓取专项和 24 项接触回归。见[逐回合结果](outputs/grasp/controller/validation_1ms_20/evaluation.json)、[核对记录](outputs/grasp/controller/validation_1ms_20/verification.json)及[实测动图](outputs/grasp/controller/pick_lift_1ms.gif)。
 
-负对照中，不闭合和不抬升均在 700 步超时、保持计时为零；摩擦降为 0.05 时触发 mimic 保护，30 g 方块未达到高度与保持条件、在 700 步超时。失败记录分别保存在 [no_close](outputs/grasp_lift/controls_1ms/no_close.json)、[no_lift](outputs/grasp_lift/controls_1ms/no_lift.json)、[low_friction](outputs/grasp_lift/controls_1ms/low_friction.json)和[heavy](outputs/grasp_lift/controls_1ms/heavy.json)。开发阶段的 2 ms 失败案例与控制时序诊断仍保存在 `outputs/grasp_lift/`。
+负对照中，不闭合和不抬升均在 700 步超时、保持计时为零；摩擦降为 0.05 时触发 mimic 保护，30 g 方块未达到高度与保持条件、在 700 步超时。失败记录分别保存在 [no_close](outputs/grasp/controller/controls_1ms/no_close.json)、[no_lift](outputs/grasp/controller/controls_1ms/no_lift.json)、[low_friction](outputs/grasp/controller/controls_1ms/low_friction.json)和[heavy](outputs/grasp/controller/controls_1ms/heavy.json)。开发阶段的 2 ms 失败案例与控制时序诊断仍保存在 `outputs/grasp/controller/`。
 
 实现入口为 [GraspLiftEnv](src/realman_rl_simtoreal/envs/grasp_lift_env.py)、[任务配置](src/realman_rl_simtoreal/tasks/grasp_lift.py)、[夹取控制器](src/realman_rl_simtoreal/simulation/grasp_controller.py)与[回合评估](src/realman_rl_simtoreal/rl/grasp_lift.py)。
 
@@ -93,28 +95,28 @@ RL 接口为 4 维 `Box(-1,1)`：前三维是世界 XYZ 增量，每轴最多 1 
 
 观测使用 `goal_relative_v3`。到点的那个 transition 按已到达的目标计算进度与成功奖励，返回的 observation 包含下一目标；`info.transition_desired_goal` 保存本步奖励所用的目标，`compute_reward` 和批量重算读取该上下文。`info.is_goal_success` 表示单个目标到达，`info.is_success` 表示整条轨迹完成。
 
-本次从 20 cm 单目标 PPO 权重开始，先训练 32768 步，再修复连续运动中的命令累计及 IK 数值问题，追加 16384 步，共新增 49152 步多目标训练。最终开发集 180000–180003 完成 4/4 条轨迹、20/20 个目标，零安全终止。actor 和 critic 均有更新，训练配置、来源权重和当前源码资源核对通过，全部 364 项回归测试通过。见[训练记录](outputs/rl/ppo_reach/random_start_multi_20cm_seed2027_continue/summary.json)与[训练核对](outputs/rl/ppo_reach/random_start_multi_20cm_seed2027_continue/training_verification.json)。
+本次从 20 cm 单目标 PPO 权重开始，先训练 32768 步，再修复连续运动中的命令累计及 IK 数值问题，追加 16384 步，共新增 49152 步多目标训练。最终开发集 180000–180003 完成 4/4 条轨迹、20/20 个目标，零安全终止。actor 和 critic 均有更新，训练配置、来源权重和当前源码资源核对通过，全部 364 项回归测试通过。见[训练记录](outputs/reach/ppo/random_start_multi_20cm_seed2027_continue/summary.json)与[训练核对](outputs/reach/ppo/random_start_multi_20cm_seed2027_continue/training_verification.json)。
 
 冻结最终模型后，独立测试 191000–191019 完成 **12/20 条完整轨迹**，成功 **72/100 个计划目标**。实际尝试 80 个目标，单目标成功率为 72/80（90%）；提前结束后未尝试的 20 个目标计入计划目标完成率的分母。8 条失败轨迹中，7 条因求解出的关节目标触及限位而停止，1 条超时，碰撞、数值失败及 IK 失败均为 0。当前仍未达到全部随机连续轨迹成功。
 
-72 个成功目标平均实际误差为 0.794 mm，最大为 0.996 mm。20 个随机起点距 home 6.39–19.74 cm，100 个计划目标距 home 4.83–19.94 cm，覆盖八个空间象限。全部 60 次目标切换均保留非零速度，切换前后的关节位置、速度、控制量和时间逐项相同。原始数据见[独立评估](outputs/rl/ppo_reach/random_start_multi_20cm_seed2027_continue/heldout_191000_191019.json)、[逐目标分析](outputs/rl/ppo_reach/random_start_multi_20cm_seed2027_continue/heldout_191000_191019_analysis.json)、[连续性核对](outputs/rl/ppo_reach/random_start_multi_20cm_seed2027_continue/heldout_verification.json)与[失败明细](outputs/rl/ppo_reach/random_start_multi_20cm_seed2027_continue/heldout_failures.json)。
+72 个成功目标平均实际误差为 0.794 mm，最大为 0.996 mm。20 个随机起点距 home 6.39–19.74 cm，100 个计划目标距 home 4.83–19.94 cm，覆盖八个空间象限。全部 60 次目标切换均保留非零速度，切换前后的关节位置、速度、控制量和时间逐项相同。原始数据见[独立评估](outputs/reach/ppo/random_start_multi_20cm_seed2027_continue/heldout_191000_191019.json)、[逐目标分析](outputs/reach/ppo/random_start_multi_20cm_seed2027_continue/heldout_191000_191019_analysis.json)、[连续性核对](outputs/reach/ppo/random_start_multi_20cm_seed2027_continue/heldout_verification.json)与[失败明细](outputs/reach/ppo/random_start_multi_20cm_seed2027_continue/heldout_failures.json)。
 
 使用本次模型继续训练，可在 `realman_rl` 环境运行以下命令，输出目录需为新目录。
 
 ```bash
 conda activate realman_rl
 python -I scripts/train/train_ppo_reach.py --task random_start_multi_reach_20cm \
-  --init-model outputs/rl/ppo_reach/random_start_multi_20cm_seed2027_continue/final/model.zip \
+  --init-model outputs/reach/ppo/random_start_multi_20cm_seed2027_continue/final/model.zip \
   --timesteps 16384 --seed 2027 --eval-every 8192 --eval-episodes 4 \
   --eval-seed-start 180000 --checkpoint-every 8192 --tensorboard \
-  --run-dir outputs/rl/ppo_reach/random_start_multi_20cm_next
+  --run-dir outputs/reach/ppo/random_start_multi_20cm_next
 ```
 
 独立评估中的 `--episodes 20` 表示 20 条轨迹，共计划 100 个目标。`sequence_success_rate` 为整条轨迹完成率，`goal_success_rate` 为成功目标数除以实际尝试目标数，`goal_completion_rate` 为成功目标数除以计划目标数。逐回合 `goal_results` 记录每个目标的动作、位置、结束原因及起止物理状态，成功目标的 `end_state` 与下一目标的 `start_state` 可逐项核对。
 
 ```bash
 python -I scripts/evaluate/evaluate_ppo_reach.py \
-  --model outputs/rl/ppo_reach/random_start_multi_20cm_seed2027_continue/final/model.zip \
+  --model outputs/reach/ppo/random_start_multi_20cm_seed2027_continue/final/model.zip \
   --episodes 20 --seed-start 191000 --json /tmp/realman_multi_goal_evaluation.json
 ```
 
@@ -128,24 +130,24 @@ python -I scripts/evaluate/evaluate_ppo_reach.py \
 
 本次由种子 2027 的 5 mm PPO 权重开始迁移，先完成 32768 步大范围训练，再使用上述观测和参考轨迹追加 16384 步，20 cm 任务共新增 49152 步。两阶段权重哈希与父模型记录相符，actor 和 critic 均有更新。最终模型在开发集 130000–130011 上成功 12/12；独立测试 140000–140099 成功 **97/100**，另有 2 次超时、1 次 IK 失败，碰撞与数值失败为 0。
 
-独立目标的实际半径为 3.19–19.99 cm，八个空间象限均有样本，15–20 cm 分组成功 52/55。100 回合平均最终误差为 2.692 mm；97 个成功回合的平均误差为 0.773 mm，平均 241.47 步到达。三个失败目标均位于 +X 方向，IK 失败记录为迭代次数耗尽，两个超时回合在 600 步结束时的误差为 53.68、45.21 mm。完整数据见[独立评估](outputs/rl/ppo_reach/random_20cm_seed2027_continue/heldout_140000_140099.json)、[方向与距离分组](outputs/rl/ppo_reach/random_20cm_seed2027_continue/heldout_140000_140099_analysis.json)及[失败复核](outputs/rl/ppo_reach/random_20cm_seed2027_continue/heldout_failures.json)。全部 351 项回归测试通过。
+独立目标的实际半径为 3.19–19.99 cm，八个空间象限均有样本，15–20 cm 分组成功 52/55。100 回合平均最终误差为 2.692 mm；97 个成功回合的平均误差为 0.773 mm，平均 241.47 步到达。三个失败目标均位于 +X 方向，IK 失败记录为迭代次数耗尽，两个超时回合在 600 步结束时的误差为 53.68、45.21 mm。完整数据见[独立评估](outputs/reach/ppo/random_20cm_seed2027_continue/heldout_140000_140099.json)、[方向与距离分组](outputs/reach/ppo/random_20cm_seed2027_continue/heldout_140000_140099_analysis.json)及[失败复核](outputs/reach/ppo/random_20cm_seed2027_continue/heldout_failures.json)。全部 351 项回归测试通过。
 
 在 `realman_rl` 环境中使用已训练权重继续训练，可执行以下命令。`--run-dir` 需选择新的目录。
 
 ```bash
 conda activate realman_rl
 python -I scripts/train/train_ppo_reach.py --task random_reach_20cm \
-  --init-model outputs/rl/ppo_reach/random_20cm_seed2027_continue/final/model.zip \
+  --init-model outputs/reach/ppo/random_20cm_seed2027_continue/final/model.zip \
   --timesteps 16384 --seed 2027 --eval-every 4096 --eval-episodes 12 \
   --eval-seed-start 130000 --checkpoint-every 4096 --tensorboard \
-  --run-dir outputs/rl/ppo_reach/random_20cm_seed2027_next
+  --run-dir outputs/reach/ppo/random_20cm_seed2027_next
 ```
 
 `--init-model` 加载 PPO 的 actor、critic 和 log-std 权重，为本次任务创建优化器、RolloutBuffer 和计数器。配置记录来源模型哈希、来源训练步数和观测变换；`--timesteps` 表示本次新增训练步数。训练完成后，可独立复测 100 个新目标，`--json` 需使用新路径。
 
 ```bash
 python -I scripts/evaluate/evaluate_ppo_reach.py \
-  --model outputs/rl/ppo_reach/random_20cm_seed2027_continue/final/model.zip \
+  --model outputs/reach/ppo/random_20cm_seed2027_continue/final/model.zip \
   --episodes 100 --seed-start 140000 --json /tmp/realman_20cm_evaluation.json
 ```
 
@@ -155,18 +157,18 @@ python -I scripts/evaluate/evaluate_ppo_reach.py \
 
 种子 2026 的 PPO 从头训练 16384 步后，在旧模型的同一组 100 个目标（92000–92099）上从 1/100 提高到 100/100，另一组新目标（110000–110099）也达到 100/100。两组合计平均 12.44 步，终止时平均实际误差 0.857 mm，零超时、零安全终止。冻结同一策略单独复测 ±X 5 mm，两个方向均为 18 步。以上为 MuJoCo 仿真结果。
 
-补充的 1000 个新目标（120000–120999）全部成功，平均 12.138 步，终止时平均实际误差 0.859 mm，零超时、零安全终止。目标覆盖全部八个空间象限，每个象限有 105–141 个样本且全部成功，两个距离分组 3–4 mm 与 4–5 mm 也全部成功。原始位置、动作、奖励和结束原因见[逐回合结果](outputs/rl/ppo_reach/random_goal_relative_seed2026/heldout_120000_120999.json)，分方向统计见[目标覆盖分析](outputs/rl/ppo_reach/random_goal_relative_seed2026/heldout_120000_120999_analysis.json)。
+补充的 1000 个新目标（120000–120999）全部成功，平均 12.138 步，终止时平均实际误差 0.859 mm，零超时、零安全终止。目标覆盖全部八个空间象限，每个象限有 105–141 个样本且全部成功，两个距离分组 3–4 mm 与 4–5 mm 也全部成功。原始位置、动作、奖励和结束原因见[逐回合结果](outputs/reach/ppo/random_goal_relative_seed2026/heldout_120000_120999.json)，分方向统计见[目标覆盖分析](outputs/reach/ppo/random_goal_relative_seed2026/heldout_120000_120999_analysis.json)。
 
-当前代码从头训练的种子 2027、2028 模型各完成 16384 步，在相同 1000 个目标上分别成功 1000/1000，零超时、零安全终止；平均分别为 12.157、12.106 步，终止时平均实际误差分别为 0.862、0.859 mm。三个训练种子共计 3000 回合评估，八个象限均全部成功。新模型、环境资源哈希、配置与 TensorBoard 记录保存在各自的训练目录，评估原始记录见[种子 2027](outputs/rl/ppo_reach/random_goal_relative_seed2027/heldout_120000_120999.json)和[种子 2028](outputs/rl/ppo_reach/random_goal_relative_seed2028/heldout_120000_120999.json)。
+当前代码从头训练的种子 2027、2028 模型各完成 16384 步，在相同 1000 个目标上分别成功 1000/1000，零超时、零安全终止；平均分别为 12.157、12.106 步，终止时平均实际误差分别为 0.862、0.859 mm。三个训练种子共计 3000 回合评估，八个象限均全部成功。新模型、环境资源哈希、配置与 TensorBoard 记录保存在各自的训练目录，评估原始记录见[种子 2027](outputs/reach/ppo/random_goal_relative_seed2027/heldout_120000_120999.json)和[种子 2028](outputs/reach/ppo/random_goal_relative_seed2028/heldout_120000_120999.json)。
 
-种子 2026 也已在当前源码下重新训练 16384 步，初始、4096、8192、12288、16384 步五个检查点的网络参数均与历史运行逐项一致。此次重跑记录的环境源码和机器人资源哈希与当前工作区匹配，另用 121000–121019 的 20 个新目标复测，成功 20/20。记录见[复现训练](outputs/rl/ppo_reach/random_goal_relative_seed2026_verified/summary.json)和[复现模型独立评估](outputs/rl/ppo_reach/random_goal_relative_seed2026_verified/heldout_121000_121019.json)。随机 Reach 回归测试覆盖默认训练配置、真实物理步进、模型重载和独立 CLI 推理，共 17 项通过。
+种子 2026 也已在当前源码下重新训练 16384 步，初始、4096、8192、12288、16384 步五个检查点的网络参数均与历史运行逐项一致。此次重跑记录的环境源码和机器人资源哈希与当前工作区匹配，另用 121000–121019 的 20 个新目标复测，成功 20/20。记录见[复现训练](outputs/reach/ppo/random_goal_relative_seed2026_verified/summary.json)和[复现模型独立评估](outputs/reach/ppo/random_goal_relative_seed2026_verified/heldout_121000_121019.json)。随机 Reach 回归测试覆盖默认训练配置、真实物理步进、模型重载和独立 CLI 推理，共 17 项通过。
 
 用工作区中按当前代码训练的种子 2027 模型复测这 1000 个目标：
 
 ```bash
 conda activate realman_rl
 python -I scripts/evaluate/evaluate_ppo_reach.py \
-  --model outputs/rl/ppo_reach/random_goal_relative_seed2027/final/model.zip \
+  --model outputs/reach/ppo/random_goal_relative_seed2027/final/model.zip \
   --episodes 1000 --seed-start 120000 --json /tmp/realman_random_reach_eval.json
 ```
 
@@ -175,7 +177,7 @@ python -I scripts/evaluate/evaluate_ppo_reach.py \
 ```bash
 python -I scripts/train/train_ppo_reach.py --task random_reach \
   --timesteps 16384 --seed 2027 --eval-every 4096 --eval-episodes 20 \
-  --checkpoint-every 4096 --run-dir outputs/rl/ppo_reach/random_goal_relative_retrain
+  --checkpoint-every 4096 --run-dir outputs/reach/ppo/random_goal_relative_retrain
 ```
 
 变目标 PPO 默认使用 `goal_relative_v1` 观测与 `reach_progress_v1` 奖励。策略每步获得两个世界坐标系下的三维差值，即「目标位置 − 已发命令位置」和「已发命令位置 − 实际末端位置」。策略输入按 1 mm 缩放，GoalEnv 的目标字段、逆运动学和奖励计算使用的位置均以米为单位。训练从随机权重开始，动作由 PPO 产生。评估自动加载模型保存的观测和奖励配置。
@@ -244,10 +246,10 @@ python -I scripts/models/build_grasp_scene.py
 ```bash
 python -I scripts/train/train_ppo_reach.py \
   --task fixed_reach --reward-mode reach_shaped_v1 --action-scale 0.00025 \
-  --timesteps 16384 --seed 2026 --run-dir outputs/rl/ppo_reach/fixed_seed2026_new \
+  --timesteps 16384 --seed 2026 --run-dir outputs/reach/ppo/fixed_seed2026_new \
   --eval-every 2048 --eval-episodes 1 --eval-seed-start 87000 \
   --checkpoint-every 2048 --tensorboard
-python -I -m tensorboard.main --logdir outputs/rl/ppo_reach --host 127.0.0.1 --port 6006
+python -I -m tensorboard.main --logdir outputs/reach/ppo --host 127.0.0.1 --port 6006
 ```
 
 PPO 保留官方 512 步 Rollout、64 样本 minibatch、10 个 epoch；评估和保存发生在完整更新之后，因此实际步数可能超过请求下界。原始高斯动作与环境 Box 裁剪动作分别记录，动作裁剪率与 PPO `clip_fraction` 含义不同。固定目标更换 seed 不等于泛化验证。
@@ -261,7 +263,7 @@ conda activate realman_rl
 cd /home/mr-beaver/Documents/robot/realman_rl_simtoreal
 python -I scripts/train/train_ppo_reach.py \
   --task random_reach --observation-mode legacy --reward-mode reach_shaped_v1 --action-scale 0.00025 \
-  --timesteps 16384 --seed 2026 --run-dir outputs/rl/ppo_reach/random_seed2026_pilot_04f2 \
+  --timesteps 16384 --seed 2026 --run-dir outputs/reach/ppo/random_seed2026_pilot_04f2 \
   --eval-every 4096 --eval-episodes 20 --eval-seed-start 87000 \
   --checkpoint-every 4096 --tensorboard
 ```
@@ -269,16 +271,16 @@ python -I scripts/train/train_ppo_reach.py \
 开发期checkpoint始终用87000–87019这20个目标比较。最终模型冻结后再评估90000–90099，不据此反复选模型或调参。监控、查看结果、最终100目标评估、导出曲线和分方向统计：
 
 ```bash
-python -I -m tensorboard.main --logdir outputs/rl/ppo_reach/random_seed2026_pilot_04f2/sb3 --host 127.0.0.1 --port 6006
-python -I -m json.tool outputs/rl/ppo_reach/random_seed2026_pilot_04f2/summary.json
+python -I -m tensorboard.main --logdir outputs/reach/ppo/random_seed2026_pilot_04f2/sb3 --host 127.0.0.1 --port 6006
+python -I -m json.tool outputs/reach/ppo/random_seed2026_pilot_04f2/summary.json
 python -I scripts/evaluate/evaluate_ppo_reach.py \
-  --model outputs/rl/ppo_reach/random_seed2026_pilot_04f2/checkpoints/step_016384/model.zip \
+  --model outputs/reach/ppo/random_seed2026_pilot_04f2/checkpoints/step_016384/model.zip \
   --episodes 100 --seed-start 90000 \
-  --json outputs/rl/ppo_reach/random_seed2026_pilot_04f2/final_test_90000_90099.json
-python -I scripts/plots/plot_ppo_training.py --run-dir outputs/rl/ppo_reach/random_seed2026_pilot_04f2
+  --json outputs/reach/ppo/random_seed2026_pilot_04f2/final_test_90000_90099.json
+python -I scripts/plots/plot_ppo_training.py --run-dir outputs/reach/ppo/random_seed2026_pilot_04f2
 python -I scripts/evaluate/analyze_reach_results.py \
-  --evaluation outputs/rl/ppo_reach/random_seed2026_pilot_04f2/final_test_90000_90099.json \
-  --json outputs/rl/ppo_reach/random_seed2026_pilot_04f2/final_test_direction_analysis.json
+  --evaluation outputs/reach/ppo/random_seed2026_pilot_04f2/final_test_90000_90099.json \
+  --json outputs/reach/ppo/random_seed2026_pilot_04f2/final_test_direction_analysis.json
 ```
 
 提前停止时先检查summary，再选择实际存在的checkpoint。评估JSON、绘图目录及分析JSON均不得覆盖已有结果。方向分析同时输出六个可重叠符号组、八个互斥象限、3–4/4–5mm半径组及每组样本量；不足10个标记小样本。新PPO评估JSON额外保留原始动作和步前实际位置，可计算裁剪角度、动作是否朝实际目标和+X偏置；历史JSON缺少字段时明确报告不可计算。环境、网络、损失及超参数不变。详情见 [PPO随机Reach验证](docs/validation/PPO_RANDOM_REACH_VALIDATION.md)。
@@ -292,23 +294,23 @@ conda activate realman_rl
 cd /home/mr-beaver/Documents/robot/realman_rl_simtoreal
 python -I scripts/train/train_ppo_reach.py \
   --task axis_pair_reach --observation-mode legacy --reward-mode reach_shaped_v1 --action-scale 0.00025 \
-  --timesteps 16384 --seed 2026 --run-dir outputs/rl/ppo_reach/axis_pair_seed2026_pilot_04f3 \
+  --timesteps 16384 --seed 2026 --run-dir outputs/reach/ppo/axis_pair_seed2026_pilot_04f3 \
   --eval-every 2048 --eval-episodes 2 --eval-seed-start 87000 \
   --checkpoint-every 2048 --tensorboard
-python -I -m tensorboard.main --logdir outputs/rl/ppo_reach/axis_pair_seed2026_pilot_04f3/sb3 --host 127.0.0.1 --port 6006
+python -I -m tensorboard.main --logdir outputs/reach/ppo/axis_pair_seed2026_pilot_04f3/sb3 --host 127.0.0.1 --port 6006
 ```
 
 评估会通过合法reset选项逐一枚举两个候选，保证每次恰好+X、-X各一次；种子只是reset标签，不是不同随机目标。离散任务省略`--eval-episodes`/`--episodes`时自动覆盖所有候选，显式要求100次重复会报错。随机任务的多seed评估语义不变。
 
 ```bash
-python -I -m json.tool outputs/rl/ppo_reach/axis_pair_seed2026_pilot_04f3/summary.json
+python -I -m json.tool outputs/reach/ppo/axis_pair_seed2026_pilot_04f3/summary.json
 python -I scripts/evaluate/evaluate_ppo_reach.py \
-  --model outputs/rl/ppo_reach/axis_pair_seed2026_pilot_04f3/checkpoints/step_016384/model.zip \
-  --episodes 2 --json outputs/rl/ppo_reach/axis_pair_seed2026_pilot_04f3/distinct_goal_evaluation.json
+  --model outputs/reach/ppo/axis_pair_seed2026_pilot_04f3/checkpoints/step_016384/model.zip \
+  --episodes 2 --json outputs/reach/ppo/axis_pair_seed2026_pilot_04f3/distinct_goal_evaluation.json
 python -I scripts/evaluate/analyze_reach_results.py \
-  --evaluation outputs/rl/ppo_reach/axis_pair_seed2026_pilot_04f3/distinct_goal_evaluation.json \
-  --json outputs/rl/ppo_reach/axis_pair_seed2026_pilot_04f3/distinct_goal_analysis.json
-python -I scripts/plots/plot_ppo_training.py --run-dir outputs/rl/ppo_reach/axis_pair_seed2026_pilot_04f3
+  --evaluation outputs/reach/ppo/axis_pair_seed2026_pilot_04f3/distinct_goal_evaluation.json \
+  --json outputs/reach/ppo/axis_pair_seed2026_pilot_04f3/distinct_goal_analysis.json
+python -I scripts/plots/plot_ppo_training.py --run-dir outputs/reach/ppo/axis_pair_seed2026_pilot_04f3
 ```
 
 JSON、终端和TensorBoard分别报告±X结果、误差、步数、首动作、结束原因、实际路径和动作方向比例；PNG增加两方向曲线及训练成功率/保护分类。所有输出目录须为新位置，不覆盖原产物。两方向均稳定成功后才考虑六方向；`axis_six_reach`5mm目前会拒绝±Y，不能直接启动。显式3mm六方向仅用于已完成的合法reset敏感性诊断，没有偷偷替换训练配置。证据、文件说明和课程边界见[04-F3验证报告](docs/validation/PPO_GOAL_CONDITIONED_VALIDATION.md)。尚未实现`ppo_transfer`或严格跨进程续训。
@@ -319,7 +321,7 @@ JSON、终端和TensorBoard分别报告±X结果、误差、步数、首动作�
 python -I scripts/train/train_sac_reach.py \
   --task fixed_reach --reward-mode safe_dense --action-scale 0.001 \
   --timesteps 5000 --seed 2026 --init-mode scratch \
-  --run-dir outputs/rl/pure_reach/fixed_safe_seed2026_new \
+  --run-dir outputs/reach/sac_reward_comparison/fixed_safe_seed2026_new \
   --eval-at-start --eval-every 1000 --checkpoint-every 1000 \
   --eval-episodes 1 --eval-seed-start 85000 --tensorboard
 ```
@@ -339,7 +341,7 @@ python -I scripts/train/train_ppo_reach.py \
   --task axis_pair_reach --observation-mode fetch_like_v1 --reward-mode reach_progress_v1 \
   --action-scale 0.00025 --timesteps 16384 --seed 2026 \
   --eval-every 2048 --checkpoint-every 2048 --eval-episodes 2 --eval-seed-start 97000 \
-  --run-dir outputs/rl/ppo_reward/axis_pair_progress_seed2026_pilot
+  --run-dir outputs/reach/ppo_reward/axis_pair_progress_seed2026_pilot
 ```
 
 先检查两方向是否都能选择正确动作，再考虑random_reach。新旧奖励应以相同观测、seed、预算和目标配对，
@@ -355,7 +357,7 @@ python -I scripts/train/train_ppo_reach.py \
 home、运动特征按固定 0.01m 尺度处理；两个 goal 始终保持世界坐标米。
 
 用户已按以下参数完成训练与独立评估，产物位于
-`outputs/rl/ppo_reach/random_fetch_v1_seed2026_ab_new/`。以下保留已完成实验的命令；
+`outputs/reach/ppo/random_fetch_v1_seed2026_ab_new/`。以下保留已完成实验的命令；
 复现时必须更换 `--run-dir` 和 `--json`，不能覆盖该目录或原评估文件：
 
 ```bash
@@ -364,12 +366,12 @@ python -I scripts/train/train_ppo_reach.py \
   --reward-mode reach_shaped_v1 --action-scale 0.00025 \
   --timesteps 16384 --seed 2026 --eval-every 2048 --checkpoint-every 2048 \
   --eval-episodes 20 --eval-seed-start 87000 \
-  --run-dir outputs/rl/ppo_reach/random_fetch_v1_seed2026_ab_new
+  --run-dir outputs/reach/ppo/random_fetch_v1_seed2026_ab_new
 
 python -I scripts/evaluate/evaluate_ppo_reach.py \
-  --model outputs/rl/ppo_reach/random_fetch_v1_seed2026_ab_new/final/model.zip \
+  --model outputs/reach/ppo/random_fetch_v1_seed2026_ab_new/final/model.zip \
   --observation-mode fetch_like_v1 --episodes 100 --seed-start 88000 \
-  --json outputs/rl/ppo_reach/random_fetch_v1_seed2026_ab_new/heldout_88000.json
+  --json outputs/reach/ppo/random_fetch_v1_seed2026_ab_new/heldout_88000.json
 ```
 
 训练也支持 fixed_reach、axis_pair_reach 和 easy_random_reach；离散两方向评估仍须
@@ -380,7 +382,7 @@ python -I scripts/evaluate/evaluate_ppo_reach.py \
 [Fetch观测验证报告](docs/validation/REACH_FETCH_OBSERVATION_VALIDATION.md)。本轮训练完成32次Rollout、
 320个epoch、2560次Adam更新；开发集87000–87019最终成功2/20，独立集88000–88099成功3/100。
 独立集平均初始距离4.122mm、最终距离5.888mm，100次首动作X分量均为正。
-后续131072步实验位于 `outputs/rl/ppo_reach/random_fetch_v1_seed2026_131072/`，
+后续131072步实验位于 `outputs/reach/ppo/random_fetch_v1_seed2026_131072/`，
 使用相同PPO配置和开发集，每8192步评估/保存，独立测试为92000–92099，成功1/100。
 12维接口和训练链路验证通过，但两档预算均未学会可靠的随机Reach；在诊断目标映射和固定落点前，不建议直接扩大到262144步。
 
@@ -390,10 +392,10 @@ python -I scripts/evaluate/evaluate_ppo_reach.py \
 
 ```bash
 python -I scripts/evaluate/evaluate_ppo_reach.py \
-  --model outputs/rl/ppo_reach/fixed_seed2026_pilot/checkpoints/step_016384/model.zip \
+  --model outputs/reach/ppo/fixed_seed2026_pilot/checkpoints/step_016384/model.zip \
   --episodes 1 --seed-start 88000 --json /tmp/realman_ppo_evaluation_new.json
 python -I scripts/plots/plot_ppo_training.py \
-  --run-dir outputs/rl/ppo_reach/fixed_seed2026_pilot --out /tmp/realman_ppo_plots_new
+  --run-dir outputs/reach/ppo/fixed_seed2026_pilot --out /tmp/realman_ppo_plots_new
 ```
 
 SAC、BC 分别使用 `scripts/evaluate/evaluate_sac_reach.py`、`scripts/evaluate/evaluate_bc_reach.py`。评估读取保存的环境与观测变换；绘图只读 JSON，不加载策略、不推断未测量的成功率。早期 schema 1 SAC smoke 文件不受当前 schema 2 加载器支持；本次未改写这些历史文件，详见 [重构报告](docs/validation/PROJECT_ORGANIZATION_REFACTOR.md)。
@@ -407,7 +409,7 @@ SAC、BC 分别使用 `scripts/evaluate/evaluate_sac_reach.py`、`scripts/evalua
 - `utils/`、`vendor/`：共享几何 / 演示工具和厂家离线适配器。
 - `scripts/{train,evaluate,demos,models,diagnostics,plots}/`：按用途分类的正式入口。
 - `tests/`：独立回归测试；`docs/`：架构、文件索引、实验及验证记录。
-- `outputs/`：Git 忽略的模型、数据和日志，保留历史产物。
+- `outputs/{simulation,reach,grasp,imitation,validation}/`：按用途分类的模型、数据、图像与验证记录，入口见 [输出导航](outputs/README.md)。
 
 包内目录的完整关系见 [架构](docs/architecture.md)，逐文件职责和调用者见 [FILE_MAP](docs/FILE_MAP.md)。旧平铺脚本和 `experiments.*` 不再作为 Python 接口保留。
 
@@ -415,6 +417,7 @@ SAC、BC 分别使用 `scripts/evaluate/evaluate_sac_reach.py`、`scripts/evalua
 
 - [工程架构与依赖边界](docs/architecture.md)
 - [完整 Python 文件地图](docs/FILE_MAP.md)
+- [输出目录、主要模型与路径迁移](docs/OUTPUTS.md)
 - [实验历史与历史 README](docs/experiments/README.md)
 - [历次验证报告索引](docs/validation/README.md)
 - [本次重构、迁移表、验证及新命令](docs/validation/PROJECT_ORGANIZATION_REFACTOR.md)
