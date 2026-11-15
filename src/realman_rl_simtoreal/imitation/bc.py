@@ -15,7 +15,9 @@ import torch
 from torch import nn
 
 from ..envs.reach_env import ReachEnv
-from ..rl.common.baselines import rule_action
+from ..evaluation.reach import evaluate_bc
+from ..utils.metrics import cosine
+from ..evaluation.baselines import rule_action
 from ..rl.common.observation import FEATURE_KEYS, features, ReachTransform, require_legacy
 from ..rl.common.artifacts import empty_directory, write_json, versions
 from ..tasks.reach import ENV_CONFIG
@@ -86,12 +88,6 @@ def stats(values):
         return dict(count=0)
     return dict(count=int(values.size), mean=float(values.mean()), min=float(values.min()),
                 median=float(np.median(values)), p95=float(np.percentile(values, 95)), max=float(values.max()))
-
-
-def cosine(a, b):
-    denominator = np.linalg.norm(a, axis=-1)*np.linalg.norm(b, axis=-1)
-    mask = denominator > 1e-12
-    return np.clip(np.sum(a[mask]*b[mask], axis=-1)/denominator[mask], -1., 1.)
 
 
 def action_metrics(predictions, labels, raw):
@@ -311,86 +307,6 @@ def train_bc(data_path, folder, *, epochs=300, batch_size=256, learning_rate=.00
 
 
 def evaluate_policy(name, seeds, *, policy=None, environment=None):
-    """BC execution never calls expert; only the rule comparison uses rule_action."""
-    if name not in ('rule','untrained','bc') or not len(seeds):
-        raise ValueError('Expected rule/untrained/bc and nonempty seeds')
-    if name != 'rule' and policy is None:
-        raise ValueError('Learned/untrained policy required')
-    config=dict(ENV_CONFIG if environment is None else environment)
-    require_legacy(config, 'BC evaluation')
-    before=weight_digest(policy.network) if policy is not None else None
-    episodes,records,step_times=[],[],[]
-    started=perf_counter()
-    with ReachEnv(**config) as env:
-        if policy is not None and policy.transform.config != ReachTransform.from_env(env).config:
-            raise ValueError('Saved transform does not match environment')
-        for seed in seeds:
-            obs,_=env.reset(seed=int(seed))
-            goal=obs['desired_goal'].copy();initial=obs['achieved_goal'].copy()
-            rewards=[];previous=None;reversed_steps=0;physical_steps=0
-            begin=len(records)
-            for step in range(env.max_episode_steps):
-                actual=obs['achieved_goal'].copy();command=obs['observation'][18:21].copy()
-                # No expert correction, blending or fallback in either neural branch.
-                action=rule_action(obs,env.action_scale) if name == 'rule' else policy.predict(obs)
-                if not env.action_space.contains(action):
-                    raise ValueError('Illegal policy action')
-                raw={k:v.copy() for k,v in obs.items()}
-                tick=perf_counter()
-                obs,reward,terminated,truncated,info=env.step(action)
-                step_times.append(perf_counter()-tick)
-                if not env.observation_space.contains(obs) or not all(np.isfinite(v).all() for v in obs.values()):
-                    raise ValueError('Invalid evaluation observation')
-                if reward != env.compute_reward(obs['achieved_goal'],obs['desired_goal'],info):
-                    raise ValueError('Inconsistent evaluation reward')
-                reversal=previous is not None and float(previous@action) < -1e-9
-                reversed_steps+=int(reversal);previous=action.copy()
-                records.append(dict(seed=int(seed),step=step+1,raw_observation=raw['observation'].tolist(),
-                    actual_before_m=actual.tolist(),command_before_m=command.tolist(),goal_m=goal.tolist(),
-                    actual_after_m=obs['achieved_goal'].tolist(),command_after_m=info['command_position_m'].tolist(),
-                    action=action.tolist(),reversed_from_previous=bool(reversal),
-                    reward=reward,distance_m=info['distance_m'],reason=info['termination_reason'],
-                    physics_steps=info['physics_steps'],simulation_time_s=info['simulation_time_s']))
-                rewards.append(reward);physical_steps+=info['physics_steps']
-                if terminated or truncated:
-                    break
-            rows=records[begin:]
-            actual_error=goal-np.array([r['actual_before_m'] for r in rows])
-            command_error=goal-np.array([r['command_before_m'] for r in rows])
-            actions=np.array([r['action'] for r in rows])
-            actual_cos,command_cos=cosine(actions,actual_error),cosine(actions,command_error)
-            command_path=sum(np.linalg.norm(np.subtract(r['command_after_m'],r['command_before_m'])) for r in rows)
-            actual_path=sum(np.linalg.norm(np.subtract(r['actual_after_m'],r['actual_before_m'])) for r in rows)
-            episodes.append(dict(seed=int(seed),goal_m=goal.tolist(),initial_position_m=initial.tolist(),
-                final_position_m=obs['achieved_goal'].tolist(),success=info['is_success'],
-                safety_failure=info['is_safety_failure'],reason=info['termination_reason'],
-                terminated=bool(terminated),truncated=bool(truncated),length=len(rows),
-                return_=float(sum(rewards)),discounted_return=float(np.dot(rewards,.99**np.arange(len(rewards)))),
-                final_distance_m=info['distance_m'],physical_steps=physical_steps,
-                actual_toward=int(np.sum(actual_cos > 0)),actual_directions=len(actual_cos),
-                command_toward=int(np.sum(command_cos > 0)),command_directions=len(command_cos),
-                reversed_steps=reversed_steps,reversal_pairs=max(0,len(rows)-1),
-                command_path_m=command_path,actual_path_m=actual_path))
-    if policy is not None and weight_digest(policy.network) != before:
-        raise ValueError('Evaluation changed network parameters')
-    successes=[e for e in episodes if e['success']]
-    def fraction(count,total):
-        denominator=sum(e[total] for e in episodes)
-        return sum(e[count] for e in episodes)/denominator if denominator else None
-    command_path=sum(e['command_path_m'] for e in episodes)
-    summary=dict(episodes=len(episodes),success_rate=len(successes)/len(episodes),
-        mean_success_steps=float(np.mean([e['length'] for e in successes])) if successes else None,
-        mean_episode_length=float(np.mean([e['length'] for e in episodes])),
-        mean_final_distance_m=float(np.mean([e['final_distance_m'] for e in episodes])),
-        mean_return=float(np.mean([e['return_'] for e in episodes])),
-        safety_failures=sum(e['safety_failure'] for e in episodes),
-        termination_counts=dict(Counter(e['reason'] for e in episodes)),
-        actual_toward_fraction=fraction('actual_toward','actual_directions'),
-        command_toward_fraction=fraction('command_toward','command_directions'),
-        reversed_fraction=fraction('reversed_steps','reversal_pairs'),
-        command_path_m=command_path,actual_path_m=sum(e['actual_path_m'] for e in episodes),
-        actual_to_command_path_ratio=sum(e['actual_path_m'] for e in episodes)/command_path if command_path else None)
-    wall=perf_counter()-started
-    return dict(policy=name,environment=config,summary=summary,episodes=episodes,records=records,
-                parameters_unchanged=True,timing=dict(wall_s=wall,mean_step_s=float(np.mean(step_times)),
-                                                     interaction_steps_per_s=len(step_times)/wall))
+    """BC weight guard around the independent, schema-compatible evaluator."""
+    return evaluate_bc(name, seeds, policy=policy, environment=environment,
+                       state_digest=None if policy is None else lambda: weight_digest(policy.network))

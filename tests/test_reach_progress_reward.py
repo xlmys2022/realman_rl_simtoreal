@@ -256,7 +256,7 @@ class Block(importlib.abc.MetaPathFinder):
 sys.meta_path.insert(0,Block())
 from realman_rl_simtoreal.paths import PROJECT_ROOT
 from realman_rl_simtoreal.envs.reach_env import ReachEnv
-from realman_rl_simtoreal.rl.common import baselines,evaluation
+from realman_rl_simtoreal.evaluation import baselines, reach as evaluation
 def forbidden(*a,**kw):raise AssertionError('No expert actions')
 baselines.rule_action=evaluation.rule_action=forbidden
 physical=mujoco.mj_step;original=ReachEnv.step;active={};counts=dict(env_steps=0,physics_steps=0)

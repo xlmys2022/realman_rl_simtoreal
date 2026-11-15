@@ -334,8 +334,8 @@ class ObservationPolicyTests(unittest.TestCase):
                 load_ppo(path/'model.zip')
 
     def test_legacy_only_consumers_refuse_new_mode_clearly(self):
-        from realman_rl_simtoreal.rl.common.baselines import rule_action
-        from realman_rl_simtoreal.rl.common.evaluation import evaluate
+        from realman_rl_simtoreal.evaluation.baselines import rule_action
+        from realman_rl_simtoreal.evaluation.reach import evaluate
         from realman_rl_simtoreal.rl.sac import make_model
         from realman_rl_simtoreal.rl.sac_diagnostics import trace_policy
         from realman_rl_simtoreal.imitation.bc import collect_demonstrations, evaluate_policy, BCPolicy, BCNetwork
@@ -393,7 +393,7 @@ class FetchPPOSmokeTests(unittest.TestCase):
         cls.folder = Path(os.environ.get('REALMAN_FETCH_PPO_TEST_ARTIFACTS', str(Path(cls.temp.name)/'run')))
         if not (cls.folder/'summary.json').exists():
             driver = script('scripts/train/train_ppo_reach.py')
-            from realman_rl_simtoreal.rl.common import baselines, evaluation
+            from realman_rl_simtoreal.evaluation import baselines, reach as evaluation
             physical = mujoco.mj_step;original_step = ReachEnv.step;active = {};counts = dict(env_steps=0, physics_steps=0)
             def checked_physics(m, d):
                 if id(d) in active:np.testing.assert_array_equal(d.qpos, active[id(d)])

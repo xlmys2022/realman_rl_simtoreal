@@ -1,0 +1,466 @@
+{
+  "date": "2026-11-15",
+  "branch": "refactor/src_rl_evaluation-reconstuct",
+  "baseline_commit": "f49faa54241ee778ab3f48958128b0d713322e33",
+  "completed": true,
+  "versions": {
+    "python": "3.11.17 (main, Oct  1 2026, 20:17:42) [GCC 14.3.0]",
+    "executable": "/home/mr-beaver/Documents/miniconda3/envs/realman_rl/bin/python",
+    "commit": "f49faa54241ee778ab3f48958128b0d713322e33",
+    "branch": "refactor/src_rl_evaluation-reconstuct",
+    "packages": {
+      "mujoco": "3.17.0",
+      "numpy": "2.4.6",
+      "gymnasium": "1.4.0",
+      "torch": "2.14.0+cpu",
+      "stable_baselines3": "2.9.2",
+      "tensorboard": "2.21.0",
+      "matplotlib": "3.11.2",
+      "setuptools": "84.0.0",
+      "Robotic_Arm": "1.1.7"
+    }
+  },
+  "tests": [
+    {
+      "stage": "重构前完整基线",
+      "log": "baseline-tests.log",
+      "passed": 396,
+      "failed": 0,
+      "skipped": 0,
+      "seconds": 374.309
+    },
+    {
+      "stage": "阶段一包与导入",
+      "log": "stage1-package.log",
+      "passed": 10,
+      "failed": 0,
+      "skipped": 0,
+      "seconds": 13.555
+    },
+    {
+      "stage": "阶段二 Evaluation",
+      "log": "stage2-evaluation.log",
+      "passed": 17,
+      "failed": 0,
+      "skipped": 0,
+      "seconds": 2.198
+    },
+    {
+      "stage": "阶段二 BC",
+      "log": "stage2-bc.log",
+      "passed": 15,
+      "failed": 0,
+      "skipped": 0,
+      "seconds": 5.182
+    },
+    {
+      "stage": "阶段二包与依赖",
+      "log": "stage2-package.log",
+      "passed": 10,
+      "failed": 0,
+      "skipped": 0,
+      "seconds": 14.598
+    },
+    {
+      "stage": "最终完整回归",
+      "log": "final-tests.log",
+      "passed": 413,
+      "failed": 0,
+      "skipped": 0,
+      "seconds": 378.864
+    }
+  ],
+  "cli": {
+    "help_entries": [
+      {
+        "script": "scripts/demos/control_ee.py",
+        "exit_code": 0
+      },
+      {
+        "script": "scripts/demos/control_joints.py",
+        "exit_code": 0
+      },
+      {
+        "script": "scripts/demos/demo_gripper.py",
+        "exit_code": 0
+      },
+      {
+        "script": "scripts/demos/run_grasp_contact_cases.py",
+        "exit_code": 0
+      },
+      {
+        "script": "scripts/demos/run_grasp_lift.py",
+        "exit_code": 0
+      },
+      {
+        "script": "scripts/demos/view_robot.py",
+        "exit_code": 0
+      },
+      {
+        "script": "scripts/diagnostics/compare_controllers.py",
+        "exit_code": 0
+      },
+      {
+        "script": "scripts/diagnostics/compare_fk.py",
+        "exit_code": 0
+      },
+      {
+        "script": "scripts/diagnostics/compare_ik.py",
+        "exit_code": 0
+      },
+      {
+        "script": "scripts/diagnostics/compare_sac_boundary.py",
+        "exit_code": 0
+      },
+      {
+        "script": "scripts/diagnostics/diagnose_reach_rewards.py",
+        "exit_code": 0
+      },
+      {
+        "script": "scripts/diagnostics/diagnose_sac_reach.py",
+        "exit_code": 0
+      },
+      {
+        "script": "scripts/diagnostics/probe_ppo_goals.py",
+        "exit_code": 0
+      },
+      {
+        "script": "scripts/diagnostics/probe_reach_env.py",
+        "exit_code": 0
+      },
+      {
+        "script": "scripts/diagnostics/smoke_reach_env.py",
+        "exit_code": 0
+      },
+      {
+        "script": "scripts/evaluate/analyze_reach_results.py",
+        "exit_code": 0
+      },
+      {
+        "script": "scripts/evaluate/evaluate_bc_reach.py",
+        "exit_code": 0
+      },
+      {
+        "script": "scripts/evaluate/evaluate_ppo_grasp_lift.py",
+        "exit_code": 0
+      },
+      {
+        "script": "scripts/evaluate/evaluate_ppo_reach.py",
+        "exit_code": 0
+      },
+      {
+        "script": "scripts/evaluate/evaluate_reach_baselines.py",
+        "exit_code": 0
+      },
+      {
+        "script": "scripts/evaluate/evaluate_sac_reach.py",
+        "exit_code": 0
+      },
+      {
+        "script": "scripts/models/inspect_model.py",
+        "exit_code": 0
+      },
+      {
+        "script": "scripts/plots/plot_ppo_training.py",
+        "exit_code": 0
+      },
+      {
+        "script": "scripts/plots/plot_sac_training.py",
+        "exit_code": 0
+      },
+      {
+        "script": "scripts/train/collect_reach_demonstrations.py",
+        "exit_code": 0
+      },
+      {
+        "script": "scripts/train/train_bc_reach.py",
+        "exit_code": 0
+      },
+      {
+        "script": "scripts/train/train_ppo_grasp_lift.py",
+        "exit_code": 0
+      },
+      {
+        "script": "scripts/train/train_ppo_reach.py",
+        "exit_code": 0
+      },
+      {
+        "script": "scripts/train/train_sac_reach.py",
+        "exit_code": 0
+      }
+    ],
+    "pip_check": "No broken requirements found."
+  },
+  "ast": {
+    "unchanged_algorithm_class_and_function_definitions": 55,
+    "unchanged_moved_definitions": 13,
+    "all_32_script_cli_argument_definitions_unchanged": true,
+    "algorithm_modules_unchanged_except_imports": [
+      "rl/ppo.py",
+      "rl/sac.py",
+      "rl/ppo_grasp.py",
+      "rl/sac_monitoring.py",
+      "rl/sac_diagnostics.py",
+      "imitation/bc_to_sac.py"
+    ],
+    "algorithm_constants_and_hyperparameters_unchanged": true
+  },
+  "episodes": {
+    "protocols": [
+      "rule",
+      "random",
+      "ppo",
+      "sac",
+      "bc",
+      "bc_rule",
+      "baseline",
+      "grasp_controller",
+      "grasp_ppo"
+    ],
+    "physical_and_policy_results_exactly_equal": true,
+    "json_fields_unchanged": true,
+    "demonstration_arrays_equal": 21,
+    "sac_replay_size": 30000,
+    "exceptions": [
+      "Wall-clock measurements compared by field structure only",
+      "Source provenance paths/hashes follow the relocated implementation"
+    ]
+  },
+  "protected_files": {
+    "files": 4116,
+    "bytes": 2477165716,
+    "outputs_files": 4056,
+    "historical_models": 731,
+    "all_sha256_and_sizes_identical": true,
+    "no_added_or_removed_protected_files": true,
+    "manifest_sha256": "ed1b500a6f351480977b820b5cdd7fc2052247bcfd53ca7f9e5b1dc976da93f8"
+  },
+  "protocol_summaries": {
+    "rule": {
+      "summary": {
+        "episodes": 1,
+        "success_rate": 1.0,
+        "mean_return": -1.6770143983478094,
+        "mean_discounted_return": -1.5980498186577636,
+        "mean_episode_length": 14.0,
+        "mean_success_steps": 14.0,
+        "mean_final_distance_m": 0.0007969846261752673,
+        "safety_failures": 0,
+        "rejected_actions": 0,
+        "termination_counts": {
+          "success": 1,
+          "workspace_limit": 0,
+          "joint_limit": 0,
+          "ik_failure": 0,
+          "orientation_limit": 0,
+          "collision": 0,
+          "numerical_failure": 0,
+          "time_limit": 0,
+          "unreachable_target": 0,
+          "velocity_limit": 0,
+          "drive_failure": 0
+        }
+      },
+      "seeds": [
+        88100
+      ]
+    },
+    "random": {
+      "summary": {
+        "episodes": 1,
+        "success_rate": 0.0,
+        "mean_return": -0.5929473447706783,
+        "mean_discounted_return": -0.5870679260254267,
+        "mean_episode_length": 3.0,
+        "mean_success_steps": null,
+        "mean_final_distance_m": 0.003911691681971702,
+        "safety_failures": 0,
+        "rejected_actions": 0,
+        "termination_counts": {
+          "success": 0,
+          "workspace_limit": 0,
+          "joint_limit": 0,
+          "ik_failure": 0,
+          "orientation_limit": 0,
+          "collision": 0,
+          "numerical_failure": 0,
+          "time_limit": 1,
+          "unreachable_target": 0,
+          "velocity_limit": 0,
+          "drive_failure": 0
+        }
+      },
+      "seeds": [
+        88100
+      ]
+    },
+    "ppo": {
+      "summary": {
+        "episodes": 1,
+        "success_rate": 1.0,
+        "mean_return": 8.17318374460006,
+        "mean_discounted_return": 6.9230665546159305,
+        "mean_episode_length": 18.0,
+        "mean_success_steps": 18.0,
+        "mean_final_distance_m": 0.0009609675835569294,
+        "safety_failures": 0,
+        "rejected_actions": 0,
+        "termination_counts": {
+          "success": 1,
+          "workspace_limit": 0,
+          "joint_limit": 0,
+          "ik_failure": 0,
+          "orientation_limit": 0,
+          "collision": 0,
+          "numerical_failure": 0,
+          "time_limit": 0,
+          "unreachable_target": 0,
+          "velocity_limit": 0,
+          "drive_failure": 0
+        }
+      },
+      "seeds": [
+        88000
+      ]
+    },
+    "sac": {
+      "summary": {
+        "episodes": 1,
+        "success_rate": 0.0,
+        "mean_return": -46.52774540633707,
+        "mean_discounted_return": -20.503938214623314,
+        "mean_episode_length": 200.0,
+        "mean_success_steps": null,
+        "mean_final_distance_m": 0.00402821771241283,
+        "safety_failures": 0,
+        "rejected_actions": 0,
+        "termination_counts": {
+          "success": 0,
+          "workspace_limit": 0,
+          "joint_limit": 0,
+          "ik_failure": 0,
+          "orientation_limit": 0,
+          "collision": 0,
+          "numerical_failure": 0,
+          "time_limit": 1,
+          "unreachable_target": 0,
+          "velocity_limit": 0,
+          "drive_failure": 0
+        }
+      },
+      "seeds": [
+        88100
+      ]
+    },
+    "bc": {
+      "summary": {
+        "episodes": 1,
+        "success_rate": 1.0,
+        "mean_success_steps": 14.0,
+        "mean_episode_length": 14.0,
+        "mean_final_distance_m": 0.0007830662429889778,
+        "mean_return": -1.672784402350891,
+        "safety_failures": 0,
+        "termination_counts": {
+          "success": 1
+        },
+        "actual_toward_fraction": 1.0,
+        "command_toward_fraction": 1.0,
+        "reversed_fraction": 0.0,
+        "command_path_m": 0.003516567283832134,
+        "actual_path_m": 0.003124930787966793,
+        "actual_to_command_path_ratio": 0.8886310244464994
+      },
+      "seeds": [
+        88100
+      ]
+    },
+    "bc_rule": {
+      "summary": {
+        "episodes": 1,
+        "success_rate": 0.0,
+        "mean_success_steps": null,
+        "mean_episode_length": 3.0,
+        "mean_final_distance_m": 0.0035065357174737725,
+        "mean_return": -0.5529597861532843,
+        "safety_failures": 0,
+        "termination_counts": {
+          "time_limit": 1
+        },
+        "actual_toward_fraction": 1.0,
+        "command_toward_fraction": 1.0,
+        "reversed_fraction": 0.0,
+        "command_path_m": 0.0007500000117835186,
+        "actual_path_m": 0.00039996631008669165,
+        "actual_to_command_path_ratio": 0.5332884050702371
+      },
+      "seeds": [
+        88100
+      ]
+    },
+    "baseline": {
+      "summary": {
+        "episodes": 1,
+        "success_rate": 0.0,
+        "mean_return": -1.0085146362753827,
+        "mean_episode_length": 6.0,
+        "mean_success_steps": null,
+        "mean_final_distance_m": 0.002793080046449853,
+        "termination_counts": {
+          "time_limit": 1
+        },
+        "ik_failures": 0,
+        "command_boundary_failures": 0,
+        "joint_limit_failures": 0,
+        "collisions": 0,
+        "numerical_failures": 0,
+        "timeouts": 1
+      },
+      "seeds": [
+        88100
+      ]
+    },
+    "grasp_controller": {
+      "summary": {
+        "episodes": 1,
+        "successes": 1,
+        "success_rate": 1.0,
+        "termination_counts": {
+          "success": 1
+        },
+        "safety_failures": 0,
+        "mean_success_clearance_m": 0.02920730400898363,
+        "mean_success_world_z_lift_m": 0.025243488832013883,
+        "mean_success_steps": 447.0
+      },
+      "seeds": [
+        230000
+      ]
+    },
+    "grasp_ppo": {
+      "summary": {
+        "episodes": 1,
+        "successes": 1,
+        "success_rate": 1.0,
+        "termination_counts": {
+          "success": 1
+        },
+        "safety_failures": 0,
+        "mean_success_clearance_m": 0.03330030059619999,
+        "mean_success_world_z_lift_m": 0.02905550292129111,
+        "mean_success_steps": 244.0
+      },
+      "seeds": [
+        270000
+      ]
+    }
+  },
+  "documentation": {
+    "documents_checked": 5,
+    "local_links_valid": 109,
+    "python_files_indexed": 104,
+    "original_validation_reports_unchanged": 22,
+    "git_index_untouched": true,
+    "branch_unchanged": true
+  }
+}

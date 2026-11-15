@@ -9,6 +9,7 @@
 - [随机起点与连续多目标 Reach](../../README.md#随机起点与连续多目标-reach)支持 20 cm 可达区域内的随机起点、每条 5 个目标和连续物理状态，新增训练 49152 步。独立测试完成 12/20 条轨迹、72/100 个计划目标，另有 7 次限位终止、1 次超时；60 次目标切换状态连续，364 项回归测试通过。
 - [20 cm 随机 Reach 续训及验证](../../README.md#20-cm-随机-reach-续训)使用 goal_relative_v3 观测、限速笛卡尔参考轨迹和 PPO 权重迁移，新增 49152 步训练。独立 100 目标成功 97/100，2 次超时、1 次 IK 失败；目标半径 3.19–19.99 cm，成功回合平均误差 0.773 mm，351 项回归测试通过。
 - [5 mm 三维随机 Reach 验证及复现命令](../../README.md#5-mm-三维随机-reach-验证)采用 goal_relative_v1 观测与 reach_progress_v1 奖励。训练种子 2026、2027、2028 的模型在相同 1000 个新目标上分别成功 1000/1000，共计 3000 回合，八个空间象限均通过，平均实际末端误差 0.859–0.862 mm，零超时、零安全终止。
+- [Evaluation 层重构](EVALUATION_REFACTOR_VALIDATION.md)：独立 Reach / GraspLift、规则与 BC 闭环评估，指标和历史 JSON 协议兼容。
 - [项目结构重构（本次）](PROJECT_ORGANIZATION_REFACTOR.md)
 - [初始模型检查](VALIDATION.md)
 - [动力学](DYNAMICS_VALIDATION.md)

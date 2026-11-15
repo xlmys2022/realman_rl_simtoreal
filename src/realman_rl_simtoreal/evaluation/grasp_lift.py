@@ -1,31 +1,11 @@
-"""Evaluation for four-action grasp/lift controllers and PPO policies."""
-from collections import Counter
-import hashlib
-from importlib.metadata import version
+"""Independent four-action grasp episodes for caller-supplied policies or a controller."""
 from time import perf_counter
-
 import numpy as np
 
 from ..envs.grasp_lift_env import GraspLiftEnv
 from ..simulation.grasp_controller import GraspLiftController
-from ..paths import PROJECT_ROOT, GRASP_CONTACT_SCENE
-
-
-def experiment_metadata():
-    """Fingerprint the actual combined robot, gripper and contact task."""
-    assets={GRASP_CONTACT_SCENE}
-    for folder in ('assets/robots/rml63','assets/grippers/eg2_4c2'):
-        assets.update(p for p in (PROJECT_ROOT/folder).rglob('*') if p.is_file())
-    sources=[PROJECT_ROOT/'src/realman_rl_simtoreal'/p for p in (
-        'envs/grasp_lift_env.py','tasks/grasp_lift.py','rl/grasp_lift.py',
-        'simulation/grasp_controller.py','simulation/gripper.py','simulation/grasp_contact.py',
-        'simulation/control.py','simulation/kinematics.py','simulation/model.py')]
-    def hashes(paths):
-        return {str(p.relative_to(PROJECT_ROOT)):hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(paths)}
-    return dict(assets=hashes(assets),sources=hashes(sources),
-                runtime={name:version(name) for name in ('mujoco','numpy','gymnasium')},
-                action_semantics=['world_dx','world_dy','world_dz','absolute_gripper_opening'],
-                observation_dim=41,action_dim=4)
+from ..utils.artifacts import experiment_metadata
+from .metrics import summarize_grasp_episodes as summarize
 
 
 def rollout(env,seed,*,model=None,close=True,lift=True,tick=None):
@@ -62,16 +42,6 @@ def rollout(env,seed,*,model=None,close=True,lift=True,tick=None):
         gripper_statistics=statistics,gripper_statistics_error=statistics_error,wall_s=perf_counter()-started,records=records)
     if env.config['record_physics']:result['physics_records']=env.recorder.rows
     return result
-
-
-def summarize(episodes):
-    successful=[e for e in episodes if e['success']]
-    return dict(episodes=len(episodes),successes=len(successful),success_rate=len(successful)/len(episodes) if episodes else None,
-        termination_counts=dict(Counter(e['reason'] for e in episodes)),
-        safety_failures=sum(e['is_safety_failure'] for e in episodes),
-        mean_success_clearance_m=float(np.mean([e['final_support_clearance_m'] for e in successful])) if successful else None,
-        mean_success_world_z_lift_m=float(np.mean([e['world_z_lift_m'] for e in successful])) if successful else None,
-        mean_success_steps=float(np.mean([e['length'] for e in successful])) if successful else None)
 
 
 def evaluate(config,seeds,*,model=None,close=True,lift=True,tick=None):

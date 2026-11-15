@@ -11,7 +11,7 @@ import torch
 from stable_baselines3 import SAC
 
 from ..envs.reach_env import ReachEnv
-from .common.baselines import rule_action
+from ..evaluation.baselines import rule_action
 from .common.observation import checkpoint_transform, require_legacy, validate_model_observation
 from .common.artifacts import write_json
 

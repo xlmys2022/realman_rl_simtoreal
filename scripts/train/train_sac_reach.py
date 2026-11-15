@@ -16,7 +16,8 @@ from realman_rl_simtoreal.tasks.reach import ENV_CONFIG, TASKS, task_environment
 from realman_rl_simtoreal.rl.sac import SAC_CONFIG, make_model, save_checkpoint
 from realman_rl_simtoreal.rl.common.env_factory import training_env, make_probe
 from realman_rl_simtoreal.rl.sac_monitoring import TrainingAudit, MonitoredTrainingAudit, probe_q
-from realman_rl_simtoreal.rl.common.evaluation import evaluate, record_evaluation
+from realman_rl_simtoreal.evaluation.reach import evaluate
+from realman_rl_simtoreal.rl.common.logging import record_evaluation
 from realman_rl_simtoreal.rl.common.artifacts import asset_hashes, versions, write_json
 from realman_rl_simtoreal.rl.sac_diagnostics import td_diagnostic
 from realman_rl_simtoreal.rl.common.observation import require_legacy, observation_metadata

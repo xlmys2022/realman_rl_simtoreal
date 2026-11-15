@@ -15,7 +15,7 @@ import sys
 import numpy as np
 
 from realman_rl_simtoreal.paths import OUTPUTS, PROJECT_ROOT
-from realman_rl_simtoreal.rl.common.evaluation import evaluate
+from realman_rl_simtoreal.evaluation.reach import evaluate
 from realman_rl_simtoreal.rl.common.artifacts import write_json
 from realman_rl_simtoreal.rl.sac_diagnostics import load_bundle, trace_policy, td_diagnostic
 

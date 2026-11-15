@@ -18,7 +18,7 @@ from stable_baselines3.common.logger import configure
 from realman_rl_simtoreal.rl.ppo_grasp import (
     CURRICULUM,ENCODING,REWARD,PPO_PARAMETERS,GraspAudit,environment_config,
     make_training_env,parameter_hashes,optimizer_steps,save_checkpoint,load_checkpoint,evaluate_model)
-from realman_rl_simtoreal.rl.grasp_lift import experiment_metadata
+from realman_rl_simtoreal.utils.artifacts import experiment_metadata
 from realman_rl_simtoreal.rl.common.artifacts import empty_directory,write_json,versions
 
 

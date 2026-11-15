@@ -1,50 +1,27 @@
-"""Shared deterministic Reach evaluation, episode summaries and logger tags."""
+"""Independent Reach episodes; policies are supplied by callers, never trained here."""
 from collections import Counter
 from time import perf_counter
 import numpy as np
 
-from ...envs.factory import make_reach_env
-from ...tasks.reach import ENV_CONFIG
+from ..envs.factory import make_reach_env
+from ..tasks.reach import ENV_CONFIG
+from ..tasks.rewards import REWARD_COMPONENT_KEYS
+from ..rl.common.observation import ReachTransform, require_legacy
+from ..utils.metrics import MotionStats
 from .baselines import rule_action
-from .metrics import MotionStats
-from .observation import ReachTransform, require_legacy
-from ...tasks.rewards import REWARD_COMPONENT_KEYS
-
-
-REASONS = ('success', 'workspace_limit', 'joint_limit', 'ik_failure', 'orientation_limit',
-           'collision', 'numerical_failure', 'time_limit', 'unreachable_target',
-           'velocity_limit', 'drive_failure')
-
-
-def summarize_episodes(episodes):
-    counts = Counter(e['reason'] for e in episodes)
-    successful = [e for e in episodes if e['success']]
-    result = dict(episodes=len(episodes), success_rate=len(successful)/len(episodes) if episodes else None,
-                mean_return=float(np.mean([e['return_'] for e in episodes])) if episodes else None,
-                mean_discounted_return=float(np.mean([e['discounted_return'] for e in episodes])) if episodes else None,
-                mean_episode_length=float(np.mean([e['length'] for e in episodes])) if episodes else None,
-                mean_success_steps=float(np.mean([e['length'] for e in successful])) if successful else None,
-                mean_final_distance_m=float(np.mean([e['final_distance_m'] for e in episodes])) if episodes else None,
-                safety_failures=sum(e['safety_failure'] for e in episodes),
-                rejected_actions=sum(e.get('rejected_actions',0) for e in episodes),
-                termination_counts={k: counts[k] for k in dict.fromkeys((*REASONS, *counts))})
-    if any('goals_planned' in e for e in episodes):
-        planned=sum(e.get('goals_planned',1) for e in episodes)
-        completed=sum(e.get('goals_completed',int(e['success'])) for e in episodes)
-        attempted=sum(e.get('goals_attempted',1) for e in episodes)
-        result.update(sequence_success_rate=result['success_rate'],goals_planned=planned,
-                      goals_completed=completed,goals_attempted=attempted,
-                      goal_success_rate=completed/attempted if attempted else None,
-                      goal_completion_rate=completed/planned if planned else None)
-    return result
+from .metrics import summarize_episodes, summarize_bc_episodes
+from ..envs.reach_env import ReachEnv
+from ..utils.metrics import cosine
 
 
 def evaluate(name, seeds, *, model=None, transform=None, config=None, action_seed=2026, gamma=.99,
-             reference_policy=None,collect_motion=False):
+             reference_policy=None,collect_motion=False,predict_action=None):
     """Raw SI environment; shared deterministic model.predict protocol for SAC/PPO."""
-    if name not in ('random', 'rule', 'sac', 'ppo') or not seeds:
+    if predict_action is not None and not callable(predict_action):
+        raise TypeError('predict_action must map one raw observation to one action')
+    if (name not in ('random', 'rule', 'sac', 'ppo') and predict_action is None) or not seeds:
         raise ValueError('Expected policy name and nonempty seeds')
-    if name in ('sac','ppo') and (model is None or transform is None):
+    if predict_action is None and name in ('sac','ppo') and (model is None or transform is None):
         raise ValueError(name.upper()+' requires model AND its saved observation transform')
     if name == 'rule':
         require_legacy(ENV_CONFIG if config is None else config, 'Command-lag rule baseline')
@@ -71,7 +48,11 @@ def evaluate(name, seeds, *, model=None, transform=None, config=None, action_see
             physics_steps = 0
             episode_motion=MotionStats() if discrete and collect_motion else None
             for _ in range(getattr(env,'episode_step_limit',env.max_episode_steps)):
-                if name in ('sac','ppo'):
+                if predict_action is not None:
+                    action = predict_action(obs)
+                    if reference_policy is not None:
+                        reference_errors.append(action.astype(float)-reference_policy.predict(obs))
+                elif name in ('sac','ppo'):
                     action, _ = model.predict(transform.encode(obs), deterministic=True)
                     if reference_policy is not None:
                         reference_errors.append(action.astype(float)-reference_policy.predict(obs))
@@ -148,7 +129,7 @@ def evaluate(name, seeds, *, model=None, transform=None, config=None, action_see
                 episodes[-1]['goal_label']=('+' if offset[axis]>0 else '-')+'XYZ'[axis] if np.all(abs(others)<1e-10) else f'goal_{episode_index}'
                 if episode_motion is not None:episodes[-1]['motion']=episode_motion.summary()
     elapsed = perf_counter()-start_total
-    result = dict(policy=name, deterministic=name in ('sac','ppo'), summary=summarize_episodes(episodes), episodes=episodes,
+    result = dict(policy=name, deterministic=predict_action is not None or name in ('sac','ppo'), summary=summarize_episodes(episodes), episodes=episodes,
                 timing=dict(wall_s=elapsed, interaction_steps_per_s=len(step_times)/elapsed,
                             mean_step_s=float(np.mean(step_times)), median_step_s=float(np.median(step_times)),
                             p95_step_s=float(np.percentile(step_times, 95))))
@@ -171,32 +152,89 @@ def evaluate(name, seeds, *, model=None, transform=None, config=None, action_see
     return result
 
 
-def record_evaluation(logger, evaluation):
-    for key,total in evaluation.get('reward_component_totals',{}).items():
-        logger.record('evaluation/reward_components/'+key+'_mean_per_step',
-                      total/sum(e['length'] for e in evaluation['episodes']))
-    summary=evaluation['summary']
-    for key in ('sequence_success_rate','goal_success_rate','goal_completion_rate','goals_completed','goals_planned'):
-        if summary.get(key) is not None:
-            logger.record('evaluation/'+key,summary[key])
-    for tag,key in [('success_rate','success_rate'),('episode_length_mean','mean_episode_length'),
-                    ('episode_reward_mean','mean_return'),('success_steps_mean','mean_success_steps'),
-                    ('safety_failures','safety_failures')]:
-        if summary[key] is not None:
-            logger.record('evaluation/'+tag,summary[key])
-    logger.record('evaluation/final_distance_mm',1000*summary['mean_final_distance_m'])
-    logger.record('evaluation/timeouts',summary['termination_counts'].get('time_limit',0))
-    logger.record('evaluation/action_rejection_fraction',summary['rejected_actions']/sum(e['length'] for e in evaluation['episodes']))
-    if evaluation.get('bc_action_deviation') is not None:
-        for key in ('mse','mae','max_abs'):
-            logger.record('bc/evaluation_states_'+key,evaluation['bc_action_deviation'][key])
-    for key,value in evaluation.get('motion',{}).items():
-        if value is not None:logger.record('evaluation/motion/'+key,value)
-    for label,row in evaluation.get('per_goal',{}).items():
-        tag=label.replace('+','plus_').replace('-','minus_').lower()
-        for key in ('success','episode_length','action_direction_fraction'):
-            if row[key] is not None:logger.record(f'evaluation/goals/{tag}/{key}',float(row[key]))
-        logger.record(f'evaluation/goals/{tag}/distance_mm',row['final_distance_m']*1000)
-        if row['actual_path_m'] is not None:logger.record(f'evaluation/goals/{tag}/actual_path_mm',row['actual_path_m']*1000)
-        for reason in REASONS:logger.record(f'evaluation/goals/{tag}/termination/'+reason,int(row['termination_reason']==reason))
-        for axis,value in zip('xyz',row['first_action']):logger.record(f'evaluation/goals/{tag}/first_action_{axis}',value)
+def evaluate_policy(predict_action, seeds, *, name='policy', config=None, transform=None,
+                    gamma=.99, collect_motion=False, state_digest=None):
+    """Evaluate a raw-observation -> action callable, independently of its training.
+
+    Callers select deterministic inference and any needed preprocessing. For
+    example BCPolicy.predict is already a raw-observation callable; an SB3
+    policy uses a lambda encoding obs and selecting predict(..., deterministic=True)[0].
+    An optional caller-owned state_digest verifies parameter/counter invariance
+    without importing its algorithm. Historical JSON schemas stay unchanged.
+    """
+    before=state_digest() if state_digest is not None else None
+    result=evaluate(name, seeds, config=config, transform=transform, gamma=gamma,
+                    collect_motion=collect_motion, predict_action=predict_action)
+    if state_digest is not None and state_digest()!=before:
+        raise ValueError('Evaluation changed policy parameters or counters')
+    return result
+
+
+def evaluate_bc(name, seeds, *, policy=None, environment=None, state_digest=None):
+    """BC execution never calls expert; only the rule comparison uses rule_action."""
+    if name not in ('rule','untrained','bc') or not len(seeds):
+        raise ValueError('Expected rule/untrained/bc and nonempty seeds')
+    if name != 'rule' and policy is None:
+        raise ValueError('Learned/untrained policy required')
+    config=dict(ENV_CONFIG if environment is None else environment)
+    require_legacy(config, 'BC evaluation')
+    before=state_digest() if state_digest is not None else None
+    episodes,records,step_times=[],[],[]
+    started=perf_counter()
+    with ReachEnv(**config) as env:
+        if policy is not None and policy.transform.config != ReachTransform.from_env(env).config:
+            raise ValueError('Saved transform does not match environment')
+        for seed in seeds:
+            obs,_=env.reset(seed=int(seed))
+            goal=obs['desired_goal'].copy();initial=obs['achieved_goal'].copy()
+            rewards=[];previous=None;reversed_steps=0;physical_steps=0
+            begin=len(records)
+            for step in range(env.max_episode_steps):
+                actual=obs['achieved_goal'].copy();command=obs['observation'][18:21].copy()
+                # No expert correction, blending or fallback in either neural branch.
+                action=rule_action(obs,env.action_scale) if name == 'rule' else policy.predict(obs)
+                if not env.action_space.contains(action):
+                    raise ValueError('Illegal policy action')
+                raw={k:v.copy() for k,v in obs.items()}
+                tick=perf_counter()
+                obs,reward,terminated,truncated,info=env.step(action)
+                step_times.append(perf_counter()-tick)
+                if not env.observation_space.contains(obs) or not all(np.isfinite(v).all() for v in obs.values()):
+                    raise ValueError('Invalid evaluation observation')
+                if reward != env.compute_reward(obs['achieved_goal'],obs['desired_goal'],info):
+                    raise ValueError('Inconsistent evaluation reward')
+                reversal=previous is not None and float(previous@action) < -1e-9
+                reversed_steps+=int(reversal);previous=action.copy()
+                records.append(dict(seed=int(seed),step=step+1,raw_observation=raw['observation'].tolist(),
+                    actual_before_m=actual.tolist(),command_before_m=command.tolist(),goal_m=goal.tolist(),
+                    actual_after_m=obs['achieved_goal'].tolist(),command_after_m=info['command_position_m'].tolist(),
+                    action=action.tolist(),reversed_from_previous=bool(reversal),
+                    reward=reward,distance_m=info['distance_m'],reason=info['termination_reason'],
+                    physics_steps=info['physics_steps'],simulation_time_s=info['simulation_time_s']))
+                rewards.append(reward);physical_steps+=info['physics_steps']
+                if terminated or truncated:
+                    break
+            rows=records[begin:]
+            actual_error=goal-np.array([r['actual_before_m'] for r in rows])
+            command_error=goal-np.array([r['command_before_m'] for r in rows])
+            actions=np.array([r['action'] for r in rows])
+            actual_cos,command_cos=cosine(actions,actual_error),cosine(actions,command_error)
+            command_path=sum(np.linalg.norm(np.subtract(r['command_after_m'],r['command_before_m'])) for r in rows)
+            actual_path=sum(np.linalg.norm(np.subtract(r['actual_after_m'],r['actual_before_m'])) for r in rows)
+            episodes.append(dict(seed=int(seed),goal_m=goal.tolist(),initial_position_m=initial.tolist(),
+                final_position_m=obs['achieved_goal'].tolist(),success=info['is_success'],
+                safety_failure=info['is_safety_failure'],reason=info['termination_reason'],
+                terminated=bool(terminated),truncated=bool(truncated),length=len(rows),
+                return_=float(sum(rewards)),discounted_return=float(np.dot(rewards,.99**np.arange(len(rewards)))),
+                final_distance_m=info['distance_m'],physical_steps=physical_steps,
+                actual_toward=int(np.sum(actual_cos > 0)),actual_directions=len(actual_cos),
+                command_toward=int(np.sum(command_cos > 0)),command_directions=len(command_cos),
+                reversed_steps=reversed_steps,reversal_pairs=max(0,len(rows)-1),
+                command_path_m=command_path,actual_path_m=actual_path))
+    if state_digest is not None and state_digest() != before:
+        raise ValueError('Evaluation changed network parameters')
+    summary=summarize_bc_episodes(episodes)
+    wall=perf_counter()-started
+    return dict(policy=name,environment=config,summary=summary,episodes=episodes,records=records,
+                parameters_unchanged=True if policy is None or state_digest is not None else None,timing=dict(wall_s=wall,mean_step_s=float(np.mean(step_times)),
+                                                     interaction_steps_per_s=len(step_times)/wall))
