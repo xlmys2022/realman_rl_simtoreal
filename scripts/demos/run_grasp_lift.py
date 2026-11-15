@@ -11,7 +11,8 @@ configure_backend()
 from realman_rl_simtoreal.envs.grasp_lift_env import GraspLiftEnv
 from realman_rl_simtoreal.paths import OUTPUTS
 from realman_rl_simtoreal.rl.common.artifacts import write_json
-from realman_rl_simtoreal.rl.grasp_lift import rollout,summarize,experiment_metadata
+from realman_rl_simtoreal.evaluation.grasp_lift import rollout, summarize
+from realman_rl_simtoreal.utils.artifacts import experiment_metadata
 from realman_rl_simtoreal.tasks.grasp_lift import GRASP_LIFT_CONFIG
 
 

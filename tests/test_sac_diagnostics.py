@@ -207,7 +207,7 @@ try:
     import torch
     from realman_rl_simtoreal.rl.common.env_factory import training_env
     from realman_rl_simtoreal.rl.sac import make_model
-    from realman_rl_simtoreal.rl.common.evaluation import evaluate
+    from realman_rl_simtoreal.evaluation.reach import evaluate
     from realman_rl_simtoreal.tasks.reach import ENV_CONFIG
     from realman_rl_simtoreal.rl.sac_diagnostics import td_diagnostic, fingerprint
     AVAILABLE=True

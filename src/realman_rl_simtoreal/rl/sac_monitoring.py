@@ -7,8 +7,8 @@ import torch
 from stable_baselines3.common.callbacks import BaseCallback
 
 from .common.artifacts import append_json
-from .common.evaluation import summarize_episodes
-from .common.metrics import MotionStats
+from ..evaluation.metrics import summarize_episodes
+from ..utils.metrics import MotionStats
 from .sac_diagnostics import q_diagnostic
 
 

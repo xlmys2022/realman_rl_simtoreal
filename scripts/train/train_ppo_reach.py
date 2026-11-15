@@ -25,7 +25,7 @@ from realman_rl_simtoreal.rl.ppo import (
 from realman_rl_simtoreal.tasks.reach import TASKS, OBSERVATION_MODES
 from realman_rl_simtoreal.rl.common.env_factory import training_env
 from realman_rl_simtoreal.rl.common.artifacts import asset_hashes, versions, write_json, append_json
-from realman_rl_simtoreal.rl.common.evaluation import record_evaluation
+from realman_rl_simtoreal.rl.common.logging import record_evaluation
 from realman_rl_simtoreal.tasks.rewards import REWARD_MODES
 from realman_rl_simtoreal.rl.common.observation import observation_metadata, validate_model_observation
 

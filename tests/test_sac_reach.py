@@ -28,7 +28,7 @@ if AVAILABLE:
     from realman_rl_simtoreal.rl.common.env_factory import training_env
     from realman_rl_simtoreal.rl.sac import make_model, save_checkpoint
     from realman_rl_simtoreal.rl.sac_diagnostics import q_diagnostic
-    from realman_rl_simtoreal.rl.common.evaluation import evaluate
+    from realman_rl_simtoreal.evaluation.reach import evaluate
     from realman_rl_simtoreal.rl.common.artifacts import write_json
     from realman_rl_simtoreal.paths import PROJECT_ROOT
 

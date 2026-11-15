@@ -16,7 +16,7 @@ try:
     from stable_baselines3.common.torch_layers import CombinedExtractor
     from stable_baselines3.sac.policies import Actor
     from realman_rl_simtoreal.imitation import bc as bc
-    from realman_rl_simtoreal.rl.common.baselines import rule_action
+    from realman_rl_simtoreal.evaluation.baselines import rule_action
     from realman_rl_simtoreal.tasks.reach import ENV_CONFIG
     from realman_rl_simtoreal.rl.common.env_factory import training_env
     from realman_rl_simtoreal.envs.reach_env import ReachEnv
@@ -159,7 +159,7 @@ class BehavioralCloningTests(unittest.TestCase):
         original=ReachEnv.step;calls=[]
         def checked(env,action):
             calls.append(np.array(action));return original(env,action)
-        with patch.object(ReachEnv,'step',checked),patch.object(bc,'rule_action',side_effect=AssertionError('No teacher during BC')):
+        with patch.object(ReachEnv,'step',checked),patch('realman_rl_simtoreal.evaluation.reach.rule_action',side_effect=AssertionError('No teacher during BC')):
             result=bc.evaluate_policy('bc',[40000],policy=self.policy,
                                       environment=dict(ENV_CONFIG,max_episode_steps=2))
         self.assertEqual(len(calls),2);self.assertEqual(len(result['records']),2)

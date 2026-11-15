@@ -23,7 +23,7 @@
 
 选中模型的来源链共包含 86016 步 PPO 更新，actor 和 critic 在每个选中阶段都有更新；模型来源、完整更新状态、网络参数、当前训练源码和仿真资源哈希核对通过，见 [核对记录](outputs/grasp/ppo/pick_lift_12mm_seed2027/verification.json)及[开发集选择记录](outputs/grasp/ppo/pick_lift_12mm_seed2027/selection.json)。这些步数只统计实际继承的 checkpoint，不包含未选中的探索试验。
 
-当前全套 **396 项回归测试通过**，涵盖四维 PPO 的真实更新、模型重载、奖励与固定观测变换、课程 reset、迁移参数变换、只读独立推理及碰撞保护；[测试结果](outputs/grasp/ppo/pick_lift_12mm_seed2027/regression.json)和[完整日志](outputs/grasp/ppo/pick_lift_12mm_seed2027/regression.log)已保存。
+该训练阶段已保存 **396 项回归测试通过** 的结果，涵盖四维 PPO 的真实更新、模型重载、奖励与固定观测变换、课程 reset、迁移参数变换、只读独立推理及碰撞保护；[测试结果](outputs/grasp/ppo/pick_lift_12mm_seed2027/regression.json)和[完整日志](outputs/grasp/ppo/pick_lift_12mm_seed2027/regression.log)已保存。
 
 **原默认 20 mm 起点尚未被 PPO 解决。** 对该冻结模型强制 `--stage full`，开发集 240000–240001 为 0/2，均因指爪与支撑台碰撞保护终止；[失败原始数据](outputs/grasp/ppo/pick_lift_12mm_seed2027/development_full_240000_240001.json)已保留。下文分阶段控制器的 20/20 成绩属于另一种控制方式，不能作为 PPO 的完整任务成绩。
 
@@ -83,7 +83,7 @@ RL 接口为 4 维 `Box(-1,1)`：前三维是世界 XYZ 增量，每轴最多 1 
 
 负对照中，不闭合和不抬升均在 700 步超时、保持计时为零；摩擦降为 0.05 时触发 mimic 保护，30 g 方块未达到高度与保持条件、在 700 步超时。失败记录分别保存在 [no_close](outputs/grasp/controller/controls_1ms/no_close.json)、[no_lift](outputs/grasp/controller/controls_1ms/no_lift.json)、[low_friction](outputs/grasp/controller/controls_1ms/low_friction.json)和[heavy](outputs/grasp/controller/controls_1ms/heavy.json)。开发阶段的 2 ms 失败案例与控制时序诊断仍保存在 `outputs/grasp/controller/`。
 
-实现入口为 [GraspLiftEnv](src/realman_rl_simtoreal/envs/grasp_lift_env.py)、[任务配置](src/realman_rl_simtoreal/tasks/grasp_lift.py)、[夹取控制器](src/realman_rl_simtoreal/simulation/grasp_controller.py)与[回合评估](src/realman_rl_simtoreal/rl/grasp_lift.py)。
+实现入口为 [GraspLiftEnv](src/realman_rl_simtoreal/envs/grasp_lift_env.py)、[任务配置](src/realman_rl_simtoreal/tasks/grasp_lift.py)、[夹取控制器](src/realman_rl_simtoreal/simulation/grasp_controller.py)与[回合评估](src/realman_rl_simtoreal/evaluation/grasp_lift.py)。
 
 ## 随机起点与连续多目标 Reach
 
@@ -404,9 +404,10 @@ SAC、BC 分别使用 `scripts/evaluate/evaluate_sac_reach.py`、`scripts/evalua
 
 - `assets/`：机器人、夹爪与场景资源。
 - `src/realman_rl_simtoreal/simulation/`、`envs/`：物理控制与 Gymnasium 环境。
-- `tasks/`：算法无关的 Reach 配置；`rl/common/`：公共观测、包装、评估、统计和日志。
-- `rl/`：PPO / SAC、SAC 监控诊断；`imitation/`：BC 与显式 BC→SAC 转移。
-- `utils/`、`vendor/`：共享几何 / 演示工具和厂家离线适配器。
+- `tasks/`：算法无关的 Reach 配置；`rl/common/`：公共观测、训练包装、产物和日志写入。
+- `rl/`：PPO / SAC 创建、训练、优化、checkpoint 与算法薄适配；`imitation/`：BC 模型和训练、历史 BC→SAC 转移。
+- `evaluation/`：独立 Reach / GraspLift 策略评估、Episode 指标和规则基线；`scripts/evaluate/` 负责 CLI、加载和输出，`tests/` 负责正确性与回归验证。
+- `utils/`、`vendor/`：共享几何、演示、运动统计 / 来源指纹和厂家离线适配器。
 - `scripts/{train,evaluate,demos,models,diagnostics,plots}/`：按用途分类的正式入口。
 - `tests/`：独立回归测试；`docs/`：架构、文件索引、实验及验证记录。
 - `outputs/{simulation,reach,grasp,imitation,validation}/`：按用途分类的模型、数据、图像与验证记录，入口见 [输出导航](outputs/README.md)。
@@ -417,6 +418,7 @@ SAC、BC 分别使用 `scripts/evaluate/evaluate_sac_reach.py`、`scripts/evalua
 
 - [工程架构与依赖边界](docs/architecture.md)
 - [完整 Python 文件地图](docs/FILE_MAP.md)
+- [Evaluation 层重构与兼容性验证](docs/validation/EVALUATION_REFACTOR_VALIDATION.md)
 - [输出目录、主要模型与路径迁移](docs/OUTPUTS.md)
 - [实验历史与历史 README](docs/experiments/README.md)
 - [历次验证报告索引](docs/validation/README.md)

@@ -8,25 +8,24 @@
 realman_rl_simtoreal/
 ├── assets/{robots,grippers,scenes}/
 ├── src/realman_rl_simtoreal/
-│   ├── __init__.py
-│   ├── paths.py
-│   ├── viewer.py
-│   ├── simulation/{model,kinematics,control,ee_control,gripper,grasp_contact}.py
-│   ├── envs/reach_env.py
-│   ├── tasks/reach.py
+│   ├── __init__.py, paths.py, viewer.py
+│   ├── simulation/{model,kinematics,control,ee_control,gripper,grasp_contact,grasp_controller}.py
+│   ├── envs/{factory,reach_env,sequence_reach_env,grasp_lift_env}.py
+│   ├── tasks/{reach,grasp_lift,rewards}.py
 │   ├── rl/
-│   │   ├── common/{observation,env_factory,evaluation,metrics,baselines,artifacts}.py
+│   │   ├── common/{observation,env_factory,artifacts,logging}.py
 │   │   ├── ppo.py
 │   │   ├── sac.py
+│   │   ├── ppo_grasp.py
 │   │   ├── sac_monitoring.py
 │   │   └── sac_diagnostics.py
+│   ├── evaluation/{__init__,reach,grasp_lift,metrics,baselines}.py
 │   ├── imitation/{bc,bc_to_sac}.py
-│   ├── utils/{geometry,demo_helpers}.py
+│   ├── utils/{geometry,demo_helpers,metrics,artifacts}.py
 │   └── vendor/{realman_fk,realman_ik}.py
 ├── scripts/{train,evaluate,demos,models,diagnostics,plots}/
-├── tests/fixtures/reach_terminate_04a.json
-├── tests/test_*.py
-├── docs/{architecture.md,FILE_MAP.md,experiments/,validation/}
+├── tests/{fixtures/,test_*.py}
+├── docs/{architecture.md,FILE_MAP.md,OUTPUTS.md,experiments/,validation/}
 ├── outputs/{simulation,reach,grasp,imitation,validation}/
 ├── pyproject.toml
 ├── requirements{,-rl,-vendor}.txt
@@ -41,43 +40,92 @@ realman_rl_simtoreal/
 
 ```mermaid
 flowchart TD
-    CLI["scripts: CLI / 时序 / 展示"] --> PPO["rl.ppo"]
-    CLI --> SAC["rl.sac + sac_monitoring + sac_diagnostics"]
-    CLI --> BC["imitation.bc"]
-    CLI --> DEMO["utils.demo_helpers / geometry"]
-    CLI --> VIEW["viewer"]
-    CLI --> SDK["vendor: 离线 FK/IK"]
-    PPO --> COMMON["rl.common: 观测 / 包装 / 评估 / 日志"]
-    SAC --> COMMON
-    BC --> COMMON
-    PPO --> TASK["tasks.reach: 默认环境 / 目标分布"]
-    CLI --> TASK
-    COMMON --> TASK
-    COMMON --> ENV["envs.reach_env"]
-    BC --> ENV
-    ENV --> SIM["simulation: IK / 控制 / MuJoCo 步进"]
-    DEMO --> SIM
-    SDK --> SIM
-    SIM --> ASSET["MuJoCo + assets"]
-    CLI -. "显式 BC 历史选项" .-> TRANSFER["imitation.bc_to_sac"]
-    SAC -. "仅 reference 非空的监控分支" .-> TRANSFER
-    TRANSFER --> BC
+    TRAIN["scripts/train: 参数与训练调度"] --> RL["rl: 模型 / 优化 / checkpoint / 薄策略适配"]
+    CLI["scripts/evaluate: 参数 / 加载 / 输出 JSON"] --> LOAD["rl 或 imitation: checkpoint 加载"]
+    CLI --> EVAL["evaluation: 独立 Episode / 评估指标"]
+    RL --> EVAL
+    RL --> FACTORY["rl.common.env_factory: 原训练包装栈"]
+    FACTORY --> ENV["envs: Gymnasium 接口"]
+    EVAL --> ENV
+    EVAL --> RULE["evaluation.baselines: 公开观测规则策略"]
+    BC["imitation: 模型 / 监督训练 / BC 权重保护适配"] --> EVAL
+    BC --> RULE
+    EVAL --> OBS["rl.common.observation: 算法无关的固定观测契约"]
+    FACTORY --> OBS
+    EVAL --> METRIC["evaluation.metrics: 纯结果汇总"]
+    RL --> METRIC
+    RL --> LOG["rl.common.logging: 已测评估结果写入训练 logger"]
+    LOG --> METRIC
+    RL --> UTIL["utils.metrics / artifacts: 中立统计与来源指纹"]
+    EVAL --> UTIL
+    ENV --> TASK["tasks: 任务配置 / 奖励"]
+    ENV --> SIM["simulation: IK / 执行器 / 物理步进"]
+    EVAL --> CTRL["simulation.grasp_controller: 原阶段控制器"]
+    CTRL --> SIM
+    SIM --> ASSETS["MuJoCo + assets"]
 ```
 
-- `simulation/` 不依赖算法、任务、演示、Viewer 或 SDK，资源通过 `paths.py` 定位。`envs/` 单向依赖仿真，不导入 PPO、SAC、BC。
-- `tasks/reach.py` 保存原 `ENV_CONFIG`、`TASKS` 和 `task_environment()`；不导入算法或统计模块。固定 +X5mm、easy 随机 2–3mm、原随机 3–5mm 条件可达目标分布不变。
-- `rl/common/` 不导入本项目 PPO/SAC/BC 实现；PPO 与 SAC 不相互依赖。`env_factory` 使用 SB3 的 Monitor/VecEnv，其他模块按具体职责使用 Gymnasium、NumPy 或 PyTorch。
-- `imitation/bc.py` 只复用公共观测、规则基线和产物工具，不导入 SAC。`bc_to_sac.py` 保留 Actor 均值通路的严格兼容校验与复制；普通训练不会导入它。
-- `sac_monitoring` 保留有条件的 `bc_to_sac.action_deviation` 惰性导入，以兼容明确指定 BC 参照的历史实验。公共 `evaluate()` 接受可选 `reference_policy` 对象，但不导入或构造 BC。
-- 测试按文件加载脚本以检验入口行为；生产包不导入脚本，不修改 `sys.path`。
+`simulation/`、`envs/`、`tasks/` 不导入评估或算法。`evaluation/` 不导入 PPO、SAC、BC 模块或训练入口，也不导入 PyTorch / SB3；策略由调用者传入。仅共享 `rl/common/observation.py` 的固定观测契约，这个模块本身不导入算法或学习框架。无需为了目录归属再复制一份缩放逻辑。
 
-## 公共功能归属
+`rl/` 负责模型创建、训练、优化状态和 checkpoint。`evaluate_ppo` / `evaluate_model` 是保留的算法薄适配：选择确定性预测、编码观测、核对原始动作与 Box 裁剪、保护参数 / 训练计数，然后调用 Evaluation 执行 Episode；它们不创建第二套环境步进循环。SAC 直接用共享 Reach 协议。BC 的薄适配只提供权重指纹检查，训练与示范采集继续在 imitation。
 
-`observation.py` 保存 `ReachTransform`、`ScaledReachObservation` 以及公共 `FEATURE_KEYS` / `features()`；`env_factory.py` 构造训练包装栈和只读 reset 探针。`evaluation.py` 共享确定性评估协议、Episode 汇总和原 TensorBoard 指标写入；`metrics.py` 保存只读 `MotionStats`；`baselines.py` 提供原规则策略；`artifacts.py` 提供 JSON、版本、资产指纹及原空目录检查。
+`utils/metrics.py` 保存训练与评估都使用的 `MotionStats` 及余弦辅助，只有 NumPy 依赖；没有让训练基础设施反向依赖 Reach 或 GraspLift 的执行器。`utils/artifacts.py` 的 `experiment_metadata()` 为训练、评估和演示共享资源 / 源码指纹，避免来源记录依赖一个评估实现。
 
-SAC 的 `TrainingAudit` 与 `MonitoredTrainingAudit` 在 `sac_monitoring.py`，Q 与 soft TD 诊断集中于 `sac_diagnostics.py`；`sac.py` 只保留 SAC 参数、官方模型创建及模型 / Replay checkpoint 格式。PPO 的 Rollout、动作裁剪、优化计数、checkpoint 和参数不变性审计仍在 `ppo.py`。
+`sac_monitoring` 保留显式 BC 参照的惰性分支；普通纯 RL 不导入 imitation。核心包不导入 scripts，不修改 sys.path。所有包初始化保持轻量，新 Evaluation 包的 `__init__.py` 不加载环境或算法。
 
-SE(3) 矩阵工具位于 `utils/geometry.py`，共享 FK 姿态、关节演示序列与报告格式位于 `utils/demo_helpers.py`。这些功能不放在 RL 公共模块中，避免基础控制演示依赖训练框架。
+## 评估实现与入口
+
+- `evaluation/reach.py`：原独立 Reach 评估、指定 seed / 离散目标枚举、连续多目标记录；通用 `evaluate_policy()` 接收原始观测到动作的 callable；`evaluate_bc()` 保留 BC 的逐步 records 协议。
+- `evaluation/grasp_lift.py`：原 GraspLift `rollout()` / `evaluate()`。`model=None` 使用阶段控制器；传入具有 `predict(obs, deterministic=True)` 的对象即使用其动作。
+- `evaluation/metrics.py`：原 Reach、GraspLift、BC、早期基线的汇总函数，保留各自字段与分母；不依赖环境、训练器或神经网络。
+- `evaluation/baselines.py`：原 rule_action、早期随机 / 规则对照、奖励反例和独立 cProfile；BC 数据采集继续调用同一份规则策略。
+- `rl/common/logging.py`：原 `record_evaluation()` 及完全相同的 TensorBoard 标签；只消费已有评估结果，不执行 Episode。
+
+`scripts/evaluate/` 保留 CLI 参数、checkpoint 选择和加载、最终 JSON 与控制台输出。基线脚本的执行循环已迁入 Evaluation，脚本直接导入原函数名供测试调用。`analyze_reach_results.py` 是单个调用者的离线 JSON 分析，保留在脚本中。
+
+历史 Reach RL、早期基线、BC 的 JSON 格式并不相同：BC 保存完整逐步 records 与方向分母，早期基线包含 warm-up / 力矩 / 延迟，现代 Reach 支持离散与连续目标。它们共处 Evaluation，但保留原协议，避免把运动方向阈值、结束原因键或成功率分母改成另一套定义。
+
+### Reach 接口
+
+已有 PPO 使用算法薄适配，checkpoint 仍由 RL 加载：
+
+```python
+from realman_rl_simtoreal.rl.ppo import load_ppo, evaluate_ppo
+
+model, transform, saved = load_ppo(model_path)
+result = evaluate_ppo(model, transform, saved['environment'], [88000])
+```
+
+新策略可直接用算法无关的接口。以 BC 为例，它的 predict 已经接收原始观测：
+
+```python
+from realman_rl_simtoreal.evaluation.reach import evaluate_policy
+from realman_rl_simtoreal.imitation.bc import load_policy, weight_digest
+
+policy, saved = load_policy(bc_path)
+result = evaluate_policy(policy.predict, [88100], name='bc',
+    config=saved['environment'], transform=policy.transform,
+    state_digest=lambda: weight_digest(policy.network))
+```
+
+`predict_action(raw_obs)` 返回原动作空间允许的数组。SB3 策略的调用者应编码观测并选择 `predict(..., deterministic=True)[0]`。可选 `state_digest` 在评估前后核对权重 / 计数；它由调用者提供，不要求 Evaluation 导入算法。若需要历史 BC JSON，继续用 `imitation.bc.evaluate_policy` 的薄适配，或传指纹回调给 `evaluation.reach.evaluate_bc`。
+
+### GraspLift 接口
+
+```python
+from realman_rl_simtoreal.evaluation.grasp_lift import evaluate
+from realman_rl_simtoreal.tasks.grasp_lift import GRASP_LIFT_CONFIG
+
+controller_result = evaluate(GRASP_LIFT_CONFIG, [230000])
+```
+
+PPO 用 `rl.ppo_grasp.load_checkpoint()` 加载，再由 `evaluate_model()` 编码原 41 维观测并核验参数 / 计数。共享 GraspLift 执行器只读取传入策略的确定性动作，不导入 PPO。`model` 参数保留历史名称；其对象只需提供 predict 协议，无需训练或优化方法。历史 JSON 的 `policy='ppo'` / `controller_phase='ppo'` 学习分支标签继续保留。
+
+## 训练公共工具
+
+`rl/common/observation.py`、`env_factory.py`、`artifacts.py` 保留原观测、包装和训练产物接口。训练回调、Rollout 审计、SAC Q/TD / Replay 诊断仍在原算法模块；BC 监督验证 MSE、数据集指标和网络训练仍在 imitation，只有环境内闭环评估迁出。
+
+SE(3)、演示序列和文本格式仍位于 utils。没有新的抽象基类、训练器、第三方依赖或自动环境注册。
 
 ## 观测、动作和奖励契约
 
@@ -145,7 +193,7 @@ SAC 同样共享包装、独立评估和日志，保留官方 DictReplayBuffer�
 
 ## 训练、评估、诊断与测试
 
-训练更新网络并写新 run；每次 CLI 从头创建模型，不是跨进程完整续训。评估固定模型、使用独立目标种子和保存的环境，不更新网络或 Replay。诊断只读分析 Q/TD/轨迹；边界对照脚本仅在原明确训练模式中启动新的 SAC 进程，`--final` 模式只评估。环境 `probe_reach_env.py` 不创建学习器。
+训练更新网络并写新 run；每次 CLI 从头创建模型，不是跨进程完整续训。Evaluation 衡量固定策略在独立环境中的行为和性能，使用指定目标种子与保存配置；tests 则核对实现正确性、协议与数值回归。评估不更新网络或 Replay。诊断只读分析 Q/TD/轨迹；边界对照脚本仅在原明确训练模式中启动新的 SAC 进程，`--final` 模式只评估。环境 `probe_reach_env.py` 不创建学习器。
 
 测试位于 `tests/`，模型构建器由逐字节重生成测试覆盖；原23个argparse入口及新增只读分析入口在`/tmp`下通过绝对路径检查`--help`。测试含小规模训练更新与保存 / 加载，不以短测试成功率作为算法效果要求。PPO 测试阻断本项目 SAC、BC 与 SDK 导入，纯 SAC 测试阻断 BC / SDK 和专家动作。随机目标测试覆盖200个目标的原可达性/安全预检、reset/home与Episode内目标稳定、33维方向特征、分组分析及一次完整512步随机任务更新；固定任务的原PPO产物可显式复用，避免重复训练。
 
@@ -157,7 +205,7 @@ PPO/SAC 保存官方 SB3 类和参数，配置以 JSON 保存；Replay 使用官
 加载核对保存模式、固定变换、模型空间与实际features_dim，33/12维模型不得混用或自动迁移权重。
 314项双模式开发验收及用户完成的12维随机Reach两档预算结果（16384步、131072步）见[Fetch观测验证报告](validation/REACH_FETCH_OBSERVATION_VALIDATION.md)。
 
-早期 schema 1 SAC smoke 配置以及缺少相邻 config.json 的历史文件在基线已不可通过当前加载协议评估；本次不改变原拒绝行为、不猜测配置。完整数量和路径见重构报告。
+早期 schema 1 SAC smoke 配置以及缺少相邻 config.json 的历史文件在基线已不可通过当前加载协议评估；本次不改变原拒绝行为、不猜测配置。其历史限制见原项目结构重构报告；本次未尝试猜测缺失的历史配置。
 
 `pyproject.toml` 原 `include = ["realman_rl_simtoreal*"]` 自动发现新包；安装元数据、依赖版本及 editable 导入在隔离进程验证。未重新安装、升级依赖，也未修改 PYTHONPATH。普通 wheel 的资源打包仍未实现。
 
@@ -167,8 +215,10 @@ PPO/SAC 保存官方 SB3 类和参数，配置以 JSON 保存；Replay 使用官
 
 ## 后续扩展
 
-夹取抬升任务已经由 `envs/grasp_lift_env.py`、`tasks/grasp_lift.py`、`simulation/grasp_controller.py` 和 `rl/grasp_lift.py` 实现，入口为 `scripts/demos/run_grasp_lift.py`。环境提供 41 维 Box 观测、XYZ 加绝对夹爪开口的 4 维动作，通过 `advance_synchronized_cycle` 让机械臂、夹爪和自由物体共享每步 50 次 1 ms 积分。阶段控制器只产生这个动作空间中的动作，使用双侧接触后的有界横向对中反馈；物体的运动由接触、摩擦和重力产生。
+夹取抬升任务已经由 `envs/grasp_lift_env.py`、`tasks/grasp_lift.py`、`simulation/grasp_controller.py` 和 `evaluation/grasp_lift.py` 实现，入口为 `scripts/demos/run_grasp_lift.py`。环境提供 41 维 Box 观测、XYZ 加绝对夹爪开口的 4 维动作，通过 `advance_synchronized_cycle` 让机械臂、夹爪和自由物体共享每步 50 次 1 ms 积分。阶段控制器只产生这个动作空间中的动作，使用双侧接触后的有界横向对中反馈；物体的运动由接触、摩擦和重力产生。
 
-成功计时在 1 ms 物理步后读取实际接触力和物体运动，要求持续离台、双侧夹持、低速度及有限滑移。`ContactRecorder` 可选择仅保留最近采样或保存完整物理历史，读取力缓存后才刷新实时几何；数值失败返回明确标记的最近有效观测。抓取评估保存在独立的 `outputs/grasp/controller/`，`rl/common` 的观测变换和训练记录仍服务于 Reach。视觉观测及真机适配需要独立验证，尚未实现。
+成功计时在 1 ms 物理步后读取实际接触力和物体运动，要求持续离台、双侧夹持、低速度及有限滑移。`ContactRecorder` 可选择仅保留最近采样或保存完整物理历史，读取力缓存后才刷新实时几何；数值失败返回明确标记的最近有效观测。抓取评估保存在独立的 `outputs/grasp/controller/`，Reach 仍复用 `rl/common` 的固定观测变换；任务行为评估统一由 Evaluation 组织。视觉观测及真机适配需要独立验证，尚未实现。
+
+本次 Evaluation 迁移、实际测试和兼容性证据见 [Evaluation 重构报告](validation/EVALUATION_REFACTOR_VALIDATION.md)。评估结果的来源路径 / 哈希随源码迁移反映新文件，物理量、指标与 JSON 协议保持。
 
 旧版细节完整保存在 [历史架构快照](experiments/ARCHITECTURE_BEFORE_REFACTOR.md)；历史验证报告中的旧路径对应其原版本。现行命令以 README 和 FILE_MAP 为准。

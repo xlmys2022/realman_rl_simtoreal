@@ -45,7 +45,7 @@ class Block(importlib.abc.MetaPathFinder):
    raise AssertionError('BC/SDK import forbidden: '+name)
 sys.meta_path.insert(0,Block())
 from realman_rl_simtoreal.paths import PROJECT_ROOT
-from realman_rl_simtoreal.rl.common import evaluation, baselines
+from realman_rl_simtoreal.evaluation import reach as evaluation, baselines
 def forbidden(*a,**kw):raise AssertionError('SAC weights/expert actions forbidden')
 evaluation.rule_action=baselines.rule_action=forbidden
 from realman_rl_simtoreal.envs.reach_env import ReachEnv

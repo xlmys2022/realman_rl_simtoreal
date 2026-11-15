@@ -32,3 +32,9 @@ class MotionStats:
             toward_command_fraction=self.command_toward/self.command_valid if self.command_valid else None,
             distance_improving_fraction=self.improving/max(1,self.steps),
             reversal_fraction=self.reversed/self.pairs if self.pairs else None)
+
+
+def cosine(a, b):
+    denominator = np.linalg.norm(a, axis=-1)*np.linalg.norm(b, axis=-1)
+    mask = denominator > 1e-12
+    return np.clip(np.sum(a[mask]*b[mask], axis=-1)/denominator[mask], -1., 1.)

@@ -7,7 +7,7 @@ from pathlib import Path
 import torch
 from stable_baselines3 import SAC
 
-from realman_rl_simtoreal.rl.common.evaluation import evaluate
+from realman_rl_simtoreal.evaluation.reach import evaluate
 from realman_rl_simtoreal.rl.common.observation import checkpoint_transform, require_legacy, validate_model_observation
 from realman_rl_simtoreal.rl.common.artifacts import write_json, versions
 

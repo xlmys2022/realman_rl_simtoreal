@@ -18,7 +18,8 @@ from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv, VecChec
 
 from ..envs.grasp_lift_env import GraspLiftEnv
 from ..tasks.grasp_lift import GRASP_LIFT_CONFIG
-from .grasp_lift import evaluate,experiment_metadata
+from ..evaluation.grasp_lift import evaluate
+from ..utils.artifacts import experiment_metadata
 from .common.artifacts import append_json,write_json
 
 

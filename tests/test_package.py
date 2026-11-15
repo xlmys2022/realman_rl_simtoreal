@@ -64,6 +64,7 @@ import realman_rl_simtoreal.rl
 import realman_rl_simtoreal.rl.common
 import realman_rl_simtoreal.imitation
 import realman_rl_simtoreal.utils
+import realman_rl_simtoreal.evaluation
 assert '/src/realman_rl_simtoreal/' in package.__file__
 assert not any(n in sys.modules for n in ('mujoco','glfw','Robotic_Arm','torch','stable_baselines3'))
 ''')
@@ -137,7 +138,7 @@ for constructor in (lambda:RealManFK(),lambda:RealManIK(kin.limits)):
         self.assertTrue(direct['dir_info']['editable'])
         from setuptools import find_packages
         discovered = set(find_packages(where=str(ROOT/'src'), include=['realman_rl_simtoreal*']))
-        for suffix in ('tasks','rl','rl.common','imitation','utils'):
+        for suffix in ('tasks','rl','rl.common','imitation','utils','evaluation'):
             self.assertIn('realman_rl_simtoreal.'+suffix, discovered)
 
     def test_canonical_import_graph_has_no_scripts_or_cycles(self):
@@ -162,7 +163,15 @@ for constructor in (lambda:RealManFK(),lambda:RealManIK(kin.limits)):
                 self.assertFalse(any(n.startswith('realman_rl_simtoreal.experiments') for n in imports))
                 if '.envs.' in name or '.tasks.' in name:
                     self.assertFalse(any(n.startswith(('realman_rl_simtoreal.rl',
-                                                       'realman_rl_simtoreal.imitation')) for n in imports))
+                                                       'realman_rl_simtoreal.imitation',
+                                                       'realman_rl_simtoreal.evaluation')) for n in imports))
+                if '.evaluation.' in name:
+                    self.assertFalse(any(n.startswith(('torch','stable_baselines3',
+                        'realman_rl_simtoreal.rl.ppo','realman_rl_simtoreal.rl.sac',
+                        'realman_rl_simtoreal.imitation')) for n in imports))
+                if '.rl.common.' in name:
+                    self.assertFalse(any(n.startswith(('realman_rl_simtoreal.evaluation.reach',
+                        'realman_rl_simtoreal.evaluation.grasp_lift')) for n in imports))
                 if '.rl.common.' in name or name=='realman_rl_simtoreal.rl.ppo':
                     self.assertFalse(any(n.startswith(('realman_rl_simtoreal.rl.sac',
                                                        'realman_rl_simtoreal.imitation')) for n in imports))
@@ -170,7 +179,8 @@ for constructor in (lambda:RealManFK(),lambda:RealManIK(kin.limits)):
                     self.assertFalse(any(n.startswith('realman_rl_simtoreal.rl.ppo') for n in imports))
                 if '.simulation.' in name:
                     self.assertFalse(any(n.startswith(('realman_rl_simtoreal.vendor','realman_rl_simtoreal.rl','realman_rl_simtoreal.imitation','realman_rl_simtoreal.tasks','realman_rl_simtoreal.utils',
-                                                       'realman_rl_simtoreal.viewer')) for n in imports))
+                                                       'realman_rl_simtoreal.viewer',
+                                                       'realman_rl_simtoreal.evaluation')) for n in imports))
                 edges[name].update(n for n in imports if n in modules)
         done,visiting=set(),set()
         def visit(name):
@@ -187,6 +197,9 @@ for constructor in (lambda:RealManFK(),lambda:RealManIK(kin.limits)):
         for old in ('kinematics.py','realman_fk.py','realman_ik.py'):
             self.assertFalse((ROOT/'scripts'/old).exists())
         self.assertFalse((package/'experiments').exists())
+        for old in ('rl/common/evaluation.py','rl/common/baselines.py',
+                    'rl/common/metrics.py','rl/grasp_lift.py'):
+            self.assertFalse((package/old).exists())
         self.assertFalse(list((ROOT/'scripts').glob('*.py')))
 
     def test_existing_argparse_entries_help_from_other_directory(self):

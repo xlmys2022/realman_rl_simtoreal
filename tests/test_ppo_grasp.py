@@ -166,7 +166,7 @@ class GraspPPORun(unittest.TestCase):
         args=SimpleNamespace(seed=2027,timesteps=64,n_envs=1,n_steps=32,batch_size=16,epochs=1,
             eval_every=32,eval_episodes=1,run_dir=cls.folder,stage='easy',episode_steps=8,
             init_model=None,eval_seed_start=240000,tensorboard=False)
-        with patch('realman_rl_simtoreal.rl.grasp_lift.GraspLiftController',side_effect=AssertionError('No staged actions')):
+        with patch('realman_rl_simtoreal.evaluation.grasp_lift.GraspLiftController',side_effect=AssertionError('No staged actions')):
             cls.summary=module.train(args)
         cls.model,cls.config=load_checkpoint(cls.folder/'final/model.zip')
 
@@ -194,7 +194,7 @@ class GraspPPORun(unittest.TestCase):
 
     def test_evaluation_is_read_only_and_never_constructs_the_staged_controller(self):
         before=parameter_hashes(self.model);counters=(self.model.num_timesteps,optimizer_steps(self.model))
-        with patch('realman_rl_simtoreal.rl.grasp_lift.GraspLiftController',side_effect=AssertionError('No fallback')):
+        with patch('realman_rl_simtoreal.evaluation.grasp_lift.GraspLiftController',side_effect=AssertionError('No fallback')):
             result=evaluate_model(self.model,self.config,[250000])
         self.assertEqual(parameter_hashes(self.model),before)
         self.assertEqual((self.model.num_timesteps,optimizer_steps(self.model)),counters)
@@ -218,7 +218,7 @@ class GraspPPORun(unittest.TestCase):
             init_model=self.folder/'final/model.zip',eval_seed_start=240000,tensorboard=False,
             reset_gripper_bias=True,gripper_mean=.5,reset_exploration=True,xyz_std=.02,gripper_std=.6,
             learning_rate=.00003,approach_distance=.012)
-        with patch('realman_rl_simtoreal.rl.grasp_lift.GraspLiftController',side_effect=AssertionError('No expert actions')):
+        with patch('realman_rl_simtoreal.evaluation.grasp_lift.GraspLiftController',side_effect=AssertionError('No expert actions')):
             summary=self.trainer.train(args)
         initial,config=load_checkpoint(args.run_dir/'initial/model.zip')
         for name,tensor in initial.policy.state_dict().items():

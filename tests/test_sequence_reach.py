@@ -16,7 +16,8 @@ from realman_rl_simtoreal.envs.sequence_reach_env import SequenceReachEnv
 from realman_rl_simtoreal.paths import PROJECT_ROOT
 from realman_rl_simtoreal.rl.ppo import environment_config,make_ppo,load_ppo,evaluate_ppo,save_ppo_checkpoint
 from realman_rl_simtoreal.rl.common.env_factory import training_env
-from realman_rl_simtoreal.rl.common.evaluation import evaluate,summarize_episodes
+from realman_rl_simtoreal.evaluation.reach import evaluate
+from realman_rl_simtoreal.evaluation.metrics import summarize_episodes
 from realman_rl_simtoreal.rl.common.observation import ReachTransform,observation_metadata
 from realman_rl_simtoreal.simulation.kinematics import IKResult
 

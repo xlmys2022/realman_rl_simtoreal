@@ -125,7 +125,7 @@ class Block(importlib.abc.MetaPathFinder):
   if name.startswith(('realman_rl_simtoreal.imitation','realman_rl_simtoreal.rl.sac','realman_rl_simtoreal.vendor','Robotic_Arm')):raise AssertionError('No BC/SAC/vendor')
 sys.meta_path.insert(0,Block())
 from realman_rl_simtoreal.paths import PROJECT_ROOT
-from realman_rl_simtoreal.rl.common import evaluation,baselines
+from realman_rl_simtoreal.evaluation import reach as evaluation, baselines
 def forbidden(*a,**k):raise AssertionError('No expert actions')
 evaluation.rule_action=baselines.rule_action=forbidden
 from realman_rl_simtoreal.envs.reach_env import ReachEnv

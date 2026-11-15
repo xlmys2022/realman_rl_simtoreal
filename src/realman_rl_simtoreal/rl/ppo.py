@@ -9,11 +9,12 @@ import torch
 from stable_baselines3 import PPO
 from stable_baselines3.common.callbacks import BaseCallback
 
-from .common.metrics import MotionStats
+from ..utils.metrics import MotionStats
 from ..tasks.reach import task_environment, ENV_CONFIG, OBSERVATION_MODES, TASKS
 from ..tasks.rewards import REWARD_COMPONENT_KEYS, validate_checkpoint_reward
 from .common.observation import checkpoint_transform, validate_model_observation
-from .common.evaluation import evaluate, summarize_episodes
+from ..evaluation.reach import evaluate
+from ..evaluation.metrics import summarize_episodes
 from .common.artifacts import write_json, append_json
 
 
