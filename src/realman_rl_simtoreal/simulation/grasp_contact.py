@@ -146,6 +146,7 @@ class ContactRecorder:
         self.probe = mujoco.MjData(model)
         self.object = model.body('target_object').id
         self.support = model.body('support').id
+        self.support_half_height = float(model.geom_size[model.geom('support_top').id,2])
         self.qadr = int(model.joint('target_free').qposadr[0])
         self.vadr = int(model.joint('target_free').dofadr[0])
         self.rows = []
@@ -169,7 +170,7 @@ class ContactRecorder:
         # Oriented box support distance, exact for the configured cube/plane.
         n = table_rotation[:, 2]
         radius = .01*np.sum(np.abs(object_rotation.T @ n))
-        clearance = (object_pos-self.probe.xpos[self.support])@n-.003-radius
+        clearance = (object_pos-self.probe.xpos[self.support])@n-self.support_half_height-radius
         row = dict(time_s=float(data.time), phase=self.phase,
                    object_position_m=object_pos.tolist(), object_quaternion_wxyz=data.qpos[self.qadr+3:self.qadr+7].tolist(),
                    object_qvel=data.qvel[self.vadr:self.vadr+6].tolist(),

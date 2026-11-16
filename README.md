@@ -10,10 +10,71 @@
 - EG2-4C2 夹爪模型、同步控制和接触 / 抬升 / 释放案例。
 - 固定及随机目标 ReachEnv，PPO、SAC 训练、独立评估、checkpoint 和 TensorBoard。
 - 四维 PPO 局部夹取与抬升训练、课程 checkpoint 和独立评估。
+- 七维 PPO 水平桌面抓取环境，支持六轴零位起点、同步关节参考和夹爪控制。
 - 独立 BC 示范采集、训练和推理；保留历史 BC→SAC Actor 初始化、边界对照与 Q/TD 诊断。
 - 自动化回归测试、环境探针及只读训练曲线绘图。
 
-## PPO 夹取与抬升学习
+## 水平桌面的完整抓取任务
+
+开发阶段按用户确认，以六轴全零 `[0,0,0,0,0,0]` 为起点；这是临时开发零位，不标注为示教器的打包姿态。`initial_q_deg` / `--initial-q-deg` 支持以后替换为准确的打包角度。完整任务 reset 不使用原项目 `[0,-20,30,0,20,0]`，也不把机械臂重置到方块附近。
+
+**完整零位流程已通过仿真验证。** 冻结的七维 PPO 从零位、60 mm 开口开始，完成接近、夹取、抬升并稳定保持。种子 360000–360019 的固定场景复测 **20/20 成功**，零安全终止；离台间隙 28.679 mm、世界竖直抬升 28.856 mm，连续保持 2.031 秒，432 个控制周期共 21.6 秒。目标高度为 30 mm、允许 2 mm 高度容差。
+
+[模型](outputs/grasp/ppo/tabletop_zero_seed2027/final/model.zip) · [完整回放](outputs/grasp/ppo/tabletop_zero_seed2027/learned_zero_pick.gif) · [复测数据](outputs/grasp/ppo/tabletop_zero_seed2027/heldout_360000_360019.json) · [验证报告](docs/validation/TABLETOP_PPO_VALIDATION.md)。方块位置固定，这 20 次验证确定性复现；随机位置泛化另行评估。
+
+独立场景 `assets/scenes/tabletop_pick.xml` 使用 0.75 m 高、1.2 m × 0.8 m 的水平桌面，机械臂基座固定在桌面上。20 mm、10 g 自由方块默认固定在桌面 `(0.4,0)` m；`object_radius` 可配置位置随机范围，`full_random` 另外提供半径 2 cm 的扩展配置。桌子保持固定，物体无焊接、无重力补偿或外力注入。场景生成入口为 `scripts/models/build_tabletop_scene.py`。
+
+`TabletopPickEnv` 提供 56 维状态和 7 维动作：前六维是与示教器一致的绝对关节角（度），最后一维是 `[-1,1]` 的绝对夹爪开口。六轴参考共用插值比例，每 50 ms 最多变化 0.5°，共享 50 个 1 ms 物理步，保留速度、力矩、mimic 和分类碰撞检查。夹爪命令默认在机械开合端点各留 2 mm 余量，原始请求和实际命令分别记录。夹持前的预检包含指垫与方块的接触深度；夹持后的物体随动由 1 ms 物理接触检查验证，预检保持不安全的关节参考。实际七维动作由 PPO 输出。
+
+观测中的关节目标来自私有 IK 计算。`--approach-waypoint-height .06` 加入方块上方 6 cm 的接近子目标；选中配置允许竖直误差 15 mm，同时要求横向误差小于 5 mm、姿态误差小于 0.03 rad，再切换为夹取目标。双侧真实接触建立后使用抬升目标。子目标切换只更新目标特征和奖励。PPO v6 的奖励还包含关节动作对当前运动学目标的正则项，以及远离方块时保持张开开口的动作正则；近处夹紧和抬升继续使用真实接触及稳定保持奖励。训练记录标注 `kinematic_action_regularizer`，执行时使用冻结网络。最终训练采用完整协方差高斯探索、每步重采样，以及 0.05 的关节参考平滑系数；没有示范数据或 BC。
+
+`--goal-height .03` 能在近距离课程中保持网络目标为 30 mm，单独用 `--lift-height` 调整训练成功门槛，避免每次升级同时改变目标观测。`--full` 独立评估始终恢复 30 mm 的目标和成功门槛。
+
+成功沿用真实接触判据：方块离台至少 28 mm、双侧指垫受力、无桌面支撑，并低速、低滑移连续保持 2 秒。可用 `pinch`、`approach`、`lift` 和 `unfold25/50/75` 配置课程，完整起点用 `full`。选中模型实际继承近距离夹持、3 cm / 10 cm 接近和全零位任务的 PPO checkpoint，来源链共 **112640 步**；各阶段 actor 均值和 critic 均有真实更新，见[来源核对](outputs/grasp/ppo/tabletop_zero_seed2027/lineage_audit.json)。每个课程的实际初始角度和任务门槛分别记录。
+
+在 `realman_rl` 环境复测已训练模型：
+
+```bash
+conda activate realman_rl
+python -I scripts/evaluate/evaluate_ppo_tabletop.py \
+  --model outputs/grasp/ppo/tabletop_zero_seed2027/final/model.zip \
+  --full --episodes 20 --seed-start 360000 --json /tmp/realman_tabletop_retest.json
+```
+
+生成从零位开始的实际 PPO 回放，输出路径须选择新文件：
+
+```bash
+python -I scripts/demos/render_ppo_tabletop.py \
+  --model outputs/grasp/ppo/tabletop_zero_seed2027/final/model.zip \
+  --output /tmp/realman_tabletop_replay.gif --seed 360000
+```
+
+**437 项回归测试通过**，包括精确零位 reset、桌面厚度、同步控制、接触预检、PPO 真实更新、目标切换、模型重载和训练参数继承。原始七维网络动作、Box 裁剪、模型参数不变、物理速度 / 力矩 / mimic 和资源哈希均已核对，见[验证记录](outputs/grasp/ppo/tabletop_zero_seed2027/verification.json)及[测试日志](outputs/grasp/ppo/tabletop_zero_seed2027/regression.log)。
+
+从当前版本启动新课程的示例：
+
+```bash
+conda activate realman_rl
+python -I scripts/models/build_tabletop_scene.py
+python -I scripts/train/train_ppo_tabletop.py --stage pinch --gripper-mean -.9 \
+  --joint-std .3 --gripper-std .1 --sde-sample-freq 1 --reference-smoothing .05 \
+  --timesteps 32768 --n-envs 4 --n-steps 256 --tensorboard \
+  --run-dir outputs/grasp/ppo/tabletop_pinch_new
+```
+
+下一课程用 `--init-model` 继承已完成更新的七维 PPO checkpoint，重建优化器和计数器。最终独立评估用 `scripts/evaluate/evaluate_ppo_tabletop.py --full` 强制恢复完整起点、60 mm 开口、30 mm 抬升、2 秒保持和固定方块配置。四维局部任务的历史模型与七维桌面模型具有不同动作契约，不能混用。
+
+继续训练已验证模型时，采样刷新周期、关节平滑和接近子目标配置会从 checkpoint 继承；新实验使用新目录：
+
+```bash
+python -I scripts/train/train_ppo_tabletop.py --stage full --max-episode-steps 700 \
+  --init-model outputs/grasp/ppo/tabletop_zero_seed2027/final/model.zip \
+  --reset-exploration --joint-std .3 --gripper-std .1 --learning-rate .00001 \
+  --timesteps 8192 --n-envs 4 --n-steps 256 --eval-every 4096 --eval-episodes 2 \
+  --tensorboard --run-dir outputs/grasp/ppo/tabletop_zero_next
+```
+
+## PPO 夹取与抬升学习（历史局部场景）
 
 训练入口为 `scripts/train/train_ppo_grasp_lift.py`，独立评估入口为 `scripts/evaluate/evaluate_ppo_grasp_lift.py`。PPO 的 MLP 同时输出 XYZ 位移和夹爪开口四个动作，使用 41 维状态的固定毫米尺度变换；动作由网络独立产生。训练使用实际接触、目标横向误差、离台高度、稳定保持与成功奖励，固定奖励缩放为 0.01。开口奖励在远处鼓励保留接近空间、在近处鼓励夹紧，避免过早闭合；它只改变奖励。成功判定沿用物理环境，完整任务仍要求离台至少 28 mm、双侧夹持且稳定保持 2 秒。
 

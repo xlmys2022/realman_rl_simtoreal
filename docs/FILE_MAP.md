@@ -1,8 +1,19 @@
 # Python 文件地图
 
-共 104 个 Python 文件：核心包 47、脚本 32、测试 25。以下列出全部文件；路径相对仓库根目录，主要调用者按实际静态导入与入口用途整理，动态进程调用另由测试覆盖。
+共 112 个 Python 文件：核心包 50、脚本 36、测试 26。以下列出全部文件；路径相对仓库根目录，主要调用者按实际静态导入与入口用途整理，动态进程调用另由测试覆盖。
 
 新增或移动文件时同步维护本表、[架构](architecture.md)和相应测试路径。[Evaluation 重构报告](validation/EVALUATION_REFACTOR_VALIDATION.md)解释本次迁移及接口；[输出导航](../outputs/README.md)用于查实验产物。
+
+水平桌面任务新增文件：
+
+- `scripts/models/build_tabletop_scene.py`：独立水平桌面、零位机械臂和自由方块场景生成器。
+- `scripts/train/train_ppo_tabletop.py`：七维 PPO 课程训练、来源记录、完整更新 checkpoint 和停止文件。
+- `scripts/evaluate/evaluate_ppo_tabletop.py`：冻结模型独立评估，`--full` 恢复零位完整任务。
+- `scripts/demos/render_ppo_tabletop.py`：同一冻结 PPO 策略的桌面全景和夹爪特写回放。
+- `src/realman_rl_simtoreal/tasks/tabletop_pick.py`：零位、方块、桌面、抬升及执行器配置。
+- `src/realman_rl_simtoreal/envs/tabletop_pick_env.py`：56 维观测、六轴绝对角度和夹爪开口，共享 1 ms 物理时钟。
+- `src/realman_rl_simtoreal/rl/ppo_tabletop.py`：固定编码、奖励、持续相关探索、PPO checkpoint 和参数不可变评估适配。
+- `tests/test_tabletop_pick.py`：桌面、精确起点、七维动作、真实 PPO 更新、完整协方差和只读推理回归。
 
 ## 命令行入口
 

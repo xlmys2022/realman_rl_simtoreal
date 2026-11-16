@@ -10,13 +10,14 @@ realman_rl_simtoreal/
 ├── src/realman_rl_simtoreal/
 │   ├── __init__.py, paths.py, viewer.py
 │   ├── simulation/{model,kinematics,control,ee_control,gripper,grasp_contact,grasp_controller}.py
-│   ├── envs/{factory,reach_env,sequence_reach_env,grasp_lift_env}.py
-│   ├── tasks/{reach,grasp_lift,rewards}.py
+│   ├── envs/{factory,reach_env,sequence_reach_env,grasp_lift_env,tabletop_pick_env}.py
+│   ├── tasks/{reach,grasp_lift,tabletop_pick,rewards}.py
 │   ├── rl/
 │   │   ├── common/{observation,env_factory,artifacts,logging}.py
 │   │   ├── ppo.py
 │   │   ├── sac.py
 │   │   ├── ppo_grasp.py
+│   │   ├── ppo_tabletop.py
 │   │   ├── sac_monitoring.py
 │   │   └── sac_diagnostics.py
 │   ├── evaluation/{__init__,reach,grasp_lift,metrics,baselines}.py
@@ -70,6 +71,10 @@ flowchart TD
 `rl/` 负责模型创建、训练、优化状态和 checkpoint。`evaluate_ppo` / `evaluate_model` 是保留的算法薄适配：选择确定性预测、编码观测、核对原始动作与 Box 裁剪、保护参数 / 训练计数，然后调用 Evaluation 执行 Episode；它们不创建第二套环境步进循环。SAC 直接用共享 Reach 协议。BC 的薄适配只提供权重指纹检查，训练与示范采集继续在 imitation。
 
 `utils/metrics.py` 保存训练与评估都使用的 `MotionStats` 及余弦辅助，只有 NumPy 依赖；没有让训练基础设施反向依赖 Reach 或 GraspLift 的执行器。`utils/artifacts.py` 的 `experiment_metadata()` 为训练、评估和演示共享资源 / 源码指纹，避免来源记录依赖一个评估实现。
+
+`TabletopPickEnv` 使用独立的 `tabletop_pick.xml`，复用现有抓取环境的逐物理步保持判据及执行器保护。完整 reset 在仿真时间零设置用户批准的全零起点和 60 mm 开口；课程 reset 显式记录与抓取上方关节姿态的插值比例。七维动作直接给出六轴绝对角度（度）和夹爪绝对开口，经过同步限速及碰撞预检后由真实执行器执行。私有 IK 计算观测目标、奖励和探索坐标，可选的接近子目标仅切换目标特征。目标高度与课程成功门槛可分别配置。
+
+`rl/ppo_tabletop.py` 使用 SB3 PPO 的采样、优势估计和裁剪更新。高斯探索采用完整协方差和可逆仿射动作坐标，刷新周期随 checkpoint 继承；最终模型每步重新采样，并通过 0.05 的关节参考平滑系数维持连续运动。全部七个输出由网络学习。v6 包含当前运动学目标的关节动作正则和远处张开夹爪的动作正则，使用动作执行前的目标，避免子目标完成的同一步被错误惩罚。评估薄适配向 `evaluation.grasp_lift.rollout()` 传入非空策略，记录原始网络动作并核对模型参数和训练计数不变。
 
 `sac_monitoring` 保留显式 BC 参照的惰性分支；普通纯 RL 不导入 imitation。核心包不导入 scripts，不修改 sys.path。所有包初始化保持轻量，新 Evaluation 包的 `__init__.py` 不加载环境或算法。
 
