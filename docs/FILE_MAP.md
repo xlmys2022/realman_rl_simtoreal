@@ -1,8 +1,19 @@
 # Python 文件地图
 
-共 134 个 Python 文件：核心包 65、脚本 41、测试 28。主要文件及新增任务入口列在下方；路径相对仓库根目录，动态进程调用另由测试覆盖。
+共 141 个 Python 文件：核心包 70、脚本 42、测试 29。主要文件及新增任务入口列在下方；路径相对仓库根目录，动态进程调用另由测试覆盖。
 
 新增或移动文件时同步维护本表、[架构](architecture.md)和相应测试路径。[Evaluation 重构报告](validation/EVALUATION_REFACTOR_VALIDATION.md)解释本次迁移及接口；[输出导航](../outputs/README.md)用于查实验产物。
+
+腕部 RGB-D 视觉观测新增文件：
+
+- `perception/__init__.py`、`perception/rgbd.py`：轻量包及 RGB/HSV Mask、深度反投影、基座坐标和视觉时间跟踪；不依赖模拟器或算法。
+- `simulation/rgbd_camera.py`：读取原 `camera_link/wrist_rgb` 的 RGB 与对齐深度，只读取相机和机器人坐标，不读取物体真值。
+- `envs/tabletop_cartesian_vision_env.py`：独立视觉观测、视觉目标与视觉完成判断；共享原物理任务与审计。
+- `rl/vision_policy.py`：视觉 PPO 目标特征、独立神经末端/夹爪分支及跨观测契约权重迁移。
+- `scripts/demos/detect_tabletop_cube.py`：原相机 RGB-D/白色目标、黑色背景 Mask 检查，保存内参、外参和基座估计坐标。
+- `tests/test_rgbd_vision.py`：图像分割、坐标转换、遮挡、真值隔离、视觉结束判断、目标丢失和 PPO 梯度验证。
+
+上述核心文件均位于现有 `src/realman_rl_simtoreal/`，没有新增独立工程；详细说明见 [视觉抓取](tabletop_vision.md)。
 
 水平桌面任务新增文件：
 

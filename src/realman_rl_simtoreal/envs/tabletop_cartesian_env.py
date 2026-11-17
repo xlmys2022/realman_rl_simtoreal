@@ -27,6 +27,11 @@ DELTA_JAW_ACTION_CONTRACT=dict(name='world_tcp_delta_and_incremental_jaw_v1',sha
     components=['delta_x','delta_y','delta_z','delta_gripper_opening'])
 POSE_DELTA_JAW_ACTION_CONTRACT=dict(name='world_tcp_pose_delta_and_incremental_jaw_v1',shape=7,
     components=['delta_x','delta_y','delta_z','delta_rx','delta_ry','delta_rz','delta_gripper_opening'])
+VISION_OBSERVATION_FIELDS=(
+    ('tcp_base_relative',3),('tcp_velocity',3),('rgbd_object_tcp_relative',3),('rgbd_goal_object_relative',3),
+    ('rgbd_object_velocity',3),('rgbd_surface_normal',3),('gripper_width_velocity_reference',3),
+    ('visual_grip_confidence',1),('rgbd_detection_confidence',1),('rgbd_measurement_age',1),
+    ('visual_hold_progress',1),('cartesian_tracking_error',3),('ik_fraction',1))
 
 
 def action_contract(config):
@@ -36,6 +41,8 @@ def action_contract(config):
 
 
 def observation_fields(config):
+    if config.observation_source=='rgbd_hsv':
+        return VISION_OBSERVATION_FIELDS+POSE_OBSERVATION_FIELDS[-3:] if config.uses_orientation_actions else VISION_OBSERVATION_FIELDS
     return POSE_OBSERVATION_FIELDS if config.uses_orientation_actions else OBSERVATION_FIELDS
 
 
@@ -44,6 +51,8 @@ class TabletopCartesianEnv(gym.Env):
 
     def __init__(self,config=None,*,startup_tick=None):
         self.config=Config() if config is None else config
+        if self.config.observation_source=='rgbd_hsv' and type(self) is TabletopCartesianEnv:
+            raise ValueError('Use make_tabletop_cartesian_env for the camera-only observation contract')
         if self.config.observation_pose=='forward' and not self.config.uses_orientation_actions:
             raise ValueError('A horizontal tabletop grasp start requires pose control so PPO can turn the gripper')
         self.robot=Runtime(self.config);self.startup_tick=startup_tick

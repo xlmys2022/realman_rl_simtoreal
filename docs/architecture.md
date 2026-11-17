@@ -29,7 +29,7 @@ realman_rl_simtoreal/
 ├── docs/{architecture.md,FILE_MAP.md,OUTPUTS.md,experiments/,validation/}
 ├── outputs/{simulation,reach,grasp,imitation,validation}/
 ├── pyproject.toml
-├── requirements{,-rl,-vendor}.txt
+├── requirements{,-rl,-vendor,-vision}.txt
 └── README.md
 ```
 
@@ -230,3 +230,5 @@ PPO/SAC 保存官方 SB3 类和参数，配置以 JSON 保存；Replay 使用官
 ## 桌面末端控制任务
 
 `tabletop_cartesian` 是现有工程中的任务功能。固定观测预设位于 `simulation/observation_profiles.py`，由任务选择 `table_down` 或 `forward`，不读取物体位置来决定启动目标。`simulation/observation_pose.py` 从零位执行固定关节轨迹，到位后由 PPO 接管；所有课程共享同一预设起点。任务环境提供四维位置控制（29 维状态）或七维笛卡尔姿态控制（38 维状态），策略不读取 IK 关节目标，任务奖励不调用 IK。`simulation/cartesian_controller.py`、工具坐标 FK/IK 适配层及共享执行器执行策略请求，平视起点的转向也来自策略。原 reach、grasp_lift 和七维 tabletop_pick 接口继续保留。详细命令见 [任务说明](tabletop_cartesian.md)。
+
+`rgbd_hsv` 是该任务的独立视觉观测契约，由 `envs/factory.py` 选择视觉环境。`simulation/rgbd_camera.py` 只提供原腕部相机的 RGB、对齐深度与机器人相机标定；中立的 `perception/rgbd.py` 从这些传感器数据生成 Mask、基座位置及视觉速度。视觉环境以此构造全部物体观测、目标和完成判断，网络不读取模拟器物体位置、速度、受力或保持进度。物理真值仅保留于动力学、安全、奖励和独立验收。`rl/vision_policy.py` 输出神经末端和夹爪动作，继续复用原 FK/IK；视觉模型与原真值模型严格区分。详见 [视觉抓取接口](tabletop_vision.md)。

@@ -1,0 +1,2 @@
+# RGB-D HSV perception; keeps the base / RL environment versions unchanged.
+opencv-python-headless==5.0.0.93

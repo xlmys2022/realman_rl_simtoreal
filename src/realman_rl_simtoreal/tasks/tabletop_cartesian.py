@@ -8,6 +8,15 @@ from ..simulation.observation_profiles import OBSERVATION_POSES
 class CartesianTabletopConfig:
     observation_pose: str = 'table_down'
     control_mode: str = 'auto'
+    observation_source: str = 'state'
+    vision_width: int = 640
+    vision_height: int = 480
+    vision_period: float = .1
+    vision_timeout: float = .25
+    vision_hold_margin: float = 1.
+    vision_cube_size: float = .02
+    vision_hsv_low: tuple = (3,175,50)
+    vision_hsv_high: tuple = (25,255,255)
     # CAD camera_link has no calibrated optical frame. These are explicit
     # simulation conventions: optical +Z parallel to the fingers, local +X up.
     camera_forward_local: tuple = (0., 0., 1.)
@@ -41,6 +50,15 @@ class CartesianTabletopConfig:
 
     def __post_init__(self):
         import numpy as np
+        if self.observation_source not in ('state','rgbd_hsv'):raise ValueError('Select state or rgbd_hsv observations')
+        if (not isinstance(self.vision_width,int) or not isinstance(self.vision_height,int)
+                or not 160<=self.vision_width<=1280 or not 120<=self.vision_height<=960
+                or not .05<=self.vision_period<=.2 or not self.vision_period<=self.vision_timeout<=.5
+                or not .005<=self.vision_cube_size<=.1 or not 0<=self.vision_hold_margin<=2.):raise ValueError('Invalid RGB-D sensor configuration')
+        low=np.asarray(self.vision_hsv_low);high=np.asarray(self.vision_hsv_high)
+        if (low.shape!=(3,) or high.shape!=(3,) or np.any(low<0) or np.any(high>[179,255,255])
+                or np.any(low>high) or np.any(low!=low.astype(int)) or np.any(high!=high.astype(int))):
+            raise ValueError('Invalid HSV thresholds')
         if self.observation_pose not in OBSERVATION_POSES:
             raise ValueError('Select a fixed observation pose: table_down or forward')
         if self.control_mode not in ('auto','position','pose'):

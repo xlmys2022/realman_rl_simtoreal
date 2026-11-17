@@ -34,6 +34,8 @@ def main(argv=None):
                        help='Reduce sampling noise near contact; learned action means are unchanged')
     train.add_argument('--max-steps',type=int)
     train.add_argument('--control-mode',choices=['auto','position','pose'])
+    train.add_argument('--observation-source',choices=['state','rgbd_hsv'],
+                       help='Use camera-only object estimates; visual checkpoints have a separate observation contract')
     train.add_argument('--cache-startup',action='store_true',help='Opt in to restoring a physically verified observation reset during training')
     evaluate=commands.add_parser('evaluate');evaluate.add_argument('--model',required=True,type=Path)
     evaluate.add_argument('--episodes',type=int,default=5);evaluate.add_argument('--seed-start',type=int,default=360000)

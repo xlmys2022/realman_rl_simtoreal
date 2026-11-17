@@ -13,13 +13,16 @@ from stable_baselines3.common.vec_env import DummyVecEnv,SubprocVecEnv,VecCheckN
 from stable_baselines3.common.logger import configure
 from ..tasks.tabletop_cartesian import CartesianTabletopConfig as Config
 from ..paths import PROJECT_ROOT as ROOT, TABLETOP_CARTESIAN_SCENE as DEFAULT_SCENE
-from ..envs.tabletop_cartesian_env import (TabletopCartesianEnv as TabletopEnv,ACTION_CONTRACT,OBSERVATION_FIELDS,
+from ..envs.factory import make_tabletop_cartesian_env as TabletopEnv
+from ..envs.tabletop_cartesian_env import (ACTION_CONTRACT,OBSERVATION_FIELDS,
                                          action_contract,observation_fields)
 from ..tasks.tabletop_cartesian_reward import REWARD
 from ..simulation.observation_profiles import startup_contract
 from ..simulation.grasp_metrics import CONTACT_MEASUREMENT
 from .cartesian_policy import CartesianPPOPolicy,reset_critic,reset_jaw_head
 from .cartesian_reach_policy import (ReachGraspPPOPolicy,CartesianGoalFeatures,initialize_reach_arm,branch_hashes,validate_reach_policy)
+from .vision_policy import VisualReachGraspPPOPolicy,VisualCartesianGoalFeatures,transfer_visual_observation_inputs
+from ..envs.tabletop_cartesian_vision_env import VISION_CONTRACT
 from ..simulation.gripper import MAX_WIDTH
 
 EASY=dict(success_height=.005,height_tolerance=.0005,hold_seconds=.2)
@@ -29,9 +32,9 @@ STAGES=dict(easy=dict(EASY),pinch=dict(EASY),approach=dict(EASY),lift=dict(),ful
 
 
 def environment_config(stage,*,observation_pose='table_down',control_mode='auto',cache_startup=False,
-                       jaw_control='absolute',jaw_delta_scale=.002):
+                       jaw_control='absolute',jaw_delta_scale=.002,observation_source='state'):
     cfg=replace(Config(observation_pose=observation_pose,control_mode=control_mode,
-                       jaw_control=jaw_control,jaw_delta_scale=jaw_delta_scale),
+                       jaw_control=jaw_control,jaw_delta_scale=jaw_delta_scale,observation_source=observation_source),
                 **STAGES[stage],cache_startup=cache_startup)
     if cfg.observation_pose=='forward' and not cfg.uses_orientation_actions:
         raise ValueError('A forward tabletop grasp start requires pose control so PPO can turn the gripper')
@@ -68,7 +71,7 @@ def capture_sources(folder):
     files={ROOT/name for name in provenance()}
     files.update((ROOT/'assets').rglob('*'))
     files.update((ROOT/'scripts').rglob('*.py'))
-    files.update(ROOT/name for name in ('pyproject.toml','requirements.txt','requirements-rl.txt'))
+    files.update(ROOT/name for name in ('pyproject.toml','requirements.txt','requirements-rl.txt','requirements-vision.txt'))
     with zipfile.ZipFile(Path(folder)/'source_snapshot.zip','w',zipfile.ZIP_DEFLATED) as archive:
         for path in sorted(files):
             if path.is_file():archive.write(path,path.relative_to(ROOT))
@@ -100,6 +103,13 @@ def load(path,*,allow_legacy_startup=False,allow_legacy_observation=False):
         raise ValueError('Checkpoint uses the old contact-force observation; use its archived source for historical evaluation '
                          'or --init-model to retrain with inward grip forces')
     model=PPO.load(path,device='cpu')
+    vision=not legacy and cfg.observation_source=='rgbd_hsv'
+    if vision!=isinstance(model.policy,VisualReachGraspPPOPolicy):
+        raise ValueError('Checkpoint policy and camera observation contract do not match; retrain an explicit transfer')
+    if vision and config.get('vision_contract')!=VISION_CONTRACT:
+        if not (allow_legacy_observation and config.get('vision_contract',{}).get('name') in
+                ('wrist_rgbd_hsv_cube_v1','wrist_rgbd_hsv_cube_v2','wrist_rgbd_hsv_cube_v3')):
+            raise ValueError('Unsupported visual sensor contract; transfer old visual weights through --init-model')
     if (model.observation_space.shape!=(sum(n for _,n in expected_fields),)
             or model.action_space.shape!=(expected_action['shape'],)):raise ValueError('Invalid policy dimensions')
     return model,config
@@ -109,11 +119,13 @@ def rollout(env,model,seed,tick=None):
     obs,initial=env.reset(seed=seed);records=[];total=0.
     if tick:tick(env.robot,'ppo')
     for _ in range(env.config.max_steps):
+        policy_observation=obs.copy()
         tensor,_=model.policy.obs_to_tensor(obs)
         with torch.no_grad():raw=model.policy.get_distribution(tensor).get_actions(deterministic=True).cpu().numpy().reshape(env.action_space.shape)
         action=np.clip(raw,-1,1).astype(np.float32)
         obs,reward,t,tr,info=env.step(action);total+=reward
         records.append(dict(info,raw_action=raw.tolist(),action=action.tolist(),reward=reward))
+        if env.config.observation_source=='rgbd_hsv':records[-1]['policy_observation']=policy_observation.tolist()
         if tick:tick(env.robot,'ppo')
         if t or tr:break
     return dict(seed=seed,initial_object_position_m=initial['object_position_m'],
@@ -150,6 +162,8 @@ def evaluate(model,config,seeds,*,full=False,tick=None,environment=None,observat
         if own:env.close()
     assert hashes(model)==before and counters==(model.num_timesteps,model._n_updates,optimizer_steps(model))
     return dict(task='tabletop_cartesian',algorithm='PPO',full_task=full,environment=env.config.to_dict(),
+                observation_source=env.config.observation_source,
+                vision_contract=VISION_CONTRACT if env.config.observation_source=='rgbd_hsv' else None,
                 startup_contract=startup_contract(env.config.observation_pose),
                 parameters_unchanged=True,scripted_task_actions=False,ik_joint_targets_in_policy=False,
                 summary=dict(episodes=len(episodes),successes=sum(e['success'] for e in episodes),
@@ -201,14 +215,22 @@ def train(args):
             raise ValueError('Reach initialization requires a completed goal_relative_v3 PPO update')
         validate_reach_policy(reach_source.policy)
     saved_environment=saved.get('environment',{}) if saved and saved.get('schema',1)>=2 else {}
+    selected_source=getattr(args,'observation_source',None) or saved_environment.get('observation_source','state')
     selected_pose=getattr(args,'observation_pose',None) or saved_environment.get('observation_pose','table_down')
     selected_control=getattr(args,'control_mode',None) or saved_environment.get('control_mode','auto')
     selected_jaw=getattr(args,'jaw_control',None) or saved_environment.get('jaw_control','delta' if init_reach else 'absolute')
     jaw_scale=getattr(args,'jaw_delta_scale',None)
     if jaw_scale is None:jaw_scale=saved_environment.get('jaw_delta_scale',.002)
     cfg=environment_config(args.stage,observation_pose=selected_pose,control_mode=selected_control,
-                           cache_startup=getattr(args,'cache_startup',False),jaw_control=selected_jaw,jaw_delta_scale=jaw_scale)
+                           cache_startup=getattr(args,'cache_startup',False),jaw_control=selected_jaw,jaw_delta_scale=jaw_scale,
+                           observation_source=selected_source)
     structured=bool(init_reach or isinstance(getattr(source,'policy',None),ReachGraspPPOPolicy))
+    vision=cfg.observation_source=='rgbd_hsv'
+    if vision and not structured:raise ValueError('Initialize RGB-D PPO from --init-reach-model or a Cartesian Reach/grasp checkpoint')
+    if source is not None and isinstance(source.policy,VisualReachGraspPPOPolicy) and not vision:
+        raise ValueError('A visual policy cannot be silently transferred back to truth-state observations')
+    visual_transfer=bool(vision and source is not None and saved_environment.get('observation_source','state')!='rgbd_hsv')
+    vision_contract_changed=bool(vision and source is not None and saved.get('vision_contract')!=VISION_CONTRACT)
     if structured and (cfg.uses_orientation_actions or cfg.observation_pose!='table_down'):
         raise ValueError('Reach warm start supports table_down position control; use ordinary Cartesian PPO for pose control')
     if freeze_arm_steps and not structured:raise ValueError('Arm freezing requires the Reach-initialized policy')
@@ -240,19 +262,22 @@ def train(args):
     elif structured:
         goal_features=dict(saved['cartesian_goal_features'])
         if getattr(args,'reset_goal_gate',False):goal_features.update(initial_gate_weight=80.,initial_gate_bias=-40.)
+    if vision:goal_features.update(visual_xy_deadband=.001,visual_z_deadband=.0005)
     def factory():return Monitor(TabletopEnv(cfg))
     vector=DummyVecEnv([factory]) if args.n_envs==1 else SubprocVecEnv([factory for _ in range(args.n_envs)],start_method='fork')
     vector=VecCheckNan(vector,raise_exception=True);vector.seed(args.seed)
     adaptive=getattr(args,'adaptive_exploration',True)
     exploration=dict(adaptive_exploration=adaptive,
-        exploration_profile=getattr(args,'exploration_profile','grasp_lift'),
+        exploration_profile='distance' if vision else getattr(args,'exploration_profile','grasp_lift'),
         exploration_distance=.04,motion_std_floor=.03,jaw_std_floor=.2,jaw_exploration_distance=.01,
         cage_xy_scale=.004,cage_z_scale=.005,grasp_offset_z=.003,jaw_far_std_floor=.1,
         jaw_held_std_floor=.1,grip_force_scale=.1,lift_exploration_gain=2.)
     policy_kwargs=dict(log_std_init=float(np.log(args.std)),**exploration)
-    if structured:policy_kwargs.update(features_extractor_class=CartesianGoalFeatures,features_extractor_kwargs=goal_features)
+    if structured:policy_kwargs.update(features_extractor_class=VisualCartesianGoalFeatures if vision else CartesianGoalFeatures,
+                                      features_extractor_kwargs=goal_features)
     else:policy_kwargs['net_arch']=dict(pi=[128,128],vf=[128,128])
-    model=PPO(ReachGraspPPOPolicy if structured else CartesianPPOPolicy,vector,
+    policy_class=VisualReachGraspPPOPolicy if vision else ReachGraspPPOPolicy if structured else CartesianPPOPolicy
+    model=PPO(policy_class,vector,
               learning_rate=args.learning_rate,n_steps=args.n_steps,batch_size=batch,
               n_epochs=10,gamma=REWARD['gamma'],gae_lambda=.95,clip_range=.2,ent_coef=.001,vf_coef=.5,
               max_grad_norm=.5,target_kl=.04,policy_kwargs=policy_kwargs,
@@ -285,11 +310,12 @@ def train(args):
     if jaw_reset:reset_jaw_head(model.policy,0. if cfg.jaw_control=='delta' else 2*cfg.initial_width/MAX_WIDTH-1)
     goal_gate_reset=bool(structured and (init_reach or getattr(args,'reset_goal_gate',False)))
     if goal_gate_reset:model.policy.features_extractor.initialize_lift_gate()
+    if visual_transfer:transfer_visual_observation_inputs(model.policy)
     if not args.init_model or args.reset_exploration:
         with torch.no_grad():model.policy.log_std.fill_(float(np.log(args.std)))
     if jaw_std is not None:
         with torch.no_grad():model.policy.log_std[-1]=float(np.log(jaw_std))
-    critic_reset=getattr(args,'reset_critic',False)
+    critic_reset=getattr(args,'reset_critic',False) or visual_transfer or vision_contract_changed
     if critic_reset:
         actor_before=hashes(model)['actor_mean'];reset_critic(model.policy)
         assert hashes(model)['actor_mean']==actor_before
@@ -298,6 +324,8 @@ def train(args):
         transfer['jaw_control_changed']=jaw_changed
         transfer['jaw_delta_scale_changed']=bool(source and saved_environment.get('jaw_delta_scale',.002)!=cfg.jaw_delta_scale)
         transfer['goal_gate_reset']=goal_gate_reset
+        transfer['visual_observation_transfer']=visual_transfer
+        transfer['vision_contract_changed']=vision_contract_changed
     if structured:model.policy.set_arm_trainable(freeze_arm_steps==0)
     config=dict(schema=2,algorithm='PPO',task='tabletop_cartesian',stage=args.stage,seed=args.seed,
                 environment=cfg.to_dict(),action_contract=action_contract(cfg),observation_fields=observation_fields(cfg),
@@ -305,7 +333,10 @@ def train(args):
                 contact_measurement=CONTACT_MEASUREMENT,adaptive_exploration=adaptive,
                 exploration=exploration,critic_reset=critic_reset,
                 jaw_head_reset=jaw_reset,jaw_initial_opening_m=cfg.initial_width if jaw_reset else None,
-                policy_type='reach_grasp' if structured else 'cartesian',cartesian_goal_features=goal_features,
+                policy_type='visual_reach_grasp' if vision else 'reach_grasp' if structured else 'cartesian',cartesian_goal_features=goal_features,
+                observation_source=cfg.observation_source,object_state_in_policy='rgbd_hsv' if vision else 'simulator_state',
+                vision_contract=VISION_CONTRACT if vision else None,
+                privileged_reward_and_success_audit=vision,
                 freeze_arm_steps=freeze_arm_steps,
                 goal_gate_reset=goal_gate_reset,
                 initial_branch_hashes=branch_hashes(model.policy) if structured else None,

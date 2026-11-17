@@ -28,13 +28,20 @@ class Recorder:
         cams=[self.camera,'top_view','wrist_rgb'];images=[]
         for renderer,camera in zip(self.renderers,cams):
             renderer.update_scene(robot.data,camera=camera);images.append(Image.fromarray(renderer.render()))
+        debug=getattr(robot,'vision_debug',None)
+        if debug:
+            images[1]=Image.fromarray(debug['mask']).convert('RGB').resize((300,220))
+            images[2]=Image.fromarray(debug['frame'].rgb).resize((300,220))
         frame=images[0];frame.paste(images[1],(652,98));frame.paste(images[2],(652,340))
         draw=ImageDraw.Draw(frame);draw.rectangle((0,0,960,90),fill=(18,23,28))
         draw.text((10,7),'RealMan EE | traditional startup + Cartesian PPO | simulation 4x',fill='white',font=self.font)
         draw.text((10,34),f'pose={robot.config.observation_pose} | phase={phase} | t={now:.2f}s',fill='white',font=self.font)
-        p=robot.tcp_pose()[0];draw.text((10,60),f'TCP=({p[0]:.3f}, {p[1]:.3f}, {p[2]:.3f}) m',fill='white',font=self.font)
-        draw.text((660,104),'Top view',fill='white',font=self.font)
-        draw.text((660,345),'Wrist camera (simulation convention)',fill='white',font=self.font)
+        p=robot.tcp_pose()[0];caption=f'TCP=({p[0]:.3f}, {p[1]:.3f}, {p[2]:.3f}) m'
+        if debug:
+            q=debug['measurement']['object_position_base_m'];caption+=f' | RGB-D base=({q[0]:.3f}, {q[1]:.3f}, {q[2]:.3f}) m'
+        draw.text((10,60),caption,fill='white',font=self.font)
+        draw.text((660,104),'HSV binary mask' if debug else 'Top view',fill='white',font=self.font)
+        draw.text((660,345),'Policy RGB input' if debug else 'Wrist camera (simulation convention)',fill='white',font=self.font)
         self.frames.append(frame)
     def save(self,path):
         path=Path(path);path.parent.mkdir(parents=True,exist_ok=True)

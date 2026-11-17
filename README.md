@@ -12,10 +12,19 @@
 - 四维 PPO 局部夹取与抬升训练、课程 checkpoint 和独立评估。
 - 七维 PPO 水平桌面抓取环境，支持六轴零位起点、同步关节参考和夹爪控制。
 - `tabletop_cartesian` 桌面末端控制任务：传统控制到固定观测姿态，PPO 输出末端位移/姿态和夹爪动作，复用独立 FK/IK 执行层。
+- 腕部 RGB-D 视觉抓取：OpenCV HSV 二值 Mask、深度反投影到基座坐标，PPO 的全部物体观测来自相机；保留原真值观测模式。
 - 独立 BC 示范采集、训练和推理；保留历史 BC→SAC Actor 初始化、边界对照与 Q/TD 诊断。
 - 自动化回归测试、环境探针及只读训练曲线绘图。
 
-## 桌面末端控制任务（新增）
+## 腕部 RGB-D 视觉完整抓取
+
+已在现有 `tabletop_cartesian` 中加入 `--observation-source rgbd_hsv`。相机沿用原 `camera_link/wrist_rgb` 的位置，读取对齐 RGB/深度，HSV 分割橙色方块，输出白色目标、黑色背景的 Mask，并恢复基座坐标。策略输入中的物体位置、速度、夹持置信度、目标及保持进度均由相机数据生成；真实接触力、物体真值和真值保持时间退出策略输入，仅用于仿真物理、安全、训练奖励及独立验收。零位到固定观测姿态仍使用传统控制，交接后的 XYZ 和夹爪增量由 PPO 网络输出，FK/IK 独立执行。
+
+**选定视觉 PPO 模型独立复测：固定位置 3/3，半径 2 cm 随机位置 3/3，零安全终止。** 六次离台 29.61–29.67 mm、物理连续稳定保持至少 3.511 秒；视觉连续稳定 3 秒后结束，再接受原完整物理标准验收。另保存一条成功的完整 RGB/Mask 回放。79 项相关测试通过，10,601 个控制周期的相机观测及原始网络动作核对通过。当前范围为理想 MuJoCo RGB-D、20 mm 正立方块和 `table_down` 起点；随机位置仅三个样本，真实相机与真机尚未验证。
+
+[视觉模型](outputs/grasp/ppo/tabletop_cartesian/vision_rgbd_v1/full_table_down_seed2031_r4_zero_anchored/checkpoints/step_00000768/model.zip) · [完整视觉回放](outputs/grasp/ppo/tabletop_cartesian/vision_rgbd_v1/full_table_down_seed2031_r4_zero_anchored/review/full_rgbd_grasp_step768.gif) · [接口与复现命令](docs/tabletop_vision.md) · [验证报告](docs/validation/TABLETOP_VISION_VALIDATION.md)。模型由既有 PPO 迁移，选中检查点新增 768 步；原真值模型与下述历史成绩单独保留。
+
+## 桌面末端控制任务（真值观测模式）
 
 `tabletop_cartesian` 与现有 reach、lift、tabletop_pick 并列，使用同一工程和 `realman_rl` 环境。流程固定为零位 → 传统控制到固定观测姿态 → PPO 执行任务，课程和物体位置都不会把启动点移到方块附近。预设包含面向桌面的 `table_down` 和夹爪与桌面平行、平视正前方的 `forward`。
 
@@ -282,10 +291,11 @@ python -I -m pip install --no-build-isolation -e .
 python -I -m pip check
 ```
 
-基础依赖锁在 `requirements.txt`；可选训练依赖锁在 `requirements-rl.txt`，厂家离线 SDK 锁在 `requirements-vendor.txt`。需要补装时分别使用：
+基础依赖锁在 `requirements.txt`；可选训练依赖锁在 `requirements-rl.txt`，视觉依赖锁在 `requirements-vision.txt`，厂家离线 SDK 锁在 `requirements-vendor.txt`。需要补装时分别使用：
 
 ```bash
 python -I -m pip install --extra-index-url https://download.pytorch.org/whl/cpu -c requirements.txt -r requirements-rl.txt
+python -I -m pip install -r requirements-vision.txt
 python -I -m pip install -r requirements-vendor.txt
 ```
 
@@ -479,20 +489,21 @@ SAC、BC 分别使用 `scripts/evaluate/evaluate_sac_reach.py`、`scripts/evalua
 ## 项目结构
 
 - `assets/`：机器人、夹爪与场景资源。
-- `src/realman_rl_simtoreal/simulation/`、`envs/`：物理控制与 Gymnasium 环境。
+- `src/realman_rl_simtoreal/simulation/`、`envs/`：物理控制与 Gymnasium 环境；`perception/`：不依赖模拟器的 RGB-D 感知与坐标转换。
 - `tasks/`：算法无关的 Reach 配置；`rl/common/`：公共观测、训练包装、产物和日志写入。
 - `rl/`：PPO / SAC 创建、训练、优化、checkpoint 与算法薄适配；`imitation/`：BC 模型和训练、历史 BC→SAC 转移。
 - `evaluation/`：独立 Reach / GraspLift 策略评估、Episode 指标和规则基线；`scripts/evaluate/` 负责 CLI、加载和输出，`tests/` 负责正确性与回归验证。
 - `utils/`、`vendor/`：共享几何、演示、运动统计 / 来源指纹和厂家离线适配器。
 - `scripts/{train,evaluate,demos,models,diagnostics,plots}/`：按用途分类的正式入口。
 - `tests/`：独立回归测试；`docs/`：架构、文件索引、实验及验证记录。
-- `outputs/{simulation,reach,grasp,imitation,validation}/`：按用途分类的模型、数据、图像与验证记录，入口见 [输出导航](outputs/README.md)。
+- `outputs/{simulation,reach,grasp,imitation,validation,vision}/`：按用途分类的模型、数据、图像与验证记录，入口见 [输出导航](outputs/README.md)。
 
 包内目录的完整关系见 [架构](docs/architecture.md)，逐文件职责和调用者见 [FILE_MAP](docs/FILE_MAP.md)。旧平铺脚本和 `experiments.*` 不再作为 Python 接口保留。
 
 ## 文档索引
 
 - [工程架构与依赖边界](docs/architecture.md)
+- [RGB-D 视觉抓取与复现](docs/tabletop_vision.md)
 - [完整 Python 文件地图](docs/FILE_MAP.md)
 - [Evaluation 层重构与兼容性验证](docs/validation/EVALUATION_REFACTOR_VALIDATION.md)
 - [输出目录、主要模型与路径迁移](docs/OUTPUTS.md)
@@ -503,4 +514,4 @@ SAC、BC 分别使用 `scripts/evaluate/evaluate_sac_reach.py`、`scripts/evalua
 
 ## 已知限制
 
-PPO 夹取抬升当前验证范围为上述 12 mm 起点的局部方块任务，默认 20 mm 起点尚未通过。尚未接入视觉观测、HER 或真机通信。训练入口支持权重迁移并重建优化器，不提供跨进程完整续训。实物代际、TCP、零位、惯量和碰撞几何尚需校准；厂家 SDK 与 MuJoCo 模型不完全一致，仿真重力补偿精度不代表真机精度。历史实验细节和失败结论保存在文档中。
+历史局部 PPO 的默认 20 mm 起点尚未通过；完整桌面任务和 RGB-D 任务具有各自的模型及独立验证范围，不能混用成绩。视觉当前依赖已知 20 mm 正立方块、理想对齐深度及仿真标定，尚未验证真实光照、深度噪声和手眼误差。尚未接入 HER 或真机通信。训练入口支持权重迁移并重建优化器，不提供跨进程完整续训。实物代际、TCP、零位、惯量和碰撞几何尚需校准；厂家 SDK 与 MuJoCo 模型不完全一致，仿真重力补偿精度不代表真机精度。历史实验细节和失败结论保存在文档中。
