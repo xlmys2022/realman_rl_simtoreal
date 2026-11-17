@@ -2,7 +2,9 @@
 
 本功能与现有 reach、grasp_lift、tabletop_pick 并列，使用同一个工程和 `realman_rl` 环境。原有任务、控制方式和模型保留。
 
-当前完整模型为 `outputs/grasp/ppo/tabletop_cartesian/fixed_observation_v2/full_table_down_seed2029_r13_secure_grip/checkpoints/step_00003072/model.zip`。固定方块 `(0.40,0)` m、`table_down` 起点独立复测 **3/3** 成功，零安全终止；成功时离台 28.962 mm，连续稳定保持 2.009 秒。每次包含实际零位传统启动，推理期间参数不变。模型使用预训练 Reach PPO 及夹持门控先验，再进行 PPO 微调；随机物体泛化、平视起点的完整抓取和真机执行尚未验证。
+当前完整模型为 `outputs/grasp/ppo/tabletop_cartesian/fixed_observation_v2/full_table_down_seed2029_r13_secure_grip/checkpoints/step_00003072/model.zip`。固定方块 `(0.40,0)` m、`table_down` 起点独立复测 **3/3** 成功，零安全终止；成功时离台 28.962 mm，连续稳定保持 2.009 秒。每次包含实际零位传统启动，推理期间参数不变。模型使用预训练 Reach PPO 及夹持门控先验，再进行 PPO 微调。
+
+随机位置已独立验证 **54/60（90%）**：以 `(0.40,0)` m 为中心，半径 1、2、5 cm 的圆盘各采样 20 个未训练位置，三档均为 18/20。六次失败为三次抬升不足超时和三次夹爪速度保护终止；完整标准、固定启动和模型参数不变。当前有一定位置泛化能力，尚未稳定全通过；平视起点、随机物体姿态、视觉定位误差和真机尚未验证。
 
 ## 固定观测姿态与交接
 
@@ -109,4 +111,15 @@ python -I scripts/demos/render_ppo_tabletop_cartesian.py \
 
 默认完整评估保留 checkpoint 所选的固定观测姿态，并恢复 30 mm/2 秒任务。`--saved-task` 只保留课程成功门槛，不能恢复近物体起点。姿态控制模型可用 `--observation-pose` 显式选择另一个预设。
 
-两种物理启动、物体位置独立性、PPO 接管边界及两种动作接口已验证；固定方块和朝下观测姿态的完整 PPO 抓取已通过独立复测。训练时随机采样的两个完整回合未通过，尚不具备带噪声执行的稳定性。过去近距离课程的 3/3 成功不计为当前任务成绩。详情见 [验证记录](validation/TABLETOP_CARTESIAN_VALIDATION.md)。
+随机位置评估可显式传入 `--object-radius`（米，范围 0–0.05）。方块以配置中的 `(0.40,0)` m 为中心，在圆盘内按面积均匀采样：角度均匀，距离为 `R * sqrt(U)`；这不是 X/Y 各自独立的正方形范围。完整模式保留这个显式随机范围，同时恢复完整成功标准；不传参数时仍默认固定位置。每回合记录实际初始物体坐标 `initial_object_position_m`，启动始终是同一个固定观测姿态。
+
+```bash
+python -I scripts/evaluate/evaluate_ppo_tabletop_cartesian.py \
+  --model outputs/grasp/ppo/tabletop_cartesian/fixed_observation_v2/full_table_down_seed2029_r13_secure_grip/checkpoints/step_00003072/model.zip \
+  --object-radius .02 --episodes 20 --seed-start 870000 \
+  --json /tmp/random_position_radius2cm.json
+```
+
+回放支持相同的 `--object-radius` 和 `--seed`，可复现某个具体位置。评估和回放不会更新模型；存在未完成任务的回合时返回码为 1，同时保存结果文件。
+
+两种物理启动、物体位置独立性、PPO 接管边界及两种动作接口已验证；固定方块完整任务为 3/3，随机位置为 54/60。随机位置验证期间仅增加评估随机范围参数和实际位置记录，没有训练或修改策略。训练时随机动作采样的两个完整回合未通过；随机物体位置与随机动作噪声是不同测试。过去近距离课程的 3/3 成功不计为当前任务成绩。详情见 [验证记录](validation/TABLETOP_CARTESIAN_VALIDATION.md)。

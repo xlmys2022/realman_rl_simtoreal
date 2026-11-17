@@ -41,6 +41,9 @@ def main(argv=None):
     render=commands.add_parser('render');render.add_argument('--model',required=True,type=Path)
     render.add_argument('--output',required=True,type=Path);render.add_argument('--seed',type=int,default=360000)
     render.add_argument('--saved-task',action='store_true')
+    for command in (evaluate,render):
+        command.add_argument('--object-radius',type=float,
+                             help='Evaluation disk radius in metres, up to 0.05; preserves full grasp criteria')
     for command in (setup,train,evaluate,render):
         command.add_argument('--observation-pose',choices=['table_down','forward'],
                              help='Fixed task preset, independent of object location')
@@ -54,7 +57,7 @@ def main(argv=None):
         from ..rl.ppo_tabletop_cartesian import load,evaluate as execute,write_json
         model,config=load(args.model)
         result=execute(model,config,range(args.seed_start,args.seed_start+args.episodes),full=not args.saved_task,
-                       observation_pose=args.observation_pose)
+                       observation_pose=args.observation_pose,object_radius=args.object_radius)
         write_json(args.json,result);print(result['summary']);return int(result['summary']['successes']!=args.episodes)
     if args.command in ('setup','render'):
         from .tabletop_cartesian_render import run

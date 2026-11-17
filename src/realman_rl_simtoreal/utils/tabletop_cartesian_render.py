@@ -61,7 +61,8 @@ def run(args):
             from ..rl.ppo_tabletop_cartesian import load,evaluate
             model,config=load(args.model)
             result=evaluate(model,config,[args.seed],full=not args.saved_task,tick=tick,
-                            observation_pose=getattr(args,'observation_pose',None))
+                            observation_pose=getattr(args,'observation_pose',None),
+                            object_radius=getattr(args,'object_radius',None))
             result['model_sha256']=hashlib.sha256(args.model.read_bytes()).hexdigest()
             path=output.with_suffix('.json')
         if path.exists():raise ValueError('Choose a new JSON output path')

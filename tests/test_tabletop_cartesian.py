@@ -262,6 +262,48 @@ class PackageTests(unittest.TestCase):
 
 
 
+class RandomEvaluationTests(unittest.TestCase):
+    def setUp(self):
+        import torch
+        from gymnasium import spaces
+        from realman_rl_simtoreal.simulation.grasp_metrics import CONTACT_MEASUREMENT
+        policy=torch.nn.Module();policy.optimizer=SimpleNamespace(state={})
+        self.model=SimpleNamespace(policy=policy,action_space=spaces.Box(-1.,1.,(4,),dtype=np.float32),
+                                   num_timesteps=123,_n_updates=4)
+        # Full evaluation must restore completion criteria, while an explicit
+        # random-position request must survive that restoration.
+        self.config=dict(schema=2,environment=replace(Config(),object_radius=.01,
+            success_height=.005,height_tolerance=.0005,hold_seconds=.2,max_steps=8,cache_startup=True).to_dict(),
+            startup_contract=startup_contract('table_down'),contact_measurement=CONTACT_MEASUREMENT)
+
+    def test_full_evaluation_preserves_explicit_randomization_and_strict_criteria(self):
+        from realman_rl_simtoreal.rl.ppo_tabletop_cartesian import evaluate
+        def environment(cfg,**kwargs):return SimpleNamespace(config=cfg,close=lambda:None)
+        with patch('realman_rl_simtoreal.rl.ppo_tabletop_cartesian.TabletopEnv',side_effect=environment), \
+             patch('realman_rl_simtoreal.rl.ppo_tabletop_cartesian.rollout',return_value=dict(success=False,reason='time_limit')):
+            for radius in (None,0.,.02,.05):
+                result=evaluate(self.model,self.config,[8],full=True,object_radius=radius)
+                cfg=result['environment']
+                self.assertEqual(cfg['object_radius'],0. if radius is None else radius)
+                self.assertTrue(result['full_task']);self.assertTrue(result['parameters_unchanged'])
+                self.assertIsNone(cfg['success_height']);self.assertEqual(cfg['lift_height'],.03)
+                self.assertEqual(cfg['height_tolerance'],.002);self.assertEqual(cfg['hold_seconds'],2.)
+                self.assertEqual(cfg['max_steps'],1600);self.assertFalse(cfg['cache_startup'])
+                self.assertEqual(result['startup_contract'],startup_contract('table_down'))
+
+    def test_invalid_randomization_is_rejected_before_robot_allocation(self):
+        from realman_rl_simtoreal.rl.ppo_tabletop_cartesian import evaluate
+        with patch('realman_rl_simtoreal.rl.ppo_tabletop_cartesian.TabletopEnv') as allocate:
+            for radius in (-.001,.051,np.nan,np.inf):
+                with self.assertRaises(ValueError):evaluate(self.model,self.config,[8],full=True,object_radius=radius)
+            allocate.assert_not_called()
+
+    def test_custom_environment_cannot_hide_a_randomization_override(self):
+        from realman_rl_simtoreal.rl.ppo_tabletop_cartesian import evaluate
+        with self.assertRaisesRegex(ValueError,'must construct its own'):
+            evaluate(self.model,self.config,[8],environment=object(),object_radius=.02)
+
+
 class PPOIntegrationTests(unittest.TestCase):
     def test_source_capture_does_not_include_training_outputs(self):
         from realman_rl_simtoreal.rl.ppo_tabletop_cartesian import capture_sources

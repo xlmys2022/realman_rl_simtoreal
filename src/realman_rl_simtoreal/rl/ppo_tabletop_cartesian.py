@@ -116,12 +116,13 @@ def rollout(env,model,seed,tick=None):
         records.append(dict(info,raw_action=raw.tolist(),action=action.tolist(),reward=reward))
         if tick:tick(env.robot,'ppo')
         if t or tr:break
-    return dict(seed=seed,success=info['is_success'],reason=info['termination_reason'],detail=info['detail'],
+    return dict(seed=seed,initial_object_position_m=initial['object_position_m'],
+                success=info['is_success'],reason=info['termination_reason'],detail=info['detail'],
                 length=len(records),return_=total,clearance_m=info['clearance_m'],hold_seconds=info['hold_seconds'],
                 initial_startup=initial['startup'],gripper_statistics=env.robot.gripper.statistics(),records=records)
 
 
-def evaluate(model,config,seeds,*,full=False,tick=None,environment=None,observation_pose=None):
+def evaluate(model,config,seeds,*,full=False,tick=None,environment=None,observation_pose=None,object_radius=None):
     before=hashes(model);counters=(model.num_timesteps,model._n_updates,optimizer_steps(model))
     if config.get('schema',1)<2 or 'startup_contract' not in config:
         raise ValueError('Evaluation requires the fixed observation pose startup contract')
@@ -129,7 +130,7 @@ def evaluate(model,config,seeds,*,full=False,tick=None,environment=None,observat
         raise ValueError('Evaluation requires the current inward grip-force observation contract')
     if config['startup_contract']!=startup_contract(Config(**config['environment']).observation_pose):
         raise ValueError('Checkpoint fixed observation pose contract does not match the configured preset')
-    if environment is not None and (full or observation_pose is not None):
+    if environment is not None and (full or observation_pose is not None or object_radius is not None):
         raise ValueError('Full or overridden-pose evaluation must construct its own physical-startup environment')
     values=dict(config['environment']);values['cache_startup']=False
     if observation_pose is not None:values['observation_pose']=observation_pose
@@ -137,6 +138,9 @@ def evaluate(model,config,seeds,*,full=False,tick=None,environment=None,observat
         default=Config()
         for key in ('initial_width','success_height','lift_height','height_tolerance','hold_seconds','max_steps','object_radius','axis_scale'):
             values[key]=getattr(default,key)
+    # Explicit evaluation randomization follows the full-task defaults. Otherwise
+    # full=True silently restores radius zero and repeats the training position.
+    if object_radius is not None:values['object_radius']=object_radius
     if model.action_space.shape!=(action_contract(Config(**values))['shape'],):
         raise ValueError('The checkpoint cannot control this observation pose; use pose control to turn from a forward start')
     own=environment is None

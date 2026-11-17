@@ -23,7 +23,9 @@
 
 **固定观测起点的完整抓取已通过仿真独立验证：3/3 成功，零安全终止。** 选用 r13 的 3,072 步检查点，离台约 28.96 mm（30 mm 目标、2 mm 容差），连续稳定保持 2.009 秒。每次都实际执行零位传统启动；随后 PPO 输出 XYZ 与夹爪增量，独立 IK/FK 执行。模型使用原 Reach PPO 初始化，末端、夹爪及目标门控在本轮均有实际 PPO 更新。
 
-[模型](outputs/grasp/ppo/tabletop_cartesian/fixed_observation_v2/full_table_down_seed2029_r13_secure_grip/checkpoints/step_00003072/model.zip) · [完整回放](outputs/grasp/ppo/tabletop_cartesian/fixed_observation_v2/full_table_down_seed2029_r13_secure_grip/review/full_grasp_step3072.gif) · [独立复测](outputs/grasp/ppo/tabletop_cartesian/fixed_observation_v2/full_table_down_seed2029_r13_secure_grip/review/independent_full_step3072_850000.json)。结果限固定方块 `(0.40,0)` m 与 `table_down` 姿态，不代表随机位置泛化或 `forward` 完整抓取。59 项专项/兼容检查通过；随机采样的两个训练回合未通过，评估使用确定性动作。
+[模型](outputs/grasp/ppo/tabletop_cartesian/fixed_observation_v2/full_table_down_seed2029_r13_secure_grip/checkpoints/step_00003072/model.zip) · [完整回放](outputs/grasp/ppo/tabletop_cartesian/fixed_observation_v2/full_table_down_seed2029_r13_secure_grip/review/full_grasp_step3072.gif) · [独立复测](outputs/grasp/ppo/tabletop_cartesian/fixed_observation_v2/full_table_down_seed2029_r13_secure_grip/review/independent_full_step3072_850000.json)。上述 3/3 属于固定方块 `(0.40,0)` m、`table_down` 姿态的重复复现；随机位置成绩单独记录。59 项专项/兼容检查通过；随机采样的两个训练回合未通过，评估使用确定性动作。
+
+**随机位置独立验证：54/60（90%）成功。** 以 `(0.40,0)` m 为中心，在半径 1、2、5 cm 的圆盘内各均匀采样 20 个位置，三档均为 18/20；六次失败包括三次抬升不足超时和三次夹爪速度保护终止。模型冻结、实际零位启动和完整成功标准不变。[逐位置结果](outputs/grasp/ppo/tabletop_cartesian/fixed_observation_v2/random_generalization_r13_step3072_seed870000/summary.json) · [覆盖图](outputs/grasp/ppo/tabletop_cartesian/fixed_observation_v2/random_generalization_r13_step3072_seed870000/random_position_coverage.png)。具有一定位置泛化能力，尚不能稳定全通过；平视起点、视觉误差及真机尚未验证。
 
 入口为 `scripts/train/train_ppo_tabletop_cartesian.py`，两种传统启动演示为 `scripts/demos/move_to_observation_pose.py --observation-pose table_down` 或 `forward`。详见 [任务说明和命令](docs/tabletop_cartesian.md)与[验证记录](docs/validation/TABLETOP_CARTESIAN_VALIDATION.md)。历史失败记录及近距离课程成绩单独保留。
 
