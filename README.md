@@ -11,10 +11,23 @@
 - 固定及随机目标 ReachEnv，PPO、SAC 训练、独立评估、checkpoint 和 TensorBoard。
 - 四维 PPO 局部夹取与抬升训练、课程 checkpoint 和独立评估。
 - 七维 PPO 水平桌面抓取环境，支持六轴零位起点、同步关节参考和夹爪控制。
+- `tabletop_cartesian` 桌面末端控制任务：传统控制到固定观测姿态，PPO 输出末端位移/姿态和夹爪动作，复用独立 FK/IK 执行层。
 - 独立 BC 示范采集、训练和推理；保留历史 BC→SAC Actor 初始化、边界对照与 Q/TD 诊断。
 - 自动化回归测试、环境探针及只读训练曲线绘图。
 
-## 水平桌面的完整抓取任务
+## 桌面末端控制任务（新增）
+
+`tabletop_cartesian` 与现有 reach、lift、tabletop_pick 并列，使用同一工程和 `realman_rl` 环境。流程固定为零位 → 传统控制到固定观测姿态 → PPO 执行任务，课程和物体位置都不会把启动点移到方块附近。预设包含面向桌面的 `table_down` 和夹爪与桌面平行、平视正前方的 `forward`。
+
+默认面向桌面使用 XYZ＋夹爪四维动作、29 维观测；平视起点使用 XYZ＋末端旋转＋夹爪七维笛卡尔动作、38 维观测，让 PPO 自己完成转向。FK/IK 和执行器负责关节控制，观测与奖励不包含 IK 关节目标。原任务和旧七维关节控制保留。
+
+**固定观测起点的完整抓取已通过仿真独立验证：3/3 成功，零安全终止。** 选用 r13 的 3,072 步检查点，离台约 28.96 mm（30 mm 目标、2 mm 容差），连续稳定保持 2.009 秒。每次都实际执行零位传统启动；随后 PPO 输出 XYZ 与夹爪增量，独立 IK/FK 执行。模型使用原 Reach PPO 初始化，末端、夹爪及目标门控在本轮均有实际 PPO 更新。
+
+[模型](outputs/grasp/ppo/tabletop_cartesian/fixed_observation_v2/full_table_down_seed2029_r13_secure_grip/checkpoints/step_00003072/model.zip) · [完整回放](outputs/grasp/ppo/tabletop_cartesian/fixed_observation_v2/full_table_down_seed2029_r13_secure_grip/review/full_grasp_step3072.gif) · [独立复测](outputs/grasp/ppo/tabletop_cartesian/fixed_observation_v2/full_table_down_seed2029_r13_secure_grip/review/independent_full_step3072_850000.json)。结果限固定方块 `(0.40,0)` m 与 `table_down` 姿态，不代表随机位置泛化或 `forward` 完整抓取。59 项专项/兼容检查通过；随机采样的两个训练回合未通过，评估使用确定性动作。
+
+入口为 `scripts/train/train_ppo_tabletop_cartesian.py`，两种传统启动演示为 `scripts/demos/move_to_observation_pose.py --observation-pose table_down` 或 `forward`。详见 [任务说明和命令](docs/tabletop_cartesian.md)与[验证记录](docs/validation/TABLETOP_CARTESIAN_VALIDATION.md)。历史失败记录及近距离课程成绩单独保留。
+
+## 水平桌面的完整抓取任务（原七维控制）
 
 开发阶段按用户确认，以六轴全零 `[0,0,0,0,0,0]` 为起点；这是临时开发零位，不标注为示教器的打包姿态。`initial_q_deg` / `--initial-q-deg` 支持以后替换为准确的打包角度。完整任务 reset 不使用原项目 `[0,-20,30,0,20,0]`，也不把机械臂重置到方块附近。
 

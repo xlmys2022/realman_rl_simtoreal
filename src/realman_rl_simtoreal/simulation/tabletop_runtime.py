@@ -1,0 +1,139 @@
+"""Real actuator dynamics, contact checks, and explicit reset/setup lifecycle."""
+import copy
+import mujoco
+import numpy as np
+from .camera import camera_rotation
+from ..paths import TABLETOP_CARTESIAN_SCENE as DEFAULT_SCENE
+from .model import load_model,initialize,require
+from ..simulation.gripper import Gripper,SIGNS,MAX_WIDTH,width_to_angle
+from .grasp_contact import ContactPolicy,ContactRecorder,PAD_PENETRATION,SUPPORT_PENETRATION,UNEXPECTED_PENETRATION
+from .control import advance_synchronized_cycle
+from .kinematics import rotation_vector
+from .tool_kinematics import ToolKinematics
+from .grasp_metrics import grasp_forces, CONTACT_MEASUREMENT
+
+
+class TabletopRuntime:
+    def __init__(self,config):
+        self.config=config
+        self.model,self.joint_ids,self.actuator_ids=load_model(DEFAULT_SCENE,gravity_compensation=True)
+        self.model.opt.timestep=self.config.physics_timestep
+        camera=self.model.camera('wrist_rgb').id
+        mujoco.mju_mat2Quat(self.model.cam_quat[camera],camera_rotation(self.config.camera_forward_local,self.config.camera_up_local).ravel())
+        self.model.cam_fovy[camera]=self.config.camera_fovy_deg
+        self.kinematics=ToolKinematics(self.model,tcp_site="grasp_site")
+        self.contact_policy=ContactPolicy(self.model)
+        self.object_qadr=int(self.model.joint('target_free').qposadr[0])
+        self.object_vadr=int(self.model.joint('target_free').dofadr[0])
+        self.object_body=self.model.body('target_object').id
+        self.table_height=float(self.model.body_pos[self.model.body('support').id,2]+
+                                self.model.geom_size[self.model.geom('support_top').id,2])
+        self.base_position=self.model.body_pos[self.model.body('base_link').id].copy()
+        self._probe=mujoco.MjData(self.model);self._cache=None;self._prepared=False
+
+    rotation_error=staticmethod(rotation_vector)
+
+    def reset_zero(self,object_xy):
+        self._prepared=False
+        self.data=initialize(self.model)
+        self.data.qpos[self.kinematics.qadr]=0
+        self.data.ctrl[self.actuator_ids]=0
+        angle=width_to_angle(self.config.initial_width)
+        for name,sign in SIGNS.items():self.data.qpos[self.model.joint(name).qposadr[0]]=sign*angle
+        self.data.ctrl[self.model.actuator('eg2_position').id]=angle
+        self.data.qpos[self.object_qadr:self.object_qadr+7]=[*object_xy,self.table_height+.01,1,0,0,0]
+        self.data.qvel[:]=0
+        mujoco.mj_forward(self.model,self.data)
+        self._new_monitors()
+        self.contact_policy.check(self.data)
+
+    def _new_monitors(self):
+        self.gripper=Gripper(self.model,self.data,contact_policy=self.contact_policy,reference_speed=.5)
+        self.recorder=ContactRecorder(self.model,self.data,self.gripper,self.contact_policy,keep_history=False)
+        self._grasp_forces=np.zeros(3)
+
+    def tcp_pose(self):
+        site=self.kinematics.site_id
+        return self.data.site_xpos[site].copy(),self.data.site_xmat[site].reshape(3,3).copy()
+
+    def tcp_velocity(self):
+        jac=np.empty((3,self.model.nv))
+        mujoco.mj_jacSite(self.model,self.data,jac,None,self.kinematics.site_id)
+        return jac@self.data.qvel
+
+    def tcp_angular_velocity(self):
+        jac=np.empty((3,self.model.nv))
+        mujoco.mj_jacSite(self.model,self.data,None,jac,self.kinematics.site_id)
+        return jac@self.data.qvel
+
+    def camera_frame(self):
+        camera=self.model.camera('wrist_rgb').id
+        rotation=self.data.cam_xmat[camera].reshape(3,3)
+        return dict(position_m=self.data.cam_xpos[camera].tolist(),forward=(-rotation[:,2]).tolist(),
+                    up=rotation[:,1].tolist(),optical_frame_calibrated=False)
+
+    def forces(self):
+        return self._grasp_forces.copy()
+
+    def raw_forces(self):
+        row=self.recorder.last
+        return np.zeros(3) if row is None else np.array([row['left_normal_n'],row['right_normal_n'],row['support_normal_n']])
+
+    def reference_is_safe(self,target,*,held=None):
+        q=np.asarray(target)
+        limits=self.kinematics.limits
+        if q.shape!=(6,) or not np.isfinite(q).all() or np.any(q<=limits[:,0]) or np.any(q>=limits[:,1]):
+            return False,'joint_limit'
+        self._probe.qpos[:]=self.data.qpos;self._probe.qpos[self.kinematics.qadr]=q
+        mujoco.mj_forward(self.model,self._probe)
+        if held is None:held=min(self.forces()[:2])>.005
+        for contact in self._probe.contact:
+            category=self.contact_policy.classify(*contact.geom)
+            if held and category.endswith('_pad_target'):continue
+            limit=(PAD_PENETRATION if category.endswith('_pad_target') else
+                   SUPPORT_PENETRATION if category=='target_support' else UNEXPECTED_PENETRATION)
+            if not np.isfinite(contact.dist) or contact.dist < -limit:return False,category
+        return True,None
+
+    def path_is_safe(self,start,end):
+        samples=max(51,int(np.ceil(np.max(abs(end-start))/self.config.joint_step))+1)
+        return all(self.reference_is_safe(start+alpha*(end-start),held=False)[0]
+                   for alpha in np.linspace(0,1,samples))
+
+    def advance(self,target,width,observer=None):
+        target=np.asarray(target,dtype=float)
+        start=self.data.ctrl[self.actuator_ids]
+        require(np.max(abs(target-start))<=self.config.joint_step+1e-9,'Unbounded joint-reference step')
+        self.gripper.set_width(float(np.clip(width,self.config.jaw_margin,MAX_WIDTH-self.config.jaw_margin)))
+        def observe(data):
+            self.recorder(data)
+            self._grasp_forces=grasp_forces(self.model,data,self.gripper,self.contact_policy,self.recorder)
+            self.recorder.last.update(left_grasp_n=float(self._grasp_forces[0]),
+                                      right_grasp_n=float(self._grasp_forces[1]))
+            if observer:observer(self.recorder.last)
+        return advance_synchronized_cycle(self.model,self.data,self.joint_ids,self.actuator_ids,target,self.gripper,
+            physics_steps=50,step_observer=observe,max_home_delta=2*np.pi)
+
+    def prepare(self,object_xy,tick=None):
+        """Evaluation always simulates startup; training may restore a verified robot reset state."""
+        from .observation_pose import move_to_observation
+        self.reset_zero(object_xy)
+        signature=(self.config.observation_pose,self.config.initial_width,
+                   tuple(self.config.camera_forward_local),tuple(self.config.camera_up_local))
+        if self.config.cache_startup and self._cache is not None and self._cache.get('signature')==signature:
+            cache=self._cache
+            # Reset initialization only; preserve the newly sampled free cube.
+            self.data.qpos[:self.object_qadr]=cache['qpos']
+            self.data.qvel[:self.object_vadr]=cache['qvel']
+            self.data.ctrl[:]=cache['ctrl']
+            mujoco.mj_forward(self.model,self.data);self._new_monitors();self.contact_policy.check(self.data)
+            report=copy.deepcopy(cache['report'])
+            report.update(mode='cached_verified_observation_reset',simulated_seconds=0.,cycles=0)
+            rotation=cache['rotation'].copy()
+        else:
+            report,rotation=move_to_observation(self,tick=tick)
+            if self.config.cache_startup:
+                self._cache=dict(signature=signature,qpos=self.data.qpos[:self.object_qadr].copy(),qvel=self.data.qvel[:self.object_vadr].copy(),
+                                 ctrl=self.data.ctrl.copy(),report=copy.deepcopy(report),rotation=rotation.copy())
+        self._prepared=True
+        return report,rotation

@@ -1,6 +1,6 @@
 # Python 文件地图
 
-共 112 个 Python 文件：核心包 50、脚本 36、测试 26。以下列出全部文件；路径相对仓库根目录，主要调用者按实际静态导入与入口用途整理，动态进程调用另由测试覆盖。
+共 134 个 Python 文件：核心包 65、脚本 41、测试 28。主要文件及新增任务入口列在下方；路径相对仓库根目录，动态进程调用另由测试覆盖。
 
 新增或移动文件时同步维护本表、[架构](architecture.md)和相应测试路径。[Evaluation 重构报告](validation/EVALUATION_REFACTOR_VALIDATION.md)解释本次迁移及接口；[输出导航](../outputs/README.md)用于查实验产物。
 
@@ -146,3 +146,10 @@
 跨训练与评估的 MotionStats / cosine 位于 `utils/metrics.py`；`experiment_metadata` 位于 `utils/artifacts.py`。Evaluation 仅复用 `rl/common/observation.py` 的算法无关观测契约，不导入 PPO / SAC / BC 或学习框架。PPO 与 BC 的只读推理薄适配留在模型模块。
 
 `tests/fixtures/` 的原数值基准、`assets/` 的模型与来源、`outputs/` 的模型 / 数据 / 日志均未因本次 Evaluation 重构改写。历史报告中的旧模块路径属于原版本，现行路径以本表为准。
+## 新增桌面末端任务
+
+`tabletop_cartesian` 与原有任务并列，配置、环境、训练分别位于 `tasks/tabletop_cartesian.py`、`envs/tabletop_cartesian_env.py`、`rl/ppo_tabletop_cartesian.py`。`simulation/observation_profiles.py` 定义与物体无关的两个固定观测预设；`simulation/cartesian_controller.py` 和 `simulation/observation_pose.py` 负责执行与传统启动，`simulation/tool_kinematics.py` 适配工具坐标并继承原 FK/IK 算法，继续共享夹爪和接触监控。入口位于现有 `scripts/train`、`scripts/evaluate`、`scripts/demos`；详见 [任务说明](tabletop_cartesian.md)。
+
+`simulation/grasp_metrics.py` 从真实接触力提取夹爪内向法向分量，排除顶压和空爪闭合。`rl/cartesian_policy.py` 实现采样及 PPO 似然一致的状态相关探索幅度，以及价值分支/夹爪输出头的独立初始化；动作均值仍完全由网络输出。`tests/test_cartesian_learning.py` 覆盖奖励排序、终止与持续停留的回报界限、接触测量、探索分布及局部参数重置。
+
+`rl/cartesian_reach_policy.py` 复用原 PPO Reach 的神经末端分支，增加独立夹爪网络和可学习的抬升目标门控。输入仍为任务的 29 维笛卡尔状态，目标编码不包含关节目标；训练入口通过 `--init-reach-model` 选择此结构，`--jaw-control delta` 使用增量夹爪参考。
