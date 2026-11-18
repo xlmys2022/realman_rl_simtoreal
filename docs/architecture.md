@@ -152,6 +152,12 @@ PPO 指纹覆盖全体参数、num_timesteps、_n_updates、Adam 每参数 step�
 
 SE(3)、演示序列和文本格式仍位于 utils。没有新的抽象基类、训练器、第三方依赖或自动环境注册。
 
+## 视觉职责与组合边界
+
+`VisionTabletopCartesianEnv` 继续复用基类的物理动作执行和独立物理审计，组合原 RGB-D Camera / Detector / Tracker。`_observation` 只从机器人本体和传感器读取允许数据；在同一模块内组合两个纯函数：`visual_grip_and_hold` 计算相机夹持置信度 / 连续保持，`encode_visual_observation` 编码原 29 维视觉通道；姿态模式沿用原额外 9 维。函数参数显式限定为相机测量与机器人状态，不传整个特权 info 或 simulator 对象。
+
+物理执行、传感器跟踪、观测编码、视觉进度和最终物理验收由不同现有职责承担；不为单个实现新增 ObservationProvider / CompletionChecker 类或独立文件。视觉环境的 step / reset、vision_lost、visual_false_success、settling margin 和禁止特权成功提前结束的规则保持原实现。真值与视觉观测即便维数相同，也保留各自模型契约和特征类。相机几何、深度单位、坐标变换、RGB-D 检测器与所有 Policy 类没有改动。
+
 ## 最新机器人运行时的最小接口
 
 保留具体 `simulation.TabletopRuntime`，不增加只有一个实现的抽象基类，也不强制迁移全部历史环境。当前公共接口为：

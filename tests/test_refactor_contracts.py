@@ -198,4 +198,35 @@ class ExistingCheckpointContracts(unittest.TestCase):
         finally:torch.set_num_threads(old_threads)
 
 
+class VisualCompositionContracts(unittest.TestCase):
+    def test_progress_and_encoding_use_only_explicit_sensor_inputs(self):
+        from realman_rl_simtoreal.envs.tabletop_cartesian_vision_env import visual_grip_and_hold,encode_visual_observation
+        visual=dict(position_m=np.zeros(3),velocity_m_s=np.zeros(3),normal=np.array([0.,0.,1.]),
+                    confidence=1.,visible=True,age=0.)
+        offset=np.array([0.,0.,-.003]);goal_error=np.zeros(3)
+        grip,hold=visual_grip_and_hold(visual,offset,goal_error,width=.02,jaw_reference=0.,cube_size=.02,
+            timeout=.3,previous_grip=0.,previous_hold=0.,dt=0.)
+        self.assertEqual(grip,1.);self.assertEqual(hold,0.)
+        grip,hold=visual_grip_and_hold(visual,offset,goal_error,width=.02,jaw_reference=0.,cube_size=.02,
+            timeout=.3,previous_grip=grip,previous_hold=hold,dt=.05)
+        self.assertEqual(grip,1.);self.assertEqual(hold,.05)
+        obs=encode_visual_observation(np.zeros(3),np.zeros(3),offset,goal_error,visual,width=.02,width_speed=0.,
+            jaw_reference=0.,grip=grip,hold=hold,timeout=.3,hold_required=3.,tracking_error=np.zeros(3),ik_fraction=1.)
+        self.assertEqual(obs.shape,(29,));self.assertEqual(obs.dtype,np.float32)
+        self.assertEqual(float(obs[21]),1.);self.assertAlmostEqual(float(obs[24]),.05/3.,places=8)
+        # Loss of visibility resets visual hold even if camera position remains close.
+        visual['visible']=False
+        _,hold=visual_grip_and_hold(visual,offset,goal_error,width=.02,jaw_reference=0.,cube_size=.02,
+            timeout=.3,previous_grip=1.,previous_hold=2.9,dt=.05)
+        self.assertEqual(hold,0.)
+
+    def test_composed_helpers_do_not_accept_privileged_environment_info(self):
+        import inspect
+        from realman_rl_simtoreal.envs.tabletop_cartesian_vision_env import visual_grip_and_hold,encode_visual_observation
+        for function in (visual_grip_and_hold,encode_visual_observation):
+            parameters=inspect.signature(function).parameters
+            self.assertNotIn('info',parameters);self.assertNotIn('robot',parameters)
+            self.assertNotIn('contact_forces',parameters);self.assertNotIn('object_truth',parameters)
+
+
 if __name__=='__main__':unittest.main()

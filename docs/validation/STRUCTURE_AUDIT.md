@@ -295,3 +295,13 @@ MUJOCO_GL=egl python -I -m unittest discover -s tests -v
 实际测试：同前述 discover 命令，`-p test_tabletop_runtime.py` 3 项；`-p test_tabletop_cartesian.py -k CartesianPhysicsTests -k FixedObservationTests -k PoseControlTests` 18 项；`-p test_refactor_contracts.py` 12 项，合计 **33 通过，0 失败 / 错误 / 跳过**。覆盖副本不改变 live qpos / qvel / ctrl、请求宽度与实际参考的区别、50 次 1ms observer、真实夹持与保持、IK/Jacobian、位置 / 姿态动作及 7 类模型兼容。
 
 旧真值模型两个完整 seed 850000 / 870000 再次执行，逐物理步 / 策略步所有数组最大差 **0**，完整结果 / 每步 JSON（sources 除外）相同，优化器 / 参数 / 计数不变。改动文件：Runtime、Gripper、CartesianController、两个最新环境、新 Runtime 测试与文档。
+
+## 阶段 5：受限组合式视觉观测
+
+只在既有视觉环境模块中提取 visual_grip_and_hold / encode_visual_observation 两个纯函数。输入显式为 camera tracker 测量、机器人本体和原视觉进度，不传整个特权 info / simulator。保留基类物理执行、原 Camera / Detector / Tracker 组合、视觉 step / reset 与物理验收；不添加只有单个实现的 Provider / Checker 类，也不强制真值 / 视觉共享不同成功语义。
+
+未改相机模型、几何、深度单位、坐标变换、检测器、视觉模型类 / 网络、vision_lost、settling margin 或 visual_false_success。新的组合边界使允许输入可直接审计与单测，但保留继承生命周期；整体替换为一套全新任务调度器缺少必要收益，未进行。
+
+实际测试：`-p test_refactor_contracts.py` 14 项；`-p test_rgbd_vision.py` 17 项，合计 **31 通过，0 失败 / 错误 / 跳过**。包括伪造全部物体真值 / 接触 / hold 数据不影响策略观测、黑帧丢失终止、特权成功不能提前结束视觉执行、视觉完成后独立物理验收、视觉 PPO 特征 / 权重迁移 / 梯度。
+
+旧视觉模型 seed 910000 / 920000 固定与 0.02 m 随机位置，分别 1513 / 1475 策略步、99100 / 97200 物理步；physics、states、observations、raw_actions、actions 最大差 **0**，每步 JSON、视觉进度、RGB 与深度帧摘要、奖励和终止完全相同（来源 sources 另计当前源码）。完整模型 / 优化器 / 训练计数不变。关键完成与物理方法 AST 冻结测试同时通过，满足本次有限迁移的等价性条件。改动：视觉环境、两项组合单元测试、architecture 与本报告。
