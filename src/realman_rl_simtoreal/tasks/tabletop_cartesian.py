@@ -112,3 +112,8 @@ class CartesianTabletopConfig:
         values=asdict(self)
         values['control_mode']='pose' if self.uses_orientation_actions else 'position'
         return values
+
+
+# Curriculum changes completion criteria only; startup and action authority are unchanged.
+EASY=dict(success_height=.005,height_tolerance=.0005,hold_seconds=.2)
+STAGES=dict(easy=dict(EASY),pinch=dict(EASY),approach=dict(EASY),lift=dict(),full=dict())

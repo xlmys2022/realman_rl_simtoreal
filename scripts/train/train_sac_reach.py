@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """CPU SAC Reach experiment, using official SB3 and the unchanged six-axis env."""
 import argparse
-import hashlib
 import inspect
 from datetime import datetime
 from pathlib import Path
@@ -11,6 +10,7 @@ import numpy as np
 import torch
 from stable_baselines3.common.logger import configure
 
+from realman_rl_simtoreal.utils.artifacts import file_sha256
 from realman_rl_simtoreal.paths import OUTPUTS
 from realman_rl_simtoreal.tasks.reach import ENV_CONFIG, TASKS, task_environment
 from realman_rl_simtoreal.rl.sac import SAC_CONFIG, make_model, save_checkpoint
@@ -100,7 +100,7 @@ def train(folder, *, timesteps=5000, seed=2026, eval_every=5000, eval_episodes=1
                   validation_seeds=evaluation_seeds,
                   evaluation_every_steps=eval_every,checkpoint_every_steps=checkpoint_every,
                   evaluate_at_start=bool(eval_at_start or init_mode=='bc_actor'), assets=asset_hashes(),
-                  experiment_sources={str(p): hashlib.sha256(p.read_bytes()).hexdigest() for p in
+                  experiment_sources={str(p): file_sha256(p) for p in
                                       (Path(__file__).resolve(), Path(inspect.getfile(TrainingAudit)).resolve())},
                   checkpoint_note='Chunks continue in the same process with the same replay/env/transform. '
                                   'Each CLI invocation starts with empty replay/optimizer; no implicit resume. '

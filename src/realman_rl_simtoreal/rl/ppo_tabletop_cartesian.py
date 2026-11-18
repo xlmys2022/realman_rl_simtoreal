@@ -13,7 +13,7 @@ from stable_baselines3.common.vec_env import DummyVecEnv,SubprocVecEnv,VecCheckN
 from stable_baselines3.common.logger import configure
 from ..utils.artifacts import write_json as _write_json, append_json, file_hashes, archive_sources, file_sha256
 from .common.artifacts import optimizer_steps, optimizer_state_hash
-from ..tasks.tabletop_cartesian import CartesianTabletopConfig as Config
+from ..tasks.tabletop_cartesian import CartesianTabletopConfig as Config, EASY, STAGES
 from ..evaluation import tabletop_cartesian as evaluation
 from ..paths import PROJECT_ROOT as ROOT, TABLETOP_CARTESIAN_SCENE as DEFAULT_SCENE
 from ..envs.factory import make_tabletop_cartesian_env as TabletopEnv
@@ -27,11 +27,6 @@ from .cartesian_reach_policy import (ReachGraspPPOPolicy,CartesianGoalFeatures,i
 from .vision_policy import VisualReachGraspPPOPolicy,VisualCartesianGoalFeatures,transfer_visual_observation_inputs
 from ..envs.tabletop_cartesian_vision_env import VISION_CONTRACT
 from ..simulation.gripper import MAX_WIDTH
-
-EASY=dict(success_height=.005,height_tolerance=.0005,hold_seconds=.2)
-# Curriculum changes completion criteria only. Every stage starts at the same
-# selected observation preset, with the same open jaw and full XYZ authority.
-STAGES=dict(easy=dict(EASY),pinch=dict(EASY),approach=dict(EASY),lift=dict(),full=dict())
 
 
 def environment_config(stage,*,observation_pose='table_down',control_mode='auto',cache_startup=False,

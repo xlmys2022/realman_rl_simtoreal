@@ -1,0 +1,738 @@
+{
+  "date": "2026-11-18",
+  "branch": "refactor/project-reconstruct",
+  "baseline_commit": "0e3496b67bc818aab2d1c1a49264d0be6e435215",
+  "environment": {
+    "python": "3.11.17 (main, Oct  1 2026, 20:17:42) [GCC 14.3.0]",
+    "executable": "/home/mr-beaver/Documents/miniconda3/envs/realman_rl/bin/python",
+    "commit": "0e3496b67bc818aab2d1c1a49264d0be6e435215",
+    "branch": "refactor/project-reconstruct",
+    "packages": {
+      "mujoco": "3.17.0",
+      "numpy": "2.4.6",
+      "gymnasium": "1.4.0",
+      "torch": "2.14.0+cpu",
+      "stable_baselines3": "2.9.2",
+      "opencv-python": null,
+      "tensorboard": "2.21.0",
+      "matplotlib": "3.11.2",
+      "pillow": "13.0.0",
+      "setuptools": "84.0.0",
+      "Robotic_Arm": "1.1.7"
+    }
+  },
+  "tests": {
+    "baseline_egl": {
+      "tests": 506,
+      "passed": 506,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 663.834
+    },
+    "stage2_contracts": {
+      "tests": 12,
+      "passed": 12,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 1.539
+    },
+    "stage2_package": {
+      "tests": 10,
+      "passed": 10,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 13.684
+    },
+    "stage3_evaluation": {
+      "tests": 7,
+      "passed": 7,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 1.259
+    },
+    "stage3_cartesian": {
+      "tests": 28,
+      "passed": 28,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 239.553
+    },
+    "stage3_contracts": {
+      "tests": 12,
+      "passed": 12,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 1.79
+    },
+    "stage3_package": {
+      "tests": 10,
+      "passed": 10,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 14.819
+    },
+    "stage4_runtime": {
+      "tests": 3,
+      "passed": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 0.382
+    },
+    "stage4_physics": {
+      "tests": 18,
+      "passed": 18,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 128.788
+    },
+    "stage4_contracts": {
+      "tests": 12,
+      "passed": 12,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 1.654
+    },
+    "stage5_contracts": {
+      "tests": 14,
+      "passed": 14,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 1.692
+    },
+    "stage5_vision": {
+      "tests": 17,
+      "passed": 17,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 20.462
+    },
+    "stage6_contracts": {
+      "tests": 16,
+      "passed": 16,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 1.557
+    },
+    "final_full": {
+      "tests": 532,
+      "passed": 532,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 677.284
+    },
+    "final_package": {
+      "tests": 10,
+      "passed": 10,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "seconds": 24.699
+    }
+  },
+  "initial_display_error": {
+    "command": "python -I -m unittest discover -s tests -v",
+    "tests": 501,
+    "errors": 1,
+    "failures": 0,
+    "skipped": 0,
+    "seconds": 674.459,
+    "reason": "Wayland unavailable in VisualPhysicsTests.setUpClass; five methods did not execute"
+  },
+  "trajectories": [
+    {
+      "case": "state_fixed",
+      "seed": 850000,
+      "policy_steps": 1290,
+      "physics_steps": 87950,
+      "success": true,
+      "reason": "success",
+      "exact_array_and_json_match": true,
+      "model_optimizer_counters_unchanged": true
+    },
+    {
+      "case": "state_random",
+      "seed": 870000,
+      "policy_steps": 1297,
+      "physics_steps": 88300,
+      "success": true,
+      "reason": "success",
+      "exact_array_and_json_match": true,
+      "model_optimizer_counters_unchanged": true
+    },
+    {
+      "case": "visual_fixed",
+      "seed": 910000,
+      "policy_steps": 1513,
+      "physics_steps": 99100,
+      "success": true,
+      "reason": "success",
+      "exact_array_and_json_match": true,
+      "model_optimizer_counters_unchanged": true
+    },
+    {
+      "case": "visual_random",
+      "seed": 920000,
+      "policy_steps": 1475,
+      "physics_steps": 97200,
+      "success": true,
+      "reason": "success",
+      "exact_array_and_json_match": true,
+      "model_optimizer_counters_unchanged": true
+    }
+  ],
+  "protected_files": {
+    "original_files": 11120,
+    "original_bytes": 6189603051,
+    "changed": [],
+    "missing": [],
+    "added": [
+      "tests/fixtures/refactor_contracts.json"
+    ],
+    "original_manifest_sha256": "f9ba010f24352adeda4870d57115d7aa91f88fb1889f55b311692eb960aaa784",
+    "outputs_assets_vendor_perception_and_original_fixtures_unchanged": true
+  },
+  "static_audit": {
+    "counts": {
+      "src": 75,
+      "scripts": 42,
+      "tests": 33
+    },
+    "python_files": 150,
+    "task_contract_ast_equivalence": [
+      {
+        "old": "rl/ppo_grasp.py:REWARD",
+        "new": "tasks/grasp_lift.py:REWARD",
+        "identical_ast": true
+      },
+      {
+        "old": "rl/ppo_grasp.py:CURRICULUM",
+        "new": "tasks/grasp_lift.py:CURRICULUM",
+        "identical_ast": true
+      },
+      {
+        "old": "rl/ppo_grasp.py:goal_alignment",
+        "new": "tasks/grasp_lift.py:goal_alignment",
+        "identical_ast": true
+      },
+      {
+        "old": "rl/ppo_grasp.py:aperture_score",
+        "new": "tasks/grasp_lift.py:aperture_score",
+        "identical_ast": true
+      },
+      {
+        "old": "rl/ppo_grasp.py:potential",
+        "new": "tasks/grasp_lift.py:potential",
+        "identical_ast": true
+      },
+      {
+        "old": "rl/ppo_grasp.py:shaped_reward",
+        "new": "tasks/grasp_lift.py:shaped_reward",
+        "identical_ast": true
+      },
+      {
+        "old": "rl/ppo_tabletop.py:REWARD",
+        "new": "tasks/tabletop_pick.py:REWARD",
+        "identical_ast": true
+      },
+      {
+        "old": "rl/ppo_tabletop.py:CURRICULUM",
+        "new": "tasks/tabletop_pick.py:CURRICULUM",
+        "identical_ast": true
+      },
+      {
+        "old": "rl/ppo_tabletop.py:features",
+        "new": "tasks/tabletop_pick.py:features",
+        "identical_ast": true
+      },
+      {
+        "old": "rl/ppo_tabletop.py:potential",
+        "new": "tasks/tabletop_pick.py:potential",
+        "identical_ast": true
+      },
+      {
+        "old": "rl/ppo_tabletop.py:shaped_reward",
+        "new": "tasks/tabletop_pick.py:shaped_reward",
+        "identical_ast": true
+      },
+      {
+        "old": "rl/ppo_tabletop_cartesian.py:EASY",
+        "new": "tasks/tabletop_cartesian.py:EASY",
+        "identical_ast": true
+      },
+      {
+        "old": "rl/ppo_tabletop_cartesian.py:STAGES",
+        "new": "tasks/tabletop_cartesian.py:STAGES",
+        "identical_ast": true
+      }
+    ],
+    "serialized_class_ast_sha256": {
+      "src/realman_rl_simtoreal/rl/cartesian_policy.py:CartesianPPOPolicy": "b5c1adcff497ece9e78d136adfd9b4295c59ef5d3eae6d99b61656e54c13bcc6",
+      "src/realman_rl_simtoreal/rl/cartesian_reach_policy.py:CartesianGoalFeatures": "34848eba90a124855b05e558a3ef978e4338c4e134fb97fbc870b74acebcf415",
+      "src/realman_rl_simtoreal/rl/cartesian_reach_policy.py:ReachGraspNetworks": "431f466d6902a1ea1794eb75c02fec5e46fdc4c7b4f4671f05a621586d20f7c2",
+      "src/realman_rl_simtoreal/rl/cartesian_reach_policy.py:ReachGraspPPOPolicy": "d10ce08b1518de5d142c7cdc1345a67d16c83994156ef97513b73738713d46d4",
+      "src/realman_rl_simtoreal/rl/ppo_tabletop.py:CorrelatedPositionNoise": "66f2cb0f8f0208238f3a616359a48fdde4498f9c9202e113404b021ed8aedd6e",
+      "src/realman_rl_simtoreal/rl/ppo_tabletop.py:SmoothJointPolicy": "7aed0b5483107064886387a515277ced291fbf52fe30d4006e0b60576bd4bbbb",
+      "src/realman_rl_simtoreal/rl/vision_policy.py:VisualCartesianGoalFeatures": "0bacd0eeb47528ebf0e3d70271e43fcad9539f5c8ac9412d5c262736799b1f52",
+      "src/realman_rl_simtoreal/rl/vision_policy.py:VisualReachGraspNetworks": "a99bce5c3f9796b30dd77ced5dbc63d45c9a5dd55d02de367a6ed13659c4ed21",
+      "src/realman_rl_simtoreal/rl/vision_policy.py:VisualReachGraspPPOPolicy": "4bb035caa675118c95f0e3b2cb3e8c1233bf50cb3942e065203f255c859faad6"
+    },
+    "unchanged_core_files": [
+      "simulation/model.py",
+      "simulation/kinematics.py",
+      "simulation/tool_kinematics.py",
+      "simulation/control.py",
+      "simulation/ee_control.py",
+      "simulation/grasp_contact.py",
+      "simulation/grasp_metrics.py",
+      "simulation/rgbd_camera.py",
+      "simulation/observation_pose.py",
+      "perception/rgbd.py",
+      "envs/reach_env.py",
+      "envs/grasp_lift_env.py",
+      "envs/tabletop_pick_env.py",
+      "rl/cartesian_policy.py",
+      "rl/cartesian_reach_policy.py",
+      "rl/vision_policy.py"
+    ],
+    "dependency_cycles": [],
+    "dependencies": {
+      "realman_rl_simtoreal": [],
+      "realman_rl_simtoreal.viewer": [],
+      "realman_rl_simtoreal.paths": [],
+      "realman_rl_simtoreal.rl.sac_monitoring": [
+        "realman_rl_simtoreal.evaluation.metrics",
+        "realman_rl_simtoreal.imitation.bc_to_sac",
+        "realman_rl_simtoreal.rl.common.artifacts",
+        "realman_rl_simtoreal.rl.sac_diagnostics",
+        "realman_rl_simtoreal.utils.metrics"
+      ],
+      "realman_rl_simtoreal.rl.ppo_tabletop": [
+        "realman_rl_simtoreal.envs.tabletop_pick_env",
+        "realman_rl_simtoreal.evaluation.grasp_lift",
+        "realman_rl_simtoreal.evaluation.metrics",
+        "realman_rl_simtoreal.paths",
+        "realman_rl_simtoreal.rl.common.artifacts",
+        "realman_rl_simtoreal.tasks.tabletop_pick",
+        "realman_rl_simtoreal.utils.artifacts"
+      ],
+      "realman_rl_simtoreal.rl.ppo_tabletop_cartesian": [
+        "realman_rl_simtoreal.envs.factory",
+        "realman_rl_simtoreal.envs.tabletop_cartesian_env",
+        "realman_rl_simtoreal.envs.tabletop_cartesian_vision_env",
+        "realman_rl_simtoreal.evaluation",
+        "realman_rl_simtoreal.evaluation.tabletop_cartesian",
+        "realman_rl_simtoreal.paths",
+        "realman_rl_simtoreal.rl.cartesian_policy",
+        "realman_rl_simtoreal.rl.cartesian_reach_policy",
+        "realman_rl_simtoreal.rl.common.artifacts",
+        "realman_rl_simtoreal.rl.ppo",
+        "realman_rl_simtoreal.rl.vision_policy",
+        "realman_rl_simtoreal.simulation.grasp_metrics",
+        "realman_rl_simtoreal.simulation.gripper",
+        "realman_rl_simtoreal.simulation.kinematics",
+        "realman_rl_simtoreal.simulation.observation_profiles",
+        "realman_rl_simtoreal.tasks.tabletop_cartesian",
+        "realman_rl_simtoreal.tasks.tabletop_cartesian_reward",
+        "realman_rl_simtoreal.utils.artifacts"
+      ],
+      "realman_rl_simtoreal.rl.sac": [
+        "realman_rl_simtoreal.rl.common.artifacts"
+      ],
+      "realman_rl_simtoreal.rl.sac_diagnostics": [
+        "realman_rl_simtoreal.envs.reach_env",
+        "realman_rl_simtoreal.evaluation.baselines",
+        "realman_rl_simtoreal.rl.common.artifacts",
+        "realman_rl_simtoreal.rl.common.observation"
+      ],
+      "realman_rl_simtoreal.rl": [],
+      "realman_rl_simtoreal.rl.ppo_grasp": [
+        "realman_rl_simtoreal.envs.grasp_lift_env",
+        "realman_rl_simtoreal.evaluation.grasp_lift",
+        "realman_rl_simtoreal.rl.common.artifacts",
+        "realman_rl_simtoreal.tasks.grasp_lift",
+        "realman_rl_simtoreal.utils.artifacts"
+      ],
+      "realman_rl_simtoreal.rl.cartesian_policy": [],
+      "realman_rl_simtoreal.rl.vision_policy": [
+        "realman_rl_simtoreal.rl.cartesian_reach_policy"
+      ],
+      "realman_rl_simtoreal.rl.cartesian_reach_policy": [
+        "realman_rl_simtoreal.rl.cartesian_policy"
+      ],
+      "realman_rl_simtoreal.rl.ppo": [
+        "realman_rl_simtoreal.evaluation.metrics",
+        "realman_rl_simtoreal.evaluation.reach",
+        "realman_rl_simtoreal.rl.common.artifacts",
+        "realman_rl_simtoreal.rl.common.observation",
+        "realman_rl_simtoreal.tasks.reach",
+        "realman_rl_simtoreal.tasks.rewards",
+        "realman_rl_simtoreal.utils.artifacts",
+        "realman_rl_simtoreal.utils.metrics"
+      ],
+      "realman_rl_simtoreal.rl.common.observation": [],
+      "realman_rl_simtoreal.rl.common.env_factory": [
+        "realman_rl_simtoreal.envs.factory",
+        "realman_rl_simtoreal.rl.common.observation"
+      ],
+      "realman_rl_simtoreal.rl.common.logging": [
+        "realman_rl_simtoreal.evaluation.metrics"
+      ],
+      "realman_rl_simtoreal.rl.common": [],
+      "realman_rl_simtoreal.rl.common.artifacts": [
+        "realman_rl_simtoreal.paths",
+        "realman_rl_simtoreal.utils.artifacts"
+      ],
+      "realman_rl_simtoreal.simulation.observation_profiles": [],
+      "realman_rl_simtoreal.simulation.model": [
+        "realman_rl_simtoreal.paths"
+      ],
+      "realman_rl_simtoreal.simulation.gripper": [
+        "realman_rl_simtoreal.simulation.control",
+        "realman_rl_simtoreal.simulation.model"
+      ],
+      "realman_rl_simtoreal.simulation.grasp_controller": [
+        "realman_rl_simtoreal.simulation.gripper"
+      ],
+      "realman_rl_simtoreal.simulation.observation_pose": [
+        "realman_rl_simtoreal.simulation.model",
+        "realman_rl_simtoreal.simulation.observation_profiles"
+      ],
+      "realman_rl_simtoreal.simulation.cartesian_controller": [
+        "realman_rl_simtoreal.simulation.kinematics"
+      ],
+      "realman_rl_simtoreal.simulation.grasp_contact": [
+        "realman_rl_simtoreal.paths",
+        "realman_rl_simtoreal.simulation.gripper",
+        "realman_rl_simtoreal.simulation.model"
+      ],
+      "realman_rl_simtoreal.simulation.control": [
+        "realman_rl_simtoreal.simulation.model"
+      ],
+      "realman_rl_simtoreal.simulation": [],
+      "realman_rl_simtoreal.simulation.grasp_metrics": [],
+      "realman_rl_simtoreal.simulation.tabletop_runtime": [
+        "realman_rl_simtoreal.paths",
+        "realman_rl_simtoreal.simulation.camera",
+        "realman_rl_simtoreal.simulation.control",
+        "realman_rl_simtoreal.simulation.grasp_contact",
+        "realman_rl_simtoreal.simulation.grasp_metrics",
+        "realman_rl_simtoreal.simulation.gripper",
+        "realman_rl_simtoreal.simulation.kinematics",
+        "realman_rl_simtoreal.simulation.model",
+        "realman_rl_simtoreal.simulation.observation_pose",
+        "realman_rl_simtoreal.simulation.tool_kinematics"
+      ],
+      "realman_rl_simtoreal.simulation.tool_kinematics": [
+        "realman_rl_simtoreal.simulation.kinematics"
+      ],
+      "realman_rl_simtoreal.simulation.ee_control": [
+        "realman_rl_simtoreal.simulation",
+        "realman_rl_simtoreal.simulation.control",
+        "realman_rl_simtoreal.simulation.kinematics"
+      ],
+      "realman_rl_simtoreal.simulation.rgbd_camera": [
+        "realman_rl_simtoreal.perception.rgbd"
+      ],
+      "realman_rl_simtoreal.simulation.camera": [],
+      "realman_rl_simtoreal.simulation.kinematics": [],
+      "realman_rl_simtoreal.vendor.realman_fk": [],
+      "realman_rl_simtoreal.vendor": [],
+      "realman_rl_simtoreal.vendor.realman_ik": [
+        "realman_rl_simtoreal.simulation.kinematics",
+        "realman_rl_simtoreal.vendor.realman_fk"
+      ],
+      "realman_rl_simtoreal.cli": [],
+      "realman_rl_simtoreal.cli.tabletop_cartesian": [
+        "realman_rl_simtoreal.rl.ppo_tabletop_cartesian",
+        "realman_rl_simtoreal.visualization.tabletop_cartesian"
+      ],
+      "realman_rl_simtoreal.tasks.tabletop_pick": [
+        "realman_rl_simtoreal.simulation.gripper"
+      ],
+      "realman_rl_simtoreal.tasks.grasp_lift": [],
+      "realman_rl_simtoreal.tasks.tabletop_cartesian_reward": [],
+      "realman_rl_simtoreal.tasks": [],
+      "realman_rl_simtoreal.tasks.reach": [
+        "realman_rl_simtoreal.tasks.rewards"
+      ],
+      "realman_rl_simtoreal.tasks.rewards": [],
+      "realman_rl_simtoreal.tasks.tabletop_cartesian": [
+        "realman_rl_simtoreal.simulation.observation_profiles"
+      ],
+      "realman_rl_simtoreal.perception.rgbd": [],
+      "realman_rl_simtoreal.perception": [],
+      "realman_rl_simtoreal.envs.reach_env": [
+        "realman_rl_simtoreal.simulation.control",
+        "realman_rl_simtoreal.simulation.ee_control",
+        "realman_rl_simtoreal.simulation.kinematics",
+        "realman_rl_simtoreal.simulation.model",
+        "realman_rl_simtoreal.tasks.reach",
+        "realman_rl_simtoreal.tasks.rewards"
+      ],
+      "realman_rl_simtoreal.envs.tabletop_pick_env": [
+        "realman_rl_simtoreal.envs.grasp_lift_env",
+        "realman_rl_simtoreal.paths",
+        "realman_rl_simtoreal.simulation.control",
+        "realman_rl_simtoreal.simulation.grasp_contact",
+        "realman_rl_simtoreal.simulation.gripper",
+        "realman_rl_simtoreal.simulation.kinematics",
+        "realman_rl_simtoreal.simulation.model",
+        "realman_rl_simtoreal.tasks.tabletop_pick"
+      ],
+      "realman_rl_simtoreal.envs.tabletop_cartesian_vision_env": [
+        "realman_rl_simtoreal.envs.tabletop_cartesian_env",
+        "realman_rl_simtoreal.perception.rgbd",
+        "realman_rl_simtoreal.simulation.gripper",
+        "realman_rl_simtoreal.simulation.rgbd_camera",
+        "realman_rl_simtoreal.tasks.tabletop_cartesian_reward"
+      ],
+      "realman_rl_simtoreal.envs.sequence_reach_env": [
+        "realman_rl_simtoreal.envs.reach_env",
+        "realman_rl_simtoreal.simulation.ee_control"
+      ],
+      "realman_rl_simtoreal.envs.tabletop_cartesian_env": [
+        "realman_rl_simtoreal.simulation.cartesian_controller",
+        "realman_rl_simtoreal.simulation.grasp_metrics",
+        "realman_rl_simtoreal.simulation.gripper",
+        "realman_rl_simtoreal.simulation.observation_profiles",
+        "realman_rl_simtoreal.simulation.tabletop_runtime",
+        "realman_rl_simtoreal.tasks.tabletop_cartesian",
+        "realman_rl_simtoreal.tasks.tabletop_cartesian_reward"
+      ],
+      "realman_rl_simtoreal.envs": [],
+      "realman_rl_simtoreal.envs.grasp_lift_env": [
+        "realman_rl_simtoreal.simulation.control",
+        "realman_rl_simtoreal.simulation.grasp_contact",
+        "realman_rl_simtoreal.simulation.gripper",
+        "realman_rl_simtoreal.simulation.kinematics",
+        "realman_rl_simtoreal.tasks.grasp_lift"
+      ],
+      "realman_rl_simtoreal.envs.factory": [
+        "realman_rl_simtoreal.envs.reach_env",
+        "realman_rl_simtoreal.envs.sequence_reach_env",
+        "realman_rl_simtoreal.envs.tabletop_cartesian_env",
+        "realman_rl_simtoreal.envs.tabletop_cartesian_vision_env",
+        "realman_rl_simtoreal.tasks.tabletop_cartesian"
+      ],
+      "realman_rl_simtoreal.imitation": [],
+      "realman_rl_simtoreal.imitation.bc": [
+        "realman_rl_simtoreal.envs.reach_env",
+        "realman_rl_simtoreal.evaluation.baselines",
+        "realman_rl_simtoreal.evaluation.reach",
+        "realman_rl_simtoreal.rl.common.artifacts",
+        "realman_rl_simtoreal.rl.common.observation",
+        "realman_rl_simtoreal.tasks.reach",
+        "realman_rl_simtoreal.utils.artifacts",
+        "realman_rl_simtoreal.utils.metrics"
+      ],
+      "realman_rl_simtoreal.imitation.bc_to_sac": [
+        "realman_rl_simtoreal.imitation.bc",
+        "realman_rl_simtoreal.rl.common.observation",
+        "realman_rl_simtoreal.utils.artifacts"
+      ],
+      "realman_rl_simtoreal.utils.metrics": [],
+      "realman_rl_simtoreal.utils.demo_helpers": [
+        "realman_rl_simtoreal.simulation",
+        "realman_rl_simtoreal.simulation.control"
+      ],
+      "realman_rl_simtoreal.utils.tabletop_cartesian_render": [
+        "realman_rl_simtoreal.visualization.tabletop_cartesian"
+      ],
+      "realman_rl_simtoreal.utils.tabletop_cartesian_cli": [
+        "realman_rl_simtoreal.cli.tabletop_cartesian"
+      ],
+      "realman_rl_simtoreal.utils.geometry": [],
+      "realman_rl_simtoreal.utils": [],
+      "realman_rl_simtoreal.utils.artifacts": [
+        "realman_rl_simtoreal.paths"
+      ],
+      "realman_rl_simtoreal.visualization": [],
+      "realman_rl_simtoreal.visualization.tabletop_cartesian": [
+        "realman_rl_simtoreal.rl.ppo_tabletop_cartesian",
+        "realman_rl_simtoreal.simulation.tabletop_runtime",
+        "realman_rl_simtoreal.tasks.tabletop_cartesian",
+        "realman_rl_simtoreal.utils.artifacts"
+      ],
+      "realman_rl_simtoreal.evaluation.metrics": [],
+      "realman_rl_simtoreal.evaluation.grasp_lift": [
+        "realman_rl_simtoreal.envs.grasp_lift_env",
+        "realman_rl_simtoreal.evaluation.metrics",
+        "realman_rl_simtoreal.simulation.grasp_controller",
+        "realman_rl_simtoreal.utils.artifacts"
+      ],
+      "realman_rl_simtoreal.evaluation.baselines": [
+        "realman_rl_simtoreal.envs.reach_env",
+        "realman_rl_simtoreal.evaluation.metrics",
+        "realman_rl_simtoreal.rl.common.observation"
+      ],
+      "realman_rl_simtoreal.evaluation": [],
+      "realman_rl_simtoreal.evaluation.reach": [
+        "realman_rl_simtoreal.envs.factory",
+        "realman_rl_simtoreal.envs.reach_env",
+        "realman_rl_simtoreal.evaluation.baselines",
+        "realman_rl_simtoreal.evaluation.metrics",
+        "realman_rl_simtoreal.rl.common.observation",
+        "realman_rl_simtoreal.tasks.reach",
+        "realman_rl_simtoreal.tasks.rewards",
+        "realman_rl_simtoreal.utils.metrics"
+      ],
+      "realman_rl_simtoreal.evaluation.tabletop_cartesian": [
+        "realman_rl_simtoreal.envs.factory",
+        "realman_rl_simtoreal.envs.tabletop_cartesian_env",
+        "realman_rl_simtoreal.envs.tabletop_cartesian_vision_env",
+        "realman_rl_simtoreal.simulation.grasp_metrics",
+        "realman_rl_simtoreal.simulation.observation_profiles",
+        "realman_rl_simtoreal.tasks.tabletop_cartesian"
+      ]
+    }
+  },
+  "checkpoint_cases": {
+    "reach_ppo": {
+      "path": "outputs/reach/ppo/random_goal_relative_seed2026/final/model.zip",
+      "file_sha256": "5772649162dd4635551f8b9acb32e4b90d7dfc6220c74d1cb75b2c51ac9ae52a",
+      "policy_class": "stable_baselines3.common.policies.MultiInputActorCriticPolicy",
+      "weights": "088f61ce75ff3f71ac3b592783c8d407d4a5475baef751f7b404d27cfb118b98",
+      "optimizer": "c83124bd3a2f3aaaad071fcaac7d4a97b7449611de34921bb33b42819c6241d3",
+      "action": [
+        -0.02759821154177189,
+        -0.12724295258522034,
+        0.007821556180715561
+      ],
+      "raw_action": [
+        -0.02759821154177189,
+        -0.12724295258522034,
+        0.007821556180715561
+      ]
+    },
+    "reach_sac": {
+      "path": "outputs/reach/sac/formal_seed2026/final/model.zip",
+      "file_sha256": "34f1b1ddfa172e16b8e3861c4feab1db12ab1972b9191c8d300766b69dbfd418",
+      "policy_class": "stable_baselines3.sac.policies.MultiInputPolicy",
+      "weights": "60db653d0826f30b942b8299809f3f357cf64b2b30b2398fd3dd8c73fe0236c1",
+      "optimizer": "a43c8f2da50ee42f193fab2df8183b174846da759019c65948f0a296d7394892",
+      "action": [
+        -0.034802258014678955,
+        -0.06382590532302856,
+        0.23234057426452637
+      ],
+      "raw_action": [
+        -0.034802258014678955,
+        -0.06382590532302856,
+        0.23234057426452637
+      ]
+    },
+    "bc": {
+      "path": "outputs/imitation/bc/fit_seed2026/best_bc.pt",
+      "file_sha256": "af059a26c78f0cb5eb40075ddfdf16ad1e1e18821660396ac44bd9dfe04eb8b8",
+      "policy_class": "realman_rl_simtoreal.imitation.bc.BCNetwork",
+      "weights": "6544af76c7ca6c4e59ee9119051322117f8df7bdc4bb55c55fe193b9818698d4",
+      "optimizer": null,
+      "action": [
+        0.9936542510986328,
+        -0.40895482897758484,
+        -1.0
+      ],
+      "raw_action": [
+        0.9936542510986328,
+        -0.40895482897758484,
+        -1.0
+      ]
+    },
+    "grasp_ppo": {
+      "path": "outputs/grasp/ppo/precision_goal_seed2027/final/model.zip",
+      "file_sha256": "0e4c7837ec7e2b608b67a6accb52a970a6490cf2d9852aacd3be8489bbec1f1a",
+      "policy_class": "stable_baselines3.common.policies.ActorCriticPolicy",
+      "weights": "faaf1cba510df424f2565f00c925b85858e87ed849eae2087a0a17ac6630da27",
+      "optimizer": "59f854122cc8e76fe70fbfa01c9e067e922d34247381158f316a9c03a83269bd",
+      "action": [
+        -0.009801884181797504,
+        -0.006972464732825756,
+        -0.017187900841236115,
+        -0.7575911283493042
+      ],
+      "raw_action": [
+        -0.009801884181797504,
+        -0.006972464732825756,
+        -0.017187900841236115,
+        -0.7575911283493042
+      ]
+    },
+    "joint_tabletop_ppo": {
+      "path": "outputs/grasp/ppo/tabletop_unfold25_explore_seed2027/checkpoints/step_00016384/model.zip",
+      "file_sha256": "f74182bc00a41cd0d468ed736eeaa0cf8f95f070fd73bdff304a90f98ec6bfc9",
+      "policy_class": "realman_rl_simtoreal.rl.ppo_tabletop.SmoothJointPolicy",
+      "weights": "5b1041de9a588a58ca99fcc55a5375c45079ceff224d02faec438cf61ee30d66",
+      "optimizer": "65db2e167f10bfe7902576996a8e8fe1284f9cca4c88e442585b3519e49a4f4a",
+      "action": [
+        0.10950333625078201,
+        19.236852645874023,
+        89.66939544677734,
+        0.002017700346186757,
+        71.09403228759766,
+        0.019474392756819725,
+        -0.8758389353752136
+      ],
+      "raw_action": [
+        0.10950333625078201,
+        19.236852645874023,
+        89.66939544677734,
+        0.002017700346186757,
+        71.09403228759766,
+        0.019474392756819725,
+        -0.8758389353752136
+      ]
+    },
+    "cartesian_ppo": {
+      "path": "outputs/grasp/ppo/tabletop_cartesian/fixed_observation_v2/full_table_down_seed2029_r13_secure_grip/checkpoints/step_00003072/model.zip",
+      "file_sha256": "86294aff70798e7b55db23440163121326a937cd90e73eb5e3479429858e3a8c",
+      "policy_class": "realman_rl_simtoreal.rl.cartesian_reach_policy.ReachGraspPPOPolicy",
+      "weights": "1464d504c04395248cbc67787e96872b3dae1dd23e0a5dca065ab8556768b4e6",
+      "optimizer": "71dd390539d54a6ce673b9ca574b69f14a6984631e04c3e6ae5f289afa60440a",
+      "action": [
+        -0.04518596827983856,
+        -0.1669597029685974,
+        0.6091794371604919,
+        -0.010094009339809418
+      ],
+      "raw_action": [
+        -0.04518596827983856,
+        -0.1669597029685974,
+        0.6091794371604919,
+        -0.010094009339809418
+      ]
+    },
+    "visual_ppo": {
+      "path": "outputs/grasp/ppo/tabletop_cartesian/vision_rgbd_v1/full_table_down_seed2031_r4_zero_anchored/checkpoints/step_00000768/model.zip",
+      "file_sha256": "64045c9a8ebadf1ce4cdd8d0faf750439ed1f69722412865786747434cae3542",
+      "policy_class": "realman_rl_simtoreal.rl.vision_policy.VisualReachGraspPPOPolicy",
+      "weights": "2d7d856c5a044f7a2ff5cda000e416422d60c5b4c1791f2955c1e679d5c8cec5",
+      "optimizer": "fec5c07eccbf212765d54b9e226225680c84db9df6aed46026010f19bcd7bd40",
+      "action": [
+        -0.025160832330584526,
+        -0.14687082171440125,
+        0.6048567891120911,
+        -0.007801570929586887
+      ],
+      "raw_action": [
+        -0.025160832330584526,
+        -0.14687082171440125,
+        0.6048567891120911,
+        -0.007801570929586887
+      ]
+    }
+  }
+}

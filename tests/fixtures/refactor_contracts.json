@@ -2509,5 +2509,207 @@
         "far_jaw_action_weight": 0.5
       }
     }
+  },
+  "trajectory_cases": {
+    "state_fixed": {
+      "checkpoint": "cartesian_ppo",
+      "seed": 850000,
+      "object_radius": 0.0,
+      "policy_steps": 1290,
+      "physics_steps": 87950,
+      "arrays": {
+        "physics": {
+          "shape": [
+            87950,
+            63
+          ],
+          "dtype": "float64",
+          "sha256": "cf989cb161d22f656836ce3d25bbd8ac5255abf8687c62b4300d82e64a765784"
+        },
+        "states": {
+          "shape": [
+            1290,
+            56
+          ],
+          "dtype": "float64",
+          "sha256": "52692baac98e16c26251b35629af0797d0e6d38356552eaaad198a435ed6756f"
+        },
+        "observations": {
+          "shape": [
+            1290,
+            29
+          ],
+          "dtype": "float32",
+          "sha256": "698157633a36ddff8acfe30298058fa3547f7b696b4a6f5db3d1b06594d33d2c"
+        },
+        "raw_actions": {
+          "shape": [
+            1290,
+            4
+          ],
+          "dtype": "float64",
+          "sha256": "cbc6cc6ed0dbd4b16741b6ea10fce0beac107343927d1e8ab4e2874742c8a204"
+        },
+        "actions": {
+          "shape": [
+            1290,
+            4
+          ],
+          "dtype": "float64",
+          "sha256": "cbc6cc6ed0dbd4b16741b6ea10fce0beac107343927d1e8ab4e2874742c8a204"
+        }
+      },
+      "result_sha256": "c49b5acdbb278adcab66b3655b8c4ef39a4b1bde02564d8fc0d16c3bc2504968"
+    },
+    "state_random": {
+      "checkpoint": "cartesian_ppo",
+      "seed": 870000,
+      "object_radius": 0.02,
+      "policy_steps": 1297,
+      "physics_steps": 88300,
+      "arrays": {
+        "physics": {
+          "shape": [
+            88300,
+            63
+          ],
+          "dtype": "float64",
+          "sha256": "2c5383f3528f638c4b5615c198c67f637a076987ffea42f7a77c8be569cc1cd4"
+        },
+        "states": {
+          "shape": [
+            1297,
+            56
+          ],
+          "dtype": "float64",
+          "sha256": "1c7ded6f5951b181906ae3ab863bfd8a5ff496afbc8f3a5497cedfde0371bc59"
+        },
+        "observations": {
+          "shape": [
+            1297,
+            29
+          ],
+          "dtype": "float32",
+          "sha256": "5a944f79cc61f66e43a75665e898d8bd1cdda42fe30e28bab8f6a1b90e0540c0"
+        },
+        "raw_actions": {
+          "shape": [
+            1297,
+            4
+          ],
+          "dtype": "float64",
+          "sha256": "0129bb92c2bc1a3500a008af972c4eb8035ebe948deed27a217adfbac724467c"
+        },
+        "actions": {
+          "shape": [
+            1297,
+            4
+          ],
+          "dtype": "float64",
+          "sha256": "0129bb92c2bc1a3500a008af972c4eb8035ebe948deed27a217adfbac724467c"
+        }
+      },
+      "result_sha256": "deb82bf197323e7d517653a09b1cd67b253211b5d0d1531495436fb74d2c88bc"
+    },
+    "visual_fixed": {
+      "checkpoint": "visual_ppo",
+      "seed": 910000,
+      "object_radius": 0.0,
+      "policy_steps": 1513,
+      "physics_steps": 99100,
+      "arrays": {
+        "physics": {
+          "shape": [
+            99100,
+            63
+          ],
+          "dtype": "float64",
+          "sha256": "b973f7050c6585531ec5e67cf2c69420df3ddded4f5324529cd35b86bd0d8649"
+        },
+        "states": {
+          "shape": [
+            1513,
+            56
+          ],
+          "dtype": "float64",
+          "sha256": "92339e48e3be1e96e6d7921b4c5e5f2249a8ecac025f1c753df0bd09b811a2df"
+        },
+        "observations": {
+          "shape": [
+            1513,
+            29
+          ],
+          "dtype": "float32",
+          "sha256": "474c24e582bb8f078bde679465968f043110d297a777f3357e73414acd0b0e5f"
+        },
+        "raw_actions": {
+          "shape": [
+            1513,
+            4
+          ],
+          "dtype": "float64",
+          "sha256": "798123608ea01be4bda6676ecfbe87511392b4aae119b571f609091456df3005"
+        },
+        "actions": {
+          "shape": [
+            1513,
+            4
+          ],
+          "dtype": "float64",
+          "sha256": "798123608ea01be4bda6676ecfbe87511392b4aae119b571f609091456df3005"
+        }
+      },
+      "result_sha256": "231d8b3fc95f5b4561e43808c08946289bc26e3dd6cb984450eb9d8f4a8dd31b"
+    },
+    "visual_random": {
+      "checkpoint": "visual_ppo",
+      "seed": 920000,
+      "object_radius": 0.02,
+      "policy_steps": 1475,
+      "physics_steps": 97200,
+      "arrays": {
+        "physics": {
+          "shape": [
+            97200,
+            63
+          ],
+          "dtype": "float64",
+          "sha256": "f86edb323f22490a765b47faf3e8f68afd86b6786ea523ccd7e0b41c7ef918c6"
+        },
+        "states": {
+          "shape": [
+            1475,
+            56
+          ],
+          "dtype": "float64",
+          "sha256": "072c3799b7020298107d222ba6a83d5589e71aef3f8e80a6fb32c55c76139234"
+        },
+        "observations": {
+          "shape": [
+            1475,
+            29
+          ],
+          "dtype": "float32",
+          "sha256": "e1c76fcb56f16e25cab6fcbf14d27c14ab8dcc36efd326978cbe8fe4cc2cbc55"
+        },
+        "raw_actions": {
+          "shape": [
+            1475,
+            4
+          ],
+          "dtype": "float64",
+          "sha256": "58f39b9f5ca9aadd79abdccbe9c1e031be511c9c895a842a5135895741bad202"
+        },
+        "actions": {
+          "shape": [
+            1475,
+            4
+          ],
+          "dtype": "float64",
+          "sha256": "58f39b9f5ca9aadd79abdccbe9c1e031be511c9c895a842a5135895741bad202"
+        }
+      },
+      "result_sha256": "1243cf8ccab51f576bc9dfd8086ece5ea8e06205bb8764978ea70b93adf1d2bb"
+    }
   }
 }

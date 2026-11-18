@@ -229,4 +229,21 @@ class VisualCompositionContracts(unittest.TestCase):
             self.assertNotIn('contact_forces',parameters);self.assertNotIn('object_truth',parameters)
 
 
+class TaskOwnershipContracts(unittest.TestCase):
+    def test_historical_rl_reward_imports_forward_to_task_definitions(self):
+        from realman_rl_simtoreal.rl import ppo_grasp,ppo_tabletop
+        from realman_rl_simtoreal.tasks import grasp_lift,tabletop_pick
+        for rl,task,names in [(ppo_grasp,grasp_lift,('REWARD','CURRICULUM','goal_alignment','aperture_score','potential','shaped_reward')),
+                              (ppo_tabletop,tabletop_pick,('REWARD','CURRICULUM','features','potential','shaped_reward'))]:
+            for name in names:self.assertIs(getattr(rl,name),getattr(task,name))
+        self.assertIsNot(grasp_lift.REWARD,tabletop_pick.REWARD)
+
+    def test_cartesian_curriculum_aliases_keep_original_completion_only_overrides(self):
+        from realman_rl_simtoreal.rl import ppo_tabletop_cartesian as rl
+        from realman_rl_simtoreal.tasks import tabletop_cartesian as task
+        self.assertIs(rl.STAGES,task.STAGES);self.assertIs(rl.EASY,task.EASY)
+        self.assertEqual(rl.EASY,dict(success_height=.005,height_tolerance=.0005,hold_seconds=.2))
+        self.assertEqual(set(rl.STAGES),{'easy','pinch','approach','lift','full'})
+
+
 if __name__=='__main__':unittest.main()

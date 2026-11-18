@@ -1,10 +1,10 @@
 # 工程架构与调用约定
 
-本项目采用 src + editable 布局。脚本组织命令行、训练时序和展示；可复用实现位于 `realman_rl_simtoreal` 包。当前目录重构不改变 MuJoCo 资源、控制、ReachEnv、算法及超参数。逐文件说明见 [FILE_MAP](FILE_MAP.md)，完整迁移和实测结果见 [重构报告](validation/PROJECT_ORGANIZATION_REFACTOR.md)。
+本项目采用 src + editable 布局。脚本组织命令行、训练时序和展示；可复用实现位于 `realman_rl_simtoreal` 包。当前目录重构不改变 MuJoCo 资源、控制、ReachEnv、算法及超参数。逐文件说明见 [FILE_MAP](FILE_MAP.md)，当前六阶段实测见 [结构重构验证](validation/STRUCTURE_REFACTOR_VALIDATION.md)；[早期布局重构报告](validation/PROJECT_ORGANIZATION_REFACTOR.md)保留当时版本的迁移记录。
 
-## 当前结构审计（2026-11-18）
+## 当前结构（2026-11-18）
 
-以实际代码为准的目录、依赖和六阶段计划见 [STRUCTURE_AUDIT](validation/STRUCTURE_AUDIT.md)。桌面笛卡尔 / RGB-D 代码包括 `simulation/tabletop_runtime.py`、`cartesian_controller.py`、`tool_kinematics.py`、`rgbd_camera.py`，`envs/tabletop_cartesian_env.py` / `tabletop_cartesian_vision_env.py`，`perception/rgbd.py` 和三个独立可序列化 Policy 模块。后文早期任务说明保留其语义，不能据旧目录简图认为视觉功能尚不存在。
+以实际代码为准的基线目录、依赖和六阶段记录见 [STRUCTURE_AUDIT](validation/STRUCTURE_AUDIT.md)。桌面笛卡尔 / RGB-D 代码包括 `simulation/tabletop_runtime.py`、`cartesian_controller.py`、`tool_kinematics.py`、`rgbd_camera.py`，`envs/tabletop_cartesian_env.py` / `tabletop_cartesian_vision_env.py`，`perception/rgbd.py` 和三个独立可序列化 Policy 模块。后文早期任务说明保留其语义，不能据旧目录简图认为视觉功能尚不存在。
 
 ## 目录
 
@@ -50,7 +50,11 @@ realman_rl_simtoreal/
 
 ```mermaid
 flowchart TD
-    TRAIN["scripts/train: 参数与训练调度"] --> RL["rl: 模型 / 优化 / checkpoint / 薄策略适配"]
+    SCLI["原 Cartesian scripts: train / evaluate / render / setup"] --> CCLI["cli.tabletop_cartesian: 共享参数与调度"]
+    CCLI --> RL
+    CCLI --> VIS["visualization.tabletop_cartesian: 回放与图像"]
+    VIS --> RL
+    TRAIN["其他 scripts/train: 参数与训练调度"] --> RL["rl: 模型 / 优化 / checkpoint / 薄策略适配"]
     CLI["scripts/evaluate: 参数 / 加载 / 输出 JSON"] --> LOAD["rl 或 imitation: checkpoint 加载"]
     CLI --> EVAL["evaluation: 独立 Episode / 评估指标"]
     RL --> EVAL
@@ -69,7 +73,9 @@ flowchart TD
     RL --> UTIL["utils.metrics / artifacts: 中立统计与来源指纹"]
     EVAL --> UTIL
     ENV --> TASK["tasks: 任务配置 / 奖励"]
-    ENV --> SIM["simulation: IK / 执行器 / 物理步进"]
+    ENV --> SIM["simulation: TabletopRuntime / IK / 执行器 / 物理步进"]
+    ENV --> SENSOR["perception: 原 RGB-D 检测与跟踪"]
+    ENV --> CAMERA["simulation.rgbd_camera: 传感器适配"]
     EVAL --> CTRL["simulation.grasp_controller: 原阶段控制器"]
     CTRL --> SIM
     SIM --> ASSETS["MuJoCo + assets"]
@@ -172,9 +178,15 @@ SE(3)、演示序列和文本格式仍位于 utils。没有新的抽象基类、
 
 最新笛卡尔环境、视觉环境与控制器只迁移状态读取；关节参考限幅、夹爪约束、每个 1 ms 的 recorder → grasp_forces → observer 顺序及任务 hold 计算不变。Runtime 不计算任务奖励 / 完成，也不检测视觉目标。Reach 的旧 TCP 与 25 × 2 ms、局部抓取保护和关节桌面动作不同，未强行替换；继续复用已有 model / kinematics / control / gripper。
 
+## 任务与奖励的归属
+
+`tasks/grasp_lift.py` / `tabletop_pick.py` 保存原 REWARD / CURRICULUM 和原 potential / shaped_reward 等纯计算；`tasks/tabletop_cartesian.py` 保存原 EASY / STAGES。表达式、默认字典、组件键及旧奖励版本的条件分支保持不变。`rl/ppo_grasp.py` / `ppo_tabletop.py` / `ppo_tabletop_cartesian.py` 继续以旧名称重导出，历史脚本与导入可用。PPO 参数、训练包装、观测编码、模型保存 / 加载和自定义 Policy 路径留在 RL。
+
+任务层不依赖算法或评估，其他算法可以复用原任务计算。局部抓取、关节桌面和笛卡尔桌面具有不同公式，继续分别定义；没有为了统一目录合并数值语义。关节桌面的参数 / Adam helper 直接来自 rl.common，不再为读公共状态导入另一个 PPO 任务实现。
+
 ## 观测、动作和奖励契约
 
-默认 `observation_mode="legacy"` 的原始 Dict 保持 `observation(27)`、`achieved_goal(3)`、`desired_goal(3)`。27维依次为：q(6)、qvel(6)、实际末端(3)、目标减实际(3)、命令位置(3)、实际ctrl(6)。原始观测为float64，位置单位为米，角度为弧度。
+Reach 默认 `observation_mode="legacy"` 的原始 Dict 保持 `observation(27)`、`achieved_goal(3)`、`desired_goal(3)`。27维依次为：q(6)、qvel(6)、实际末端(3)、目标减实际(3)、命令位置(3)、实际ctrl(6)。原始观测为float64，位置单位为米，角度为弧度。
 
 schema 2 固定仿射变换只缩放 27 维 observation，沿用 home 中心、5°、30°/s、10mm 尺度并转为 float32；两个 goal 键仍为 float64 米制，偏移为 0、缩放为 1。网络使用 `achieved_goal → desired_goal → observation` 的 33 维 float32 拼接，保持 SB3 CombinedExtractor 与 BC 的输入顺序一致。不增加 clipping、在线归一化或奖励归一化。
 
@@ -216,7 +228,7 @@ PPO更新、目标分布和控制/安全逻辑不变。诊断先于新实现完�
 
 目前±X5mm合法；六方向5mm中±Y的当前DLS候选解违反原home±5°范围，默认六方向配置会拒绝启动。显式3mm六方向只用于离线诊断，不是暗中改变训练阶段。`scripts/diagnostics/probe_ppo_goals.py`从合法reset获取同一物理状态的观测，检查冻结Actor对目标特征的响应，不执行step或修改权重。旧`probe_reach_env.py`继续只检查原固定/球壳任务。
 
-公共evaluation对离散任务逐一枚举候选，强制Episode数等于不同目标数；不依赖随机seed碰巧覆盖目标。保存`per_goal`、每个Episode的运动统计及结束详情，PPO继续补充raw/applied和实际位置。训练/独立评估CLI对离散任务自动选择全部候选数，显式错误数量报错；旧模式默认1集不变。TensorBoard使用`evaluation/goals/plus_x|minus_x/...`等逐目标标签，原聚合指标保留；绘图从实际per_goal JSON增加成功、距离、首动作XYZ、随机训练成功率和终止分类，不用重复次数伪称泛化。课程阶段仍只支持scratch，未实现PPO权重迁移或跨进程续训。参见[04-F3验证](validation/PPO_GOAL_CONDITIONED_VALIDATION.md)。
+公共evaluation对离散任务逐一枚举候选，强制Episode数等于不同目标数；不依赖随机seed碰巧覆盖目标。保存`per_goal`、每个Episode的运动统计及结束详情，PPO继续补充raw/applied和实际位置。训练/独立评估CLI对离散任务自动选择全部候选数，显式错误数量报错；旧模式默认1集不变。TensorBoard使用`evaluation/goals/plus_x|minus_x/...`等逐目标标签，原聚合指标保留；绘图从实际per_goal JSON增加成功、距离、首动作XYZ、随机训练成功率和终止分类，不用重复次数伪称泛化。04-F3 早期版本只支持 scratch；当前 Reach 入口已支持经观测 / 奖励契约校验的 --init-model 权重迁移，并重建优化器和 rollout；完整跨进程训练状态续训仍未实现。参见[04-F3验证](validation/PPO_GOAL_CONDITIONED_VALIDATION.md)。
 
 `scripts/evaluate/analyze_reach_results.py`只读取评估JSON，按相对reset home的XYZ符号（六组可重叠）、八象限及3–4/4–5mm半径分组，保留空组、小样本和范围外目标计数。它还比较原始/实际动作方向、裁剪角度及+X偏置；缺少原始轨迹的历史文件明确标记不可计算，不反推数据或重新调用IK。该入口仅依赖NumPy/标准库，不加载SDK、模型或环境。原有公共指标名称保留，不创建语义相同的TensorBoard标签。准备检查、种子划分和手动命令见[随机Reach验证](validation/PPO_RANDOM_REACH_VALIDATION.md)。
 
@@ -234,17 +246,17 @@ SAC 同样共享包装、独立评估和日志，保留官方 DictReplayBuffer�
   → 实际状态观测、奖励、terminated / truncated
 ```
 
-正常 step 不写实际 qpos；reset 使用官方 home keyframe。每个物理步继续审计原总驱动力、有限数值、速度、限位与碰撞。模型加载、重力补偿、FK/IK、夹爪和接触代码未改变。`ee_site` 仍是 link_6 原点，不是已标定 TCP。
+正常 step 不写实际 qpos；reset 使用官方 home keyframe。每个物理步继续审计原总驱动力、有限数值、速度、限位与碰撞。模型加载、重力补偿、FK/IK、夹爪原执行和接触时序未改变；本轮仅补充只读状态读取。`ee_site` 仍是 link_6 原点，不是已标定 TCP。
 
 ## 训练、评估、诊断与测试
 
 训练更新网络并写新 run；每次 CLI 从头创建模型，不是跨进程完整续训。Evaluation 衡量固定策略在独立环境中的行为和性能，使用指定目标种子与保存配置；tests 则核对实现正确性、协议与数值回归。评估不更新网络或 Replay。诊断只读分析 Q/TD/轨迹；边界对照脚本仅在原明确训练模式中启动新的 SAC 进程，`--final` 模式只评估。环境 `probe_reach_env.py` 不创建学习器。
 
-测试位于 `tests/`，模型构建器由逐字节重生成测试覆盖；原23个argparse入口及新增只读分析入口在`/tmp`下通过绝对路径检查`--help`。测试含小规模训练更新与保存 / 加载，不以短测试成功率作为算法效果要求。PPO 测试阻断本项目 SAC、BC 与 SDK 导入，纯 SAC 测试阻断 BC / SDK 和专家动作。随机目标测试覆盖200个目标的原可达性/安全预检、reset/home与Episode内目标稳定、33维方向特征、分组分析及一次完整512步随机任务更新；固定任务的原PPO产物可显式复用，避免重复训练。
+测试位于 `tests/`，模型构建器由逐字节重生成测试覆盖；自动扫描全部 37 个 argparse / shared-CLI 入口，在 `/tmp` 下通过绝对路径检查 `--help`；5 个无参数构建器仍由资源回归覆盖。测试含小规模训练更新与保存 / 加载，不以短测试成功率作为算法效果要求。PPO 测试阻断本项目 SAC、BC 与 SDK 导入，纯 SAC 测试阻断 BC / SDK 和专家动作。随机目标测试覆盖200个目标的原可达性/安全预检、reset/home与Episode内目标稳定、33维方向特征、分组分析及一次完整512步随机任务更新；固定任务的原PPO产物可显式复用，避免重复训练。
 
 ## 保存兼容性与边界
 
-PPO/SAC 保存官方 SB3 类和参数，配置以 JSON 保存；Replay 使用官方序列化并 gzip 压缩。BC 保存显式网络标识、配置和 state_dict，继续 `torch.load(weights_only=True)`。现有有效模型未引用旧业务类路径，无需兼容包装。仅使用仓库已有、来源明确的本地模型做只读验证，不下载或加载未知文件。
+PPO/SAC 使用官方 SB3 保存格式，配置以 JSON 保存；Replay 使用官方序列化并 gzip 压缩。部分桌面 PPO 使用自定义 Policy / 分布 / 特征类，必须保留 `rl/ppo_tabletop.py`、`cartesian_policy.py`、`cartesian_reach_policy.py`、`vision_policy.py` 的可导入路径与类实现；本轮全部保持。BC 保存显式网络标识、配置和 state_dict，继续 `torch.load(weights_only=True)`。原 utils CLI / 回放导入有兼容转发，模型类没有移动。仅使用仓库已有、来源明确的本地模型做只读验证，不下载或加载未知文件。
 
 新PPO配置schema=2保存观测元数据；历史PPO配置schema=1、变换schema=2仍按legacy加载。
 加载核对保存模式、固定变换、模型空间与实际features_dim，33/12维模型不得混用或自动迁移权重。
@@ -256,15 +268,15 @@ PPO/SAC 保存官方 SB3 类和参数，配置以 JSON 保存；Replay 使用官
 
 模型生成器 `build_dynamics_model.py` 保留写入 MJCF 的旧 provenance 注释字符串，保证资源重生成逐字节相同；它不是可执行路径，当前调用入口是 `scripts/models/build_dynamics_model.py`。
 
-`assets/**/SOURCE.md` 同样作为原版本的来源记录保留，包含历史生成路径；不改写资源目录以保持已有资产指纹。当前三个生成命令见 README，路径对应关系见重构报告。
+`assets/**/SOURCE.md` 同样作为原版本的来源记录保留，包含历史生成路径；不改写资源目录以保持已有资产指纹。当前生成命令见 README，路径对应关系见重构报告。
 
 ## 后续扩展
 
 夹取抬升任务已经由 `envs/grasp_lift_env.py`、`tasks/grasp_lift.py`、`simulation/grasp_controller.py` 和 `evaluation/grasp_lift.py` 实现，入口为 `scripts/demos/run_grasp_lift.py`。环境提供 41 维 Box 观测、XYZ 加绝对夹爪开口的 4 维动作，通过 `advance_synchronized_cycle` 让机械臂、夹爪和自由物体共享每步 50 次 1 ms 积分。阶段控制器只产生这个动作空间中的动作，使用双侧接触后的有界横向对中反馈；物体的运动由接触、摩擦和重力产生。
 
-成功计时在 1 ms 物理步后读取实际接触力和物体运动，要求持续离台、双侧夹持、低速度及有限滑移。`ContactRecorder` 可选择仅保留最近采样或保存完整物理历史，读取力缓存后才刷新实时几何；数值失败返回明确标记的最近有效观测。抓取评估保存在独立的 `outputs/grasp/controller/`，Reach 仍复用 `rl/common` 的固定观测变换；任务行为评估统一由 Evaluation 组织。视觉观测及真机适配需要独立验证，尚未实现。
+成功计时在 1 ms 物理步后读取实际接触力和物体运动，要求持续离台、双侧夹持、低速度及有限滑移。`ContactRecorder` 可选择仅保留最近采样或保存完整物理历史，读取力缓存后才刷新实时几何；数值失败返回明确标记的最近有效观测。抓取评估保存在独立的 `outputs/grasp/controller/`，Reach 仍复用 `rl/common` 的固定观测变换；任务行为评估统一由 Evaluation 组织。这是早期局部 GraspLift 的非视觉接口。当前桌面 RGB-D 观测已实现于独立视觉环境并有本轮逐步回归；真机适配仍未实现。
 
-本次 Evaluation 迁移、实际测试和兼容性证据见 [Evaluation 重构报告](validation/EVALUATION_REFACTOR_VALIDATION.md)。评估结果的来源路径 / 哈希随源码迁移反映新文件，物理量、指标与 JSON 协议保持。
+早期 Evaluation 迁移、实际测试和兼容性证据见 [Evaluation 重构报告](validation/EVALUATION_REFACTOR_VALIDATION.md)。评估结果的来源路径 / 哈希随源码迁移反映新文件，物理量、指标与 JSON 协议保持。
 
 旧版细节完整保存在 [历史架构快照](experiments/ARCHITECTURE_BEFORE_REFACTOR.md)；历史验证报告中的旧路径对应其原版本。现行命令以 README 和 FILE_MAP 为准。
 ## 桌面末端控制任务

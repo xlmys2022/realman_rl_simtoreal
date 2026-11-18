@@ -265,7 +265,7 @@ MUJOCO_GL=egl python -I -m unittest discover -s tests -v
 
 ## 阶段 2：公共产物工具与入口职责
 
-- `utils/artifacts.py` 成为 JSON / JSONL、单文件与调用者指定集合的 SHA256、依赖版本、ZIP 快照、空输出目录检查的唯一文件操作实现。`rl/common/artifacts.py` 保留原导入接口和 Reach 的原来源文件集合。Cartesian、GraspLift、关节桌面的来源范围 / 排序 / 路径键不变；新实验按当前源码计算真实指纹，旧实验不改写。
+- `utils/artifacts.py` 成为 JSON / JSONL、单文件与调用者指定集合的 SHA256、依赖版本、ZIP 快照、空输出目录检查的共享文件操作实现。`rl/common/artifacts.py` 保留原导入接口和 Reach 的原来源文件集合。Cartesian、GraspLift、关节桌面的来源范围 / 排序 / 路径键不变；新实验按当前源码计算真实指纹，旧实验不改写。
 - 完全相同的 `parameter_hashes`、Adam `optimizer_steps` 进入 `rl/common/artifacts.py`；原 PPO / Grasp / Cartesian 名称继续可导入。Cartesian 的 actor_mean 排除 log_std 的不同定义保留。所有模型保存 / 加载留在算法模块。
 - 笛卡尔解析实现进入 `cli/tabletop_cartesian.py`，回放实现进入 `visualization/tabletop_cartesian.py`，原 utils 两个路径仅转发公开名称；原四个 scripts 路径及所有参数不变。没有把单个调用者的离线分析脚本抽成框架。
 - 新增 `tests/test_refactor_contracts.py` 和基线 fixture：测试原 JSON 字节 / NaN 规则、ZIP 内容 / 成员顺序、来源选择、不可覆盖目录、共享 helper、全量旧 CLI 参数 AST、旧导入转发、24 组奖励基准、8 个策略类及关键物理 / 完成方法冻结，以及 7 类旧模型只读加载 / 推理。扩充 package 测试，覆盖新轻量包和四个旧 CLI help。
@@ -305,3 +305,24 @@ MUJOCO_GL=egl python -I -m unittest discover -s tests -v
 实际测试：`-p test_refactor_contracts.py` 14 项；`-p test_rgbd_vision.py` 17 项，合计 **31 通过，0 失败 / 错误 / 跳过**。包括伪造全部物体真值 / 接触 / hold 数据不影响策略观测、黑帧丢失终止、特权成功不能提前结束视觉执行、视觉完成后独立物理验收、视觉 PPO 特征 / 权重迁移 / 梯度。
 
 旧视觉模型 seed 910000 / 920000 固定与 0.02 m 随机位置，分别 1513 / 1475 策略步、99100 / 97200 物理步；physics、states、observations、raw_actions、actions 最大差 **0**，每步 JSON、视觉进度、RGB 与深度帧摘要、奖励和终止完全相同（来源 sources 另计当前源码）。完整模型 / 优化器 / 训练计数不变。关键完成与物理方法 AST 冻结测试同时通过，满足本次有限迁移的等价性条件。改动：视觉环境、两项组合单元测试、architecture 与本报告。
+
+## 阶段 6：原任务定义迁移与最终回归
+
+原 GraspLift / 关节桌面的 REWARD、CURRICULUM、potential / shaped_reward 等进入既有 tasks 模块，Cartesian EASY / STAGES 也进入其既有任务配置。全部 13 个迁移定义的 AST 与基线完全相同，24 组奖励 / 组件（含历史分支）严格相等；RL 旧名称 / 默认对象继续重导出。观测编码、训练包装、PPO 参数、更新与 checkpoint 留在 RL；没有重写或合并不同奖励公式。
+
+收尾复用 utils.file_sha256 处理 PPO / BC / BC→SAC 及原训练 / 评估 / 回放入口中的实验文件哈希，保留原字段、选取文件和 key。关节桌面模块及入口的参数 / Adam helper 直接来自 common，不再加载另一个 PPO 任务作为工具库。保留具有不同错误消息、校验顺序和建目录时机的历史前置目录检查，未用立即 mkdir 的工具强行替换。
+
+兼容契约专项 16 / 16 通过；最终 `MUJOCO_GL=egl python -I -m unittest discover -s tests -v` **532 / 532 通过，0 失败、0 错误、0 跳过，677.284 s**。扩充自动扫描全部 argparse / shared CLI 后的 package 套件另行 10 / 10 通过，覆盖 37 条 --help；最后收敛 helper 导入的 train_ppo_tabletop --help 再次通过。没有删除旧测试或放宽旧断言。
+
+新增显式运行的 `tests/manual_structure_regression.py`（不参与 discover），将修改前的四条完整轨迹 dtype / shape / 字节及 JSON / 帧摘要固化在新增 fixture。真实执行：
+
+```bash
+MUJOCO_GL=egl python -I tests/manual_structure_regression.py \
+  --json /tmp/realman-structure-refactor-20261118/final-trajectories.json
+```
+
+四个固定 seed 回合全部与基线逐位相同：共 5575 策略步、372550 物理步；权重、完整优化器与训练计数不变。阶段数值比较 `rtol=0`、物理 / 观测 `atol=1e-12`、动作 `atol=0`，实际差全部 0；最终摘要比对更严格要求精确字节相同。未将四条回归轨迹当作泛化性能评估。
+
+原 11120 个文件 / 6189603051 字节逐文件 SHA256 复核，0 改写、0 丢失，覆盖 outputs / assets / vendor / perception / 原 fixtures；该范围只新增本轮 fixture。另核对 9 个原序列化策略 / 分布 / 特征类、16 个关键仿真 / 历史环境 / 相机 / 感知 / Policy 文件保持，75 模块静态依赖无环。七类实际 checkpoint 的只读加载和固定输入推理全部通过；未宣称遍历所有历史模型，原无配置 / 不兼容契约的限制保留。
+
+当前 Python 文件总数为 150（src 75、scripts 42、tests 33，含手动验证工具）。更新 README、architecture、FILE_MAP 和验证索引，修正把视觉 / 权重迁移写成“尚未实现”等早期描述，历史报告不删除。完整前后树、迁移表、公共调用者、依赖图、所有测试与保留项见 [最终报告](STRUCTURE_REFACTOR_VALIDATION.md)，机器证据见 [JSON](STRUCTURE_REFACTOR_EVIDENCE.json)。没有正式长训练、依赖升级、远端推送或真机部署。

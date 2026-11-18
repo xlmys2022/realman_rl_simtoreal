@@ -2,11 +2,11 @@
 """Train four-action PPO from scratch or a recorded PPO curriculum checkpoint."""
 import argparse
 import copy
-import hashlib
 import json
 from pathlib import Path
 from time import perf_counter
 
+from realman_rl_simtoreal.utils.artifacts import file_sha256
 from realman_rl_simtoreal.viewer import configure_backend
 configure_backend()
 
@@ -73,7 +73,7 @@ def train(args):
         if reset_gripper_bias:
             with torch.no_grad():model.policy.action_net.bias[3]=mean
         transformed=(['log_std'] if reset_exploration else [])+(['action_net.bias'] if reset_gripper_bias else [])
-        transfer=dict(model=str(args.init_model.resolve()),sha256=hashlib.sha256(args.init_model.read_bytes()).hexdigest(),
+        transfer=dict(model=str(args.init_model.resolve()),sha256=file_sha256(args.init_model),
             source_timesteps=int(source.num_timesteps),source_parameter_hashes=parameter_hashes(source),
             optimizer_reset=True,counters_reset=True,reward_changed=changed,source_reward=saved['reward'],
             exploration_reset=reset_exploration,gripper_bias_reset=reset_gripper_bias,
@@ -82,7 +82,7 @@ def train(args):
     model.grasp_ppo_contract=dict(encoding=copy.deepcopy(ENCODING),reward=copy.deepcopy(reward))
     model.set_logger(configure(str(folder/'sb3'),['tensorboard'] if args.tensorboard else ['csv']))
     metadata=experiment_metadata()
-    metadata['algorithm_sources']={str(p.resolve()):hashlib.sha256(p.read_bytes()).hexdigest()
+    metadata['algorithm_sources']={str(p.resolve()):file_sha256(p)
         for p in (Path(__file__),Path(__import__('inspect').getfile(GraspAudit)))}
     config=dict(schema=1,algorithm='PPO',task='grasp_lift',pure_ppo=True,curriculum_stage=args.stage,
         initialization='scratch' if transfer is None else 'ppo_weights',transfer=transfer,

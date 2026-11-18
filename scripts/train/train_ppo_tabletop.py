@@ -2,11 +2,11 @@
 """Train seven-action tabletop PPO; curriculum checkpoints are explicit."""
 import argparse
 import copy
-import hashlib
 import json
 from pathlib import Path
 from time import perf_counter
 
+from realman_rl_simtoreal.utils.artifacts import file_sha256
 from realman_rl_simtoreal.viewer import configure_backend
 configure_backend()
 import numpy as np
@@ -17,8 +17,7 @@ from stable_baselines3.common.logger import configure
 from realman_rl_simtoreal.rl.ppo_tabletop import (
     CURRICULUM,ENCODING,ACTION_CONTRACT,REWARD,PPO_PARAMETERS,SmoothJointPolicy,TabletopAudit,environment_config,
     make_training_env,metadata,save_checkpoint,load_checkpoint,evaluate_model)
-from realman_rl_simtoreal.rl.ppo_grasp import parameter_hashes,optimizer_steps
-from realman_rl_simtoreal.rl.common.artifacts import empty_directory,write_json,versions
+from realman_rl_simtoreal.rl.common.artifacts import empty_directory,write_json,versions,parameter_hashes,optimizer_steps
 
 
 def train(args):
@@ -111,7 +110,7 @@ def train(args):
     if source is not None:
         model.policy.load_state_dict(source.policy.state_dict(),strict=True)
         if args.reset_exploration:reset_std()
-        transfer=dict(model=str(args.init_model.resolve()),sha256=hashlib.sha256(args.init_model.read_bytes()).hexdigest(),
+        transfer=dict(model=str(args.init_model.resolve()),sha256=file_sha256(args.init_model),
             source_timesteps=int(source.num_timesteps),source_parameter_hashes=parameter_hashes(source),
             optimizer_reset=True,counters_reset=True,transformed_parameters=['log_std'] if args.reset_exploration else [],
             reward_changed=saved['reward']!=REWARD,source_reward=saved['reward'],
@@ -139,7 +138,7 @@ def train(args):
         tensor,_=model.policy.obs_to_tensor(initial_obs[0])
         config['initial_action_std']=model.policy.get_distribution(tensor).distribution.stddev[0].cpu().tolist()
         config['initial_deterministic_action']=model.policy.get_distribution(tensor).get_actions(deterministic=True)[0].cpu().tolist()
-    config['algorithm_sources']={str(Path(__file__).resolve()):hashlib.sha256(Path(__file__).read_bytes()).hexdigest()}
+    config['algorithm_sources']={str(Path(__file__).resolve()):file_sha256(Path(__file__))}
     write_json(folder/'config.json',config);write_json(folder/'dependencies.json',versions())
     initial=parameter_hashes(model);save_checkpoint(model,folder/'initial',config)
     audit=TabletopAudit(folder,args.n_envs);audit.init_callback(model)

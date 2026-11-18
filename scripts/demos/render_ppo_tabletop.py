@@ -3,12 +3,12 @@
 import os
 os.environ.setdefault('MUJOCO_GL','egl')
 import argparse
-import hashlib
 from pathlib import Path
 
 import mujoco
 from PIL import Image,ImageDraw,ImageFont
 
+from realman_rl_simtoreal.utils.artifacts import file_sha256
 from realman_rl_simtoreal.rl.ppo_tabletop import load_checkpoint,evaluate_model
 from realman_rl_simtoreal.rl.common.artifacts import write_json
 
@@ -52,7 +52,7 @@ def main():
     args.output.parent.mkdir(parents=True,exist_ok=True)
     frames[0].save(args.output,save_all=True,append_images=frames[1:],duration=50,loop=1,optimize=False)
     frames[-1].save(args.output.with_suffix('.png'))
-    result.update(model=str(args.model.resolve()),model_sha256=hashlib.sha256(args.model.read_bytes()).hexdigest(),
+    result.update(model=str(args.model.resolve()),model_sha256=file_sha256(args.model),
                   replay_speed=4,frames=len(frames),full_task_override=not args.saved_task)
     write_json(args.output.with_suffix('.json'),result)
     print(result['summary']);print('Saved',args.output)

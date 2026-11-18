@@ -2,6 +2,8 @@
 
 基于 MuJoCo 的 RealMan **RML63II-6F-V** 机械臂强化学习仿真项目，长期方向为 Reach → Grasp → 视觉 → 真机部署。当前采用 Python 3.11、Gymnasium、Stable-Baselines3 和 PyTorch；代码组织与算法实验分别维护。
 
+当前结构与兼容性验证见 [2026-11-18 重构报告](docs/validation/STRUCTURE_REFACTOR_VALIDATION.md)。下列训练成绩与复现记录对应各链接报告当时的版本；本轮未重新执行正式长训练。
+
 实验产物按仿真、Reach、抓取、模仿学习和验证分类。找模型、评估结果及动图，请先看 [outputs 导航](outputs/README.md)；目录约定与旧路径对照见 [输出目录说明](docs/OUTPUTS.md)。
 
 ## 已实现功能
@@ -399,7 +401,7 @@ python -I scripts/evaluate/analyze_reach_results.py \
 python -I scripts/plots/plot_ppo_training.py --run-dir outputs/reach/ppo/axis_pair_seed2026_pilot_04f3
 ```
 
-JSON、终端和TensorBoard分别报告±X结果、误差、步数、首动作、结束原因、实际路径和动作方向比例；PNG增加两方向曲线及训练成功率/保护分类。所有输出目录须为新位置，不覆盖原产物。两方向均稳定成功后才考虑六方向；`axis_six_reach`5mm目前会拒绝±Y，不能直接启动。显式3mm六方向仅用于已完成的合法reset敏感性诊断，没有偷偷替换训练配置。证据、文件说明和课程边界见[04-F3验证报告](docs/validation/PPO_GOAL_CONDITIONED_VALIDATION.md)。尚未实现`ppo_transfer`或严格跨进程续训。
+JSON、终端和TensorBoard分别报告±X结果、误差、步数、首动作、结束原因、实际路径和动作方向比例；PNG增加两方向曲线及训练成功率/保护分类。所有输出目录须为新位置，不覆盖原产物。两方向均稳定成功后才考虑六方向；`axis_six_reach`5mm目前会拒绝±Y，不能直接启动。显式3mm六方向仅用于已完成的合法reset敏感性诊断，没有偷偷替换训练配置。证据、文件说明和课程边界见[04-F3验证报告](docs/validation/PPO_GOAL_CONDITIONED_VALIDATION.md)。早期 04-F3 没有权重迁移入口；当前 `--init-model` 支持受契约校验的权重迁移并重建优化器，仍不提供完整跨进程训练状态续训。
 
 纯 SAC 的手动入口仍保留：
 
@@ -488,15 +490,15 @@ SAC、BC 分别使用 `scripts/evaluate/evaluate_sac_reach.py`、`scripts/evalua
 
 ## 项目结构
 
-2026-11-18 的实际目录、确认重复与兼容边界见 [结构审计](docs/validation/STRUCTURE_AUDIT.md)。视觉策略类保持各自原模块路径，真值、RGB-D、关节空间与笛卡尔任务保留不同契约。
-
+2026-11-18 的实际目录、确认重复与兼容边界见 [结构审计](docs/validation/STRUCTURE_AUDIT.md)，六阶段变更及逐步回归见 [重构验证](docs/validation/STRUCTURE_REFACTOR_VALIDATION.md)。视觉策略类保持各自原模块路径，真值、RGB-D、关节空间与笛卡尔任务保留不同契约。
 
 - `assets/`：机器人、夹爪与场景资源。
 - `src/realman_rl_simtoreal/simulation/`、`envs/`：物理控制与 Gymnasium 环境；`perception/`：不依赖模拟器的 RGB-D 感知与坐标转换。
-- `tasks/`：算法无关的 Reach 配置；`rl/common/`：公共观测、训练包装、产物和日志写入。
+- `tasks/`：任务目标、配置、原奖励与课程；`rl/common/`：公共观测、训练包装、模型状态和日志写入。
 - `rl/`：PPO / SAC 创建、训练、优化、checkpoint 与算法薄适配；`imitation/`：BC 模型和训练、历史 BC→SAC 转移。
-- `evaluation/`：独立 Reach / GraspLift 策略评估、Episode 指标和规则基线；`scripts/evaluate/` 负责 CLI、加载和输出，`tests/` 负责正确性与回归验证。
-- `utils/`、`vendor/`：共享几何、演示、运动统计 / 来源指纹和厂家离线适配器。
+- `evaluation/`：独立 Reach / GraspLift / 真值及 RGB-D 笛卡尔桌面评估、Episode 指标和规则基线；`scripts/evaluate/` 负责 CLI、加载和输出，`tests/` 负责正确性与回归验证。
+- `cli/`：笛卡尔命令的共用参数与调度；`visualization/`：MuJoCo 回放与图像生成。原 scripts 命令与 utils 历史导入保留。
+- `utils/`、`vendor/`：共享几何、演示、统计、JSON / SHA256 / 来源归档工具和厂家离线适配器。
 - `scripts/{train,evaluate,demos,models,diagnostics,plots}/`：按用途分类的正式入口。
 - `tests/`：独立回归测试；`docs/`：架构、文件索引、实验及验证记录。
 - `outputs/{simulation,reach,grasp,imitation,validation,vision}/`：按用途分类的模型、数据、图像与验证记录，入口见 [输出导航](outputs/README.md)。
@@ -505,6 +507,8 @@ SAC、BC 分别使用 `scripts/evaluate/evaluate_sac_reach.py`、`scripts/evalua
 
 ## 文档索引
 
+- [渐进式结构审计](docs/validation/STRUCTURE_AUDIT.md)
+- [六阶段重构及回归验证](docs/validation/STRUCTURE_REFACTOR_VALIDATION.md)
 - [工程架构与依赖边界](docs/architecture.md)
 - [RGB-D 视觉抓取与复现](docs/tabletop_vision.md)
 - [完整 Python 文件地图](docs/FILE_MAP.md)
@@ -512,7 +516,7 @@ SAC、BC 分别使用 `scripts/evaluate/evaluate_sac_reach.py`、`scripts/evalua
 - [输出目录、主要模型与路径迁移](docs/OUTPUTS.md)
 - [实验历史与历史 README](docs/experiments/README.md)
 - [历次验证报告索引](docs/validation/README.md)
-- [本次重构、迁移表、验证及新命令](docs/validation/PROJECT_ORGANIZATION_REFACTOR.md)
+- [早期布局重构、迁移表与历史验证](docs/validation/PROJECT_ORGANIZATION_REFACTOR.md)
 - [机器人资源来源与限制](assets/robots/rml63/SOURCE.md) · [夹爪来源](assets/grippers/eg2_4c2/SOURCE.md)
 
 ## 已知限制

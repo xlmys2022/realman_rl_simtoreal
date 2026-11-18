@@ -210,8 +210,17 @@ for constructor in (lambda:RealManFK(),lambda:RealManIK(kin.limits)):
 
     def test_existing_argparse_entries_help_from_other_directory(self):
         # Builders have no argparse interface and are exercised by byte-for-byte asset tests.
-        names = [name for name in SCRIPT_PATHS if not name.startswith('build_')]
-        for name in names:
+        script_paths = {name:path for name,path in SCRIPT_PATHS.items() if not name.startswith('build_')}
+        # Include every actual argparse/shared-CLI entry, including later task additions.
+        for path in (ROOT/'scripts').rglob('*.py'):
+            imports = [node for node in ast.walk(ast.parse(path.read_text()))
+                       if isinstance(node, (ast.Import, ast.ImportFrom))]
+            if any((isinstance(node, ast.Import) and any(a.name=='argparse' for a in node.names))
+                   or (isinstance(node, ast.ImportFrom) and
+                       (node.module=='argparse' or (node.module or '').endswith('cli.tabletop_cartesian')))
+                   for node in imports):
+                script_paths[path.stem] = str(path.relative_to(ROOT/'scripts'))
+        for name,script_path in sorted(script_paths.items()):
             if name in ('train_ppo_reach','train_sac_reach','train_bc_reach',
                         'collect_reach_demonstrations','evaluate_ppo_reach','evaluate_sac_reach',
                         'evaluate_bc_reach','compare_sac_boundary','diagnose_sac_reach',
@@ -220,7 +229,7 @@ for constructor in (lambda:RealManFK(),lambda:RealManIK(kin.limits)):
             if name.startswith('plot_') and util.find_spec('matplotlib') is None:
                 continue
             with self.subTest(script=name):
-                result = subprocess.run([sys.executable,'-I',str(ROOT/'scripts'/SCRIPT_PATHS[name]),'--help'],
+                result = subprocess.run([sys.executable,'-I',str(ROOT/'scripts'/script_path),'--help'],
                                         cwd='/tmp',capture_output=True,text=True,timeout=30)
                 self.assertEqual(result.returncode,0,result.stderr)
                 self.assertIn('usage:',result.stdout)
