@@ -2,6 +2,10 @@
 
 本项目采用 src + editable 布局。脚本组织命令行、训练时序和展示；可复用实现位于 `realman_rl_simtoreal` 包。当前目录重构不改变 MuJoCo 资源、控制、ReachEnv、算法及超参数。逐文件说明见 [FILE_MAP](FILE_MAP.md)，完整迁移和实测结果见 [重构报告](validation/PROJECT_ORGANIZATION_REFACTOR.md)。
 
+## 当前结构审计（2026-11-18）
+
+以实际代码为准的目录、依赖和六阶段计划见 [STRUCTURE_AUDIT](validation/STRUCTURE_AUDIT.md)。新增桌面笛卡尔 / RGB-D 代码目前包括 `simulation/tabletop_runtime.py`、`cartesian_controller.py`、`tool_kinematics.py`、`rgbd_camera.py`，`envs/tabletop_cartesian_env.py` / `tabletop_cartesian_vision_env.py`，`perception/rgbd.py` 和三个独立可序列化 Policy 模块。后文早期任务说明保留其语义，不能据旧目录简图认为视觉功能尚不存在。
+
 ## 目录
 
 ```text
@@ -9,25 +13,28 @@ realman_rl_simtoreal/
 ├── assets/{robots,grippers,scenes}/
 ├── src/realman_rl_simtoreal/
 │   ├── __init__.py, paths.py, viewer.py
-│   ├── simulation/{model,kinematics,control,ee_control,gripper,grasp_contact,grasp_controller}.py
-│   ├── envs/{factory,reach_env,sequence_reach_env,grasp_lift_env,tabletop_pick_env}.py
-│   ├── tasks/{reach,grasp_lift,tabletop_pick,rewards}.py
+│   ├── simulation/{model,kinematics,tool_kinematics,control,ee_control,cartesian_controller,tabletop_runtime,gripper,grasp_contact,grasp_controller,grasp_metrics,camera,rgbd_camera,observation_pose,observation_profiles}.py
+│   ├── envs/{factory,reach_env,sequence_reach_env,grasp_lift_env,tabletop_pick_env,tabletop_cartesian_env,tabletop_cartesian_vision_env}.py
+│   ├── tasks/{reach,grasp_lift,tabletop_pick,tabletop_cartesian,tabletop_cartesian_reward,rewards}.py
 │   ├── rl/
 │   │   ├── common/{observation,env_factory,artifacts,logging}.py
 │   │   ├── ppo.py
 │   │   ├── sac.py
 │   │   ├── ppo_grasp.py
+│   │   ├── ppo_tabletop_cartesian.py
+│   │   ├── cartesian_policy.py, cartesian_reach_policy.py, vision_policy.py
 │   │   ├── ppo_tabletop.py
 │   │   ├── sac_monitoring.py
 │   │   └── sac_diagnostics.py
 │   ├── evaluation/{__init__,reach,grasp_lift,metrics,baselines}.py
+│   ├── perception/rgbd.py
 │   ├── imitation/{bc,bc_to_sac}.py
-│   ├── utils/{geometry,demo_helpers,metrics,artifacts}.py
+│   ├── utils/{geometry,demo_helpers,metrics,artifacts,tabletop_cartesian_cli,tabletop_cartesian_render}.py
 │   └── vendor/{realman_fk,realman_ik}.py
 ├── scripts/{train,evaluate,demos,models,diagnostics,plots}/
 ├── tests/{fixtures/,test_*.py}
 ├── docs/{architecture.md,FILE_MAP.md,OUTPUTS.md,experiments/,validation/}
-├── outputs/{simulation,reach,grasp,imitation,validation}/
+├── outputs/{simulation,reach,grasp,vision,imitation,validation}/
 ├── pyproject.toml
 ├── requirements{,-rl,-vendor,-vision}.txt
 └── README.md
@@ -35,7 +42,7 @@ realman_rl_simtoreal/
 
 所有包目录具有轻量 `__init__.py`，不实例化模型、环境、SDK 或学习器。脚本目录不作为包，不需要额外 `__init__.py`。正式入口已迁移，不保留旧脚本副本或 `experiments.*` 转发层。
 
-实验产物统一从 [输出导航](../outputs/README.md) 查找；分类和路径对照见 [OUTPUTS](OUTPUTS.md)。训练 run 内的模型、配置、评估、TensorBoard 和课程来源记录一起保留。outputs 根目录只保留五个分类目录与 README；机器索引、旧路径映射和迁移审计集中在 `validation/output_organization/`，日常使用五类正式路径。
+实验产物统一从 [输出导航](../outputs/README.md) 查找；分类和路径对照见 [OUTPUTS](OUTPUTS.md)。训练 run 内的模型、配置、评估、TensorBoard 和课程来源记录一起保留。outputs 根目录目前保留六个分类目录与 README；机器索引、旧路径映射和迁移审计集中在 `validation/output_organization/`，日常使用五类正式路径。
 
 ## 层次与依赖方向
 

@@ -488,6 +488,9 @@ SAC、BC 分别使用 `scripts/evaluate/evaluate_sac_reach.py`、`scripts/evalua
 
 ## 项目结构
 
+2026-11-18 的实际目录、确认重复与兼容边界见 [结构审计](docs/validation/STRUCTURE_AUDIT.md)。视觉策略类保持各自原模块路径，真值、RGB-D、关节空间与笛卡尔任务保留不同契约。
+
+
 - `assets/`：机器人、夹爪与场景资源。
 - `src/realman_rl_simtoreal/simulation/`、`envs/`：物理控制与 Gymnasium 环境；`perception/`：不依赖模拟器的 RGB-D 感知与坐标转换。
 - `tasks/`：算法无关的 Reach 配置；`rl/common/`：公共观测、训练包装、产物和日志写入。
