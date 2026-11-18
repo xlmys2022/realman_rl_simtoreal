@@ -271,3 +271,15 @@ MUJOCO_GL=egl python -I -m unittest discover -s tests -v
 - 新增 `tests/test_refactor_contracts.py` 和基线 fixture：测试原 JSON 字节 / NaN 规则、ZIP 内容 / 成员顺序、来源选择、不可覆盖目录、共享 helper、全量旧 CLI 参数 AST、旧导入转发、24 组奖励基准、8 个策略类及关键物理 / 完成方法冻结，以及 7 类旧模型只读加载 / 推理。扩充 package 测试，覆盖新轻量包和四个旧 CLI help。
 
 验证：`MUJOCO_GL=egl python -I -m unittest discover -s tests -p test_refactor_contracts.py -v`：12 / 12 通过，0 失败 / 错误 / 跳过；同样命令 `-p test_package.py`：10 / 10 通过，0 失败 / 错误 / 跳过。七类模型固定输入的 raw / applied 动作、完整权重和优化器摘要均与修改前逐位相同；没有训练。变更文件为上述公共工具、4 个 PPO 模块、两个新包及旧兼容模块、4 个脚本、2 个测试与 fixture、架构 / 文件地图 / 本报告。
+
+## 阶段 3：笛卡尔训练与独立评估解耦
+
+`evaluation/tabletop_cartesian.py` 接收未裁剪动作的 predict callable、action_shape、可选 state_fingerprint / sources 回调，承担原 rollout / evaluate 的独立环境、指定 seed、终止、full / radius 配置和原 JSON 汇总。它可由规则、PPO、SAC 或 BC 的适配器调用，不导入 Torch / SB3 / 算法模块。PPO 的 checkpoint 和原 get_distribution(... deterministic=True) 保留在 `rl/ppo_tabletop_cartesian.py`，旧 evaluate / rollout 为薄适配。沿用原 phase / tick 的 ppo 标签以保持输出兼容；不改动作。
+
+消除的是混合职责及未来重复循环的必要性，未把不同任务强行合并。GraspLift / 关节桌面原本已经复用抓取评估器，本阶段不额外拆分它们。模型 guard 在原参数 / step / epoch 检查之上补充 Adam 动量、参数组指纹；未提供状态回调的新通用调用明确返回 null，旧 PPO JSON 仍为 true。
+
+实际测试（均 `MUJOCO_GL=egl python -I -m unittest discover -s tests ... -v`）：`-p test_tabletop_evaluation.py` 7 项、`-p test_tabletop_cartesian.py` 28 项、`-p test_refactor_contracts.py` 12 项、`-p test_package.py` 10 项，合计 **57 通过，0 失败 / 错误 / 跳过**。测试包括外部环境所有权、异常关闭、完整 JSON 键、raw / clipped 动作、视觉 pre-action 观测、仅优化器动量变化的反例、原随机化覆盖顺序、真实短 PPO 更新与旧模型加载。原断言未放宽；只将环境 / rollout mock 目标改为新的实际实现位置，并补全假优化器的 state_dict 接口。
+
+另实际执行真值旧模型 seed 850000 / 870000 两个完整回合，分别 1290 / 1297 策略步、87950 / 88300 物理步。与修改前记录相比，physics、states、observations、raw_actions、actions 最大绝对差均 **0**；比较容差为物理 / 观测 `atol=1e-12, rtol=0`、动作 `atol=0, rtol=0`。完整任务结果 / 每步 JSON（除当前源码 sources）逐字段相同。权重、完整优化器和训练计数不变。独立 `python -I -c` 验证只导入新评估器不会加载 Torch 或 SB3。
+
+变更：新评估器、新评估接口测试、PPO 薄适配、common 中 optimizer_state_hash、原 Cartesian 测试 mock、架构 / 文件地图 / 本报告。

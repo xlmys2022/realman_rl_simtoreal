@@ -31,3 +31,24 @@ def parameter_hashes(model):
 def optimizer_steps(model):
     # Adam's own per-parameter counters: different from PPO._n_updates (epochs).
     return max((int(state['step'].item()) for state in model.policy.optimizer.state.values() if 'step' in state),default=0)
+
+
+def optimizer_state_hash(model):
+    """Fingerprint Adam moments and parameter groups, including per-parameter steps."""
+    import torch
+    digest = hashlib.sha256()
+    def update(value):
+        if isinstance(value, dict):
+            for key in sorted(value, key=str):
+                digest.update(repr(key).encode())
+                update(value[key])
+        elif isinstance(value, (list, tuple)):
+            for item in value:
+                update(item)
+        elif torch.is_tensor(value):
+            digest.update(str(value.dtype).encode()+str(tuple(value.shape)).encode())
+            digest.update(value.detach().cpu().contiguous().numpy().tobytes())
+        else:
+            digest.update(repr(value).encode())
+    update(model.policy.optimizer.state_dict())
+    return digest.hexdigest()

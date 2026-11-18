@@ -12,8 +12,9 @@ from stable_baselines3.common.monitor import Monitor
 from stable_baselines3.common.vec_env import DummyVecEnv,SubprocVecEnv,VecCheckNan
 from stable_baselines3.common.logger import configure
 from ..utils.artifacts import write_json as _write_json, append_json, file_hashes, archive_sources, file_sha256
-from .common.artifacts import optimizer_steps
+from .common.artifacts import optimizer_steps, optimizer_state_hash
 from ..tasks.tabletop_cartesian import CartesianTabletopConfig as Config
+from ..evaluation import tabletop_cartesian as evaluation
 from ..paths import PROJECT_ROOT as ROOT, TABLETOP_CARTESIAN_SCENE as DEFAULT_SCENE
 from ..envs.factory import make_tabletop_cartesian_env as TabletopEnv
 from ..envs.tabletop_cartesian_env import (ACTION_CONTRACT,OBSERVATION_FIELDS,
@@ -109,61 +110,26 @@ def load(path,*,allow_legacy_startup=False,allow_legacy_observation=False):
     return model,config
 
 
+def deterministic_action(model,observation):
+    """Read the unchanged PPO deterministic distribution without updating parameters."""
+    tensor,_=model.policy.obs_to_tensor(observation)
+    with torch.no_grad():
+        return model.policy.get_distribution(tensor).get_actions(deterministic=True).cpu().numpy().reshape(model.action_space.shape)
+
+
 def rollout(env,model,seed,tick=None):
-    obs,initial=env.reset(seed=seed);records=[];total=0.
-    if tick:tick(env.robot,'ppo')
-    for _ in range(env.config.max_steps):
-        policy_observation=obs.copy()
-        tensor,_=model.policy.obs_to_tensor(obs)
-        with torch.no_grad():raw=model.policy.get_distribution(tensor).get_actions(deterministic=True).cpu().numpy().reshape(env.action_space.shape)
-        action=np.clip(raw,-1,1).astype(np.float32)
-        obs,reward,t,tr,info=env.step(action);total+=reward
-        records.append(dict(info,raw_action=raw.tolist(),action=action.tolist(),reward=reward))
-        if env.config.observation_source=='rgbd_hsv':records[-1]['policy_observation']=policy_observation.tolist()
-        if tick:tick(env.robot,'ppo')
-        if t or tr:break
-    return dict(seed=seed,initial_object_position_m=initial['object_position_m'],
-                success=info['is_success'],reason=info['termination_reason'],detail=info['detail'],
-                length=len(records),return_=total,clearance_m=info['clearance_m'],hold_seconds=info['hold_seconds'],
-                initial_startup=initial['startup'],gripper_statistics=env.robot.gripper.statistics(),records=records)
+    """Compatibility adapter; the episode implementation belongs to evaluation."""
+    return evaluation.rollout(env,lambda obs:deterministic_action(model,obs),seed,tick=tick)
 
 
 def evaluate(model,config,seeds,*,full=False,tick=None,environment=None,observation_pose=None,object_radius=None):
-    before=hashes(model);counters=(model.num_timesteps,model._n_updates,optimizer_steps(model))
-    if config.get('schema',1)<2 or 'startup_contract' not in config:
-        raise ValueError('Evaluation requires the fixed observation pose startup contract')
-    if config.get('contact_measurement')!=CONTACT_MEASUREMENT:
-        raise ValueError('Evaluation requires the current inward grip-force observation contract')
-    if config['startup_contract']!=startup_contract(Config(**config['environment']).observation_pose):
-        raise ValueError('Checkpoint fixed observation pose contract does not match the configured preset')
-    if environment is not None and (full or observation_pose is not None or object_radius is not None):
-        raise ValueError('Full or overridden-pose evaluation must construct its own physical-startup environment')
-    values=dict(config['environment']);values['cache_startup']=False
-    if observation_pose is not None:values['observation_pose']=observation_pose
-    if full:
-        default=Config()
-        for key in ('initial_width','success_height','lift_height','height_tolerance','hold_seconds','max_steps','object_radius','axis_scale'):
-            values[key]=getattr(default,key)
-    # Explicit evaluation randomization follows the full-task defaults. Otherwise
-    # full=True silently restores radius zero and repeats the training position.
-    if object_radius is not None:values['object_radius']=object_radius
-    if model.action_space.shape!=(action_contract(Config(**values))['shape'],):
-        raise ValueError('The checkpoint cannot control this observation pose; use pose control to turn from a forward start')
-    own=environment is None
-    env=TabletopEnv(Config(**values),startup_tick=tick) if own else environment
-    try:episodes=[rollout(env,model,int(seed),tick=tick) for seed in seeds]
-    finally:
-        if own:env.close()
-    assert hashes(model)==before and counters==(model.num_timesteps,model._n_updates,optimizer_steps(model))
-    return dict(task='tabletop_cartesian',algorithm='PPO',full_task=full,environment=env.config.to_dict(),
-                observation_source=env.config.observation_source,
-                vision_contract=VISION_CONTRACT if env.config.observation_source=='rgbd_hsv' else None,
-                startup_contract=startup_contract(env.config.observation_pose),
-                parameters_unchanged=True,scripted_task_actions=False,ik_joint_targets_in_policy=False,
-                summary=dict(episodes=len(episodes),successes=sum(e['success'] for e in episodes),
-                success_rate=float(np.mean([e['success'] for e in episodes])),
-                safety_failures=sum(e['reason'] in ('safety_failure','numerical_failure') for e in episodes)),
-                episodes=episodes,sources=provenance())
+    """Keep the PPO API and JSON contract while sharing task evaluation."""
+    def fingerprint():
+        return (hashes(model),model.num_timesteps,model._n_updates,optimizer_steps(model),optimizer_state_hash(model))
+    return evaluation.evaluate(lambda obs:deterministic_action(model,obs),config,seeds,
+        action_shape=model.action_space.shape,full=full,tick=tick,environment=environment,
+        observation_pose=observation_pose,object_radius=object_radius,
+        state_fingerprint=fingerprint,sources=provenance,algorithm='PPO')
 
 
 class Audit(BaseCallback):

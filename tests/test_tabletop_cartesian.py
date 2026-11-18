@@ -267,7 +267,7 @@ class RandomEvaluationTests(unittest.TestCase):
         import torch
         from gymnasium import spaces
         from realman_rl_simtoreal.simulation.grasp_metrics import CONTACT_MEASUREMENT
-        policy=torch.nn.Module();policy.optimizer=SimpleNamespace(state={})
+        policy=torch.nn.Module();policy.optimizer=SimpleNamespace(state={},state_dict=lambda:dict(state={},param_groups=[]))
         self.model=SimpleNamespace(policy=policy,action_space=spaces.Box(-1.,1.,(4,),dtype=np.float32),
                                    num_timesteps=123,_n_updates=4)
         # Full evaluation must restore completion criteria, while an explicit
@@ -279,8 +279,8 @@ class RandomEvaluationTests(unittest.TestCase):
     def test_full_evaluation_preserves_explicit_randomization_and_strict_criteria(self):
         from realman_rl_simtoreal.rl.ppo_tabletop_cartesian import evaluate
         def environment(cfg,**kwargs):return SimpleNamespace(config=cfg,close=lambda:None)
-        with patch('realman_rl_simtoreal.rl.ppo_tabletop_cartesian.TabletopEnv',side_effect=environment), \
-             patch('realman_rl_simtoreal.rl.ppo_tabletop_cartesian.rollout',return_value=dict(success=False,reason='time_limit')):
+        with patch('realman_rl_simtoreal.evaluation.tabletop_cartesian.TabletopEnv',side_effect=environment), \
+             patch('realman_rl_simtoreal.evaluation.tabletop_cartesian.rollout',return_value=dict(success=False,reason='time_limit')):
             for radius in (None,0.,.02,.05):
                 result=evaluate(self.model,self.config,[8],full=True,object_radius=radius)
                 cfg=result['environment']
@@ -293,7 +293,7 @@ class RandomEvaluationTests(unittest.TestCase):
 
     def test_invalid_randomization_is_rejected_before_robot_allocation(self):
         from realman_rl_simtoreal.rl.ppo_tabletop_cartesian import evaluate
-        with patch('realman_rl_simtoreal.rl.ppo_tabletop_cartesian.TabletopEnv') as allocate:
+        with patch('realman_rl_simtoreal.evaluation.tabletop_cartesian.TabletopEnv') as allocate:
             for radius in (-.001,.051,np.nan,np.inf):
                 with self.assertRaises(ValueError):evaluate(self.model,self.config,[8],full=True,object_radius=radius)
             allocate.assert_not_called()

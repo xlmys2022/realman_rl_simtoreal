@@ -28,7 +28,7 @@ realman_rl_simtoreal/
 │   │   └── sac_diagnostics.py
 │   ├── cli/{__init__,tabletop_cartesian}.py
 │   ├── visualization/{__init__,tabletop_cartesian}.py
-│   ├── evaluation/{__init__,reach,grasp_lift,metrics,baselines}.py
+│   ├── evaluation/{__init__,reach,grasp_lift,tabletop_cartesian,metrics,baselines}.py
 │   ├── perception/rgbd.py
 │   ├── imitation/{bc,bc_to_sac}.py
 │   ├── utils/{geometry,demo_helpers,metrics,artifacts,tabletop_cartesian_cli,tabletop_cartesian_render}.py
@@ -93,6 +93,7 @@ flowchart TD
 
 - `evaluation/reach.py`：原独立 Reach 评估、指定 seed / 离散目标枚举、连续多目标记录；通用 `evaluate_policy()` 接收原始观测到动作的 callable；`evaluate_bc()` 保留 BC 的逐步 records 协议。
 - `evaluation/grasp_lift.py`：原 GraspLift `rollout()` / `evaluate()`。`model=None` 使用阶段控制器；传入具有 `predict(obs, deterministic=True)` 的对象即使用其动作。
+- `evaluation/tabletop_cartesian.py`：真值和 RGB-D 桌面共用的独立环境、Episode、full / 随机位置与结果汇总；仅接收 `predict(obs)`、动作形状、状态指纹与来源回调，不依赖学习框架。
 - `evaluation/metrics.py`：原 Reach、GraspLift、BC、早期基线的汇总函数，保留各自字段与分母；不依赖环境、训练器或神经网络。
 - `evaluation/baselines.py`：原 rule_action、早期随机 / 规则对照、奖励反例和独立 cProfile；BC 数据采集继续调用同一份规则策略。
 - `rl/common/logging.py`：原 `record_evaluation()` 及完全相同的 TensorBoard 标签；只消费已有评估结果，不执行 Episode。
@@ -136,6 +137,14 @@ controller_result = evaluate(GRASP_LIFT_CONFIG, [230000])
 ```
 
 PPO 用 `rl.ppo_grasp.load_checkpoint()` 加载，再由 `evaluate_model()` 编码原 41 维观测并核验参数 / 计数。共享 GraspLift 执行器只读取传入策略的确定性动作，不导入 PPO。`model` 参数保留历史名称；其对象只需提供 predict 协议，无需训练或优化方法。历史 JSON 的 `policy='ppo'` / `controller_phase='ppo'` 学习分支标签继续保留。
+
+### 笛卡尔桌面接口
+
+旧调用继续使用 `rl.ppo_tabletop_cartesian.load()` / `evaluate()` / `rollout()`；它们分别负责 checkpoint、原 PPO 分布的确定性推理与薄适配。共用循环只有 `evaluation.tabletop_cartesian` 一份，当前真值与 RGB-D 环境由 `envs.factory` 按保存的观测契约创建。GraspLift 和关节桌面的不同任务协议继续使用原 GraspLift 评估器。
+
+其他算法或规则可传 `predict(observation)`，返回未裁剪动作；Evaluation 沿用 `[-1,1]` 裁剪与 float32、原 seed、终止规则和统计定义。`evaluate(..., action_shape=(4,), state_fingerprint=..., sources=..., algorithm=...)` 接收完整任务 / startup / contact 配置；可选回调保护调用者自己的只读状态。未提供指纹时通用接口的 `parameters_unchanged` 为 null，避免声称完成未执行的参数核验；旧 PPO 薄适配始终提供指纹，JSON 保持 true。
+
+PPO 指纹覆盖全体参数、num_timesteps、_n_updates、Adam 每参数 step、动量与参数组；不执行训练或切换网络结构。own 环境在 finally 中关闭，外部环境由调用者关闭；full / pose / radius 覆盖不允许与外部环境混用。full 标准恢复后才应用显式 object_radius，避免把随机位置静默恢复为零。历史 `phase='ppo'` / tick 标签作为输出兼容约定保留，不要求预测函数来自 PPO。
 
 ## 训练公共工具
 
