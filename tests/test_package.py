@@ -16,7 +16,11 @@ from unittest.mock import Mock, patch
 from realman_rl_simtoreal.paths import PROJECT_ROOT as ROOT
 
 
-SCRIPT_PATHS = {'train_ppo_reach': 'train/train_ppo_reach.py',
+SCRIPT_PATHS = {'train_ppo_tabletop_cartesian':'train/train_ppo_tabletop_cartesian.py',
+ 'evaluate_ppo_tabletop_cartesian':'evaluate/evaluate_ppo_tabletop_cartesian.py',
+ 'render_ppo_tabletop_cartesian':'demos/render_ppo_tabletop_cartesian.py',
+ 'move_to_observation_pose':'demos/move_to_observation_pose.py',
+ 'train_ppo_reach': 'train/train_ppo_reach.py',
  'train_sac_reach': 'train/train_sac_reach.py',
  'train_bc_reach': 'train/train_bc_reach.py',
  'collect_reach_demonstrations': 'train/collect_reach_demonstrations.py',
@@ -65,6 +69,8 @@ import realman_rl_simtoreal.rl.common
 import realman_rl_simtoreal.imitation
 import realman_rl_simtoreal.utils
 import realman_rl_simtoreal.evaluation
+import realman_rl_simtoreal.cli
+import realman_rl_simtoreal.visualization
 assert '/src/realman_rl_simtoreal/' in package.__file__
 assert not any(n in sys.modules for n in ('mujoco','glfw','Robotic_Arm','torch','stable_baselines3'))
 ''')
@@ -138,7 +144,7 @@ for constructor in (lambda:RealManFK(),lambda:RealManIK(kin.limits)):
         self.assertTrue(direct['dir_info']['editable'])
         from setuptools import find_packages
         discovered = set(find_packages(where=str(ROOT/'src'), include=['realman_rl_simtoreal*']))
-        for suffix in ('tasks','rl','rl.common','imitation','utils','evaluation'):
+        for suffix in ('tasks','rl','rl.common','imitation','utils','evaluation','cli','visualization'):
             self.assertIn('realman_rl_simtoreal.'+suffix, discovered)
 
     def test_canonical_import_graph_has_no_scripts_or_cycles(self):

@@ -1,6 +1,6 @@
 # Python 文件地图
 
-当前共 141 个 Python 文件：核心包 70、入口 42、测试 29。下列清单来自实际文件与静态导入；函数内导入纳入统计，动态加载和 checkpoint 的类引用另外由测试验证。
+当前共 146 个 Python 文件：核心包 74、入口 42、测试 30。下列清单来自实际文件与静态导入；函数内导入纳入统计，动态加载和 checkpoint 的类引用另外由测试验证。
 
 当前边界见 [architecture.md](architecture.md)，本轮的基线、确认重复与阶段验证见 [结构审计](validation/STRUCTURE_AUDIT.md)。[此前 Evaluation 报告](validation/EVALUATION_REFACTOR_VALIDATION.md)和其他历史验证报告描述当时版本，不能代替当前地图。
 
@@ -69,8 +69,13 @@
 ## src
 
 - `__init__.py`：轻量包标识，无运行时初始化；由包导入、运行时或模型反序列化使用。
-- `paths.py`：源码仓库资源与输出目录定位，不依赖 cwd；调用者：`scripts/demos/demo_gripper.py`、`scripts/demos/run_grasp_contact_cases.py`、`scripts/demos/run_grasp_lift.py`、`scripts/demos/view_robot.py` 等 46 处。
+- `paths.py`：源码仓库资源与输出目录定位，不依赖 cwd；调用者：`scripts/demos/demo_gripper.py`、`scripts/demos/run_grasp_contact_cases.py`、`scripts/demos/run_grasp_lift.py`、`scripts/demos/view_robot.py` 等 47 处。
 - `viewer.py`：惰性 Viewer 生命周期、后端选择与线程清理；调用者：`scripts/demos/control_ee.py`、`scripts/demos/control_joints.py`、`scripts/demos/demo_gripper.py`、`scripts/demos/run_grasp_contact_cases.py` 等 12 处。
+
+## src/realman_rl_simtoreal/cli
+
+- `cli/__init__.py`：Command parsing and dispatch for retained script entry points.；由包导入、运行时或模型反序列化使用。
+- `cli/tabletop_cartesian.py`：Script argument handling for the Cartesian tabletop task.；调用者：`scripts/demos/move_to_observation_pose.py`、`scripts/demos/render_ppo_tabletop_cartesian.py`、`scripts/evaluate/evaluate_ppo_tabletop_cartesian.py`、`scripts/train/train_ppo_tabletop_cartesian.py` 等 6 处。
 
 ## src/realman_rl_simtoreal/envs
 
@@ -94,7 +99,7 @@
 ## src/realman_rl_simtoreal/imitation
 
 - `imitation/__init__.py`：轻量包标识，无运行时初始化；调用者：`tests/test_bc_reach.py`。
-- `imitation/bc.py`：原 BC 网络、数据采集和监督训练；闭环评估仅保留权重保护薄适配；调用者：`scripts/evaluate/evaluate_bc_reach.py`、`scripts/train/collect_reach_demonstrations.py`、`scripts/train/train_bc_reach.py`、`src/realman_rl_simtoreal/imitation/bc_to_sac.py` 等 7 处。
+- `imitation/bc.py`：原 BC 网络、数据采集和监督训练；闭环评估仅保留权重保护薄适配；调用者：`scripts/evaluate/evaluate_bc_reach.py`、`scripts/train/collect_reach_demonstrations.py`、`scripts/train/train_bc_reach.py`、`src/realman_rl_simtoreal/imitation/bc_to_sac.py` 等 8 处。
 - `imitation/bc_to_sac.py`：历史 BC→SAC Actor 均值通路校验、复制与偏差诊断；调用者：`scripts/train/train_sac_reach.py`、`src/realman_rl_simtoreal/rl/sac_monitoring.py`、`tests/test_sac_bc_initialization.py`。
 
 ## src/realman_rl_simtoreal/perception
@@ -104,18 +109,18 @@
 
 ## src/realman_rl_simtoreal/rl
 
-- `rl/__init__.py`：轻量包标识，无运行时初始化；由包导入、运行时或模型反序列化使用。
+- `rl/__init__.py`：轻量包标识，无运行时初始化；调用者：`tests/test_refactor_contracts.py`。
 - `rl/cartesian_policy.py`：PPO Gaussian exploration with enough precision for contact and stable hold.；调用者：`src/realman_rl_simtoreal/rl/cartesian_reach_policy.py`、`src/realman_rl_simtoreal/rl/ppo_tabletop_cartesian.py`、`tests/test_cartesian_learning.py`。
 - `rl/cartesian_reach_policy.py`：Goal-conditioned PPO arm and jaw branches; kinematics stays in the executor.；调用者：`src/realman_rl_simtoreal/rl/ppo_tabletop_cartesian.py`、`src/realman_rl_simtoreal/rl/vision_policy.py`、`tests/test_cartesian_learning.py`。
-- `rl/common/__init__.py`：轻量包标识，无运行时初始化；由包导入、运行时或模型反序列化使用。
-- `rl/common/artifacts.py`：JSON、依赖版本、资源指纹和空输出目录检查；调用者：`scripts/demos/render_ppo_tabletop.py`、`scripts/demos/run_grasp_lift.py`、`scripts/diagnostics/compare_sac_boundary.py`、`scripts/diagnostics/diagnose_sac_reach.py` 等 24 处。
+- `rl/common/__init__.py`：轻量包标识，无运行时初始化；调用者：`tests/test_refactor_contracts.py`。
+- `rl/common/artifacts.py`：JSON、依赖版本、资源指纹和空输出目录检查；调用者：`scripts/demos/render_ppo_tabletop.py`、`scripts/demos/run_grasp_lift.py`、`scripts/diagnostics/compare_sac_boundary.py`、`scripts/diagnostics/diagnose_sac_reach.py` 等 26 处。
 - `rl/common/env_factory.py`：原训练包装栈、公开 reset 观测探针；调用者：`scripts/train/train_ppo_reach.py`、`scripts/train/train_sac_reach.py`、`tests/test_bc_reach.py`、`tests/test_fetch_observation.py` 等 11 处。
 - `rl/common/logging.py`：原 record_evaluation 的训练 logger 写入；TensorBoard 标签不变，不执行 Episode；调用者：`scripts/train/train_ppo_reach.py`、`scripts/train/train_sac_reach.py`。
 - `rl/common/observation.py`：legacy schema 2 / fetch schema 3固定变换；33/12维顺序、checkpoint契约与模式检查；调用者：`scripts/diagnostics/probe_ppo_goals.py`、`scripts/evaluate/evaluate_sac_reach.py`、`scripts/train/train_ppo_reach.py`、`scripts/train/train_sac_reach.py` 等 21 处。
-- `rl/ppo.py`：官方 PPO 配置、训练审计、checkpoint、确定性推理和参数保护薄适配；评估循环在 evaluation；调用者：`scripts/diagnostics/diagnose_reach_rewards.py`、`scripts/diagnostics/probe_ppo_goals.py`、`scripts/evaluate/evaluate_ppo_reach.py`、`scripts/train/train_ppo_reach.py` 等 12 处。
-- `rl/ppo_grasp.py`：四维官方 PPO、课程训练/编码/奖励、checkpoint；抓取评估只保留策略薄适配；调用者：`scripts/evaluate/evaluate_ppo_grasp_lift.py`、`scripts/train/train_ppo_grasp_lift.py`、`scripts/train/train_ppo_tabletop.py`、`src/realman_rl_simtoreal/rl/ppo_tabletop.py` 等 6 处。
-- `rl/ppo_tabletop.py`：PPO-only joint-space tabletop pickup, goal features and immutable evaluation.；调用者：`scripts/demos/render_ppo_tabletop.py`、`scripts/evaluate/evaluate_ppo_tabletop.py`、`scripts/train/train_ppo_tabletop.py`、`tests/test_tabletop_pick.py`。
-- `rl/ppo_tabletop_cartesian.py`：Standard four-action PPO. Kinematics is solely an environment execution service.；调用者：`src/realman_rl_simtoreal/utils/tabletop_cartesian_cli.py`、`src/realman_rl_simtoreal/utils/tabletop_cartesian_render.py`、`tests/test_cartesian_learning.py`、`tests/test_tabletop_cartesian.py`。
+- `rl/ppo.py`：官方 PPO 配置、训练审计、checkpoint、确定性推理和参数保护薄适配；评估循环在 evaluation；调用者：`scripts/diagnostics/diagnose_reach_rewards.py`、`scripts/diagnostics/probe_ppo_goals.py`、`scripts/evaluate/evaluate_ppo_reach.py`、`scripts/train/train_ppo_reach.py` 等 13 处。
+- `rl/ppo_grasp.py`：四维官方 PPO、课程训练/编码/奖励、checkpoint；抓取评估只保留策略薄适配；调用者：`scripts/evaluate/evaluate_ppo_grasp_lift.py`、`scripts/train/train_ppo_grasp_lift.py`、`scripts/train/train_ppo_tabletop.py`、`src/realman_rl_simtoreal/rl/ppo_tabletop.py` 等 7 处。
+- `rl/ppo_tabletop.py`：PPO-only joint-space tabletop pickup, goal features and immutable evaluation.；调用者：`scripts/demos/render_ppo_tabletop.py`、`scripts/evaluate/evaluate_ppo_tabletop.py`、`scripts/train/train_ppo_tabletop.py`、`tests/test_refactor_contracts.py` 等 5 处。
+- `rl/ppo_tabletop_cartesian.py`：Standard four-action PPO. Kinematics is solely an environment execution service.；调用者：`src/realman_rl_simtoreal/cli/tabletop_cartesian.py`、`src/realman_rl_simtoreal/visualization/tabletop_cartesian.py`、`tests/test_cartesian_learning.py`、`tests/test_refactor_contracts.py` 等 5 处。
 - `rl/sac.py`：官方 SAC 配置、模型创建及模型 / Replay checkpoint；调用者：`scripts/train/train_sac_reach.py`、`tests/test_fetch_observation.py`、`tests/test_pure_reach_training.py`、`tests/test_sac_bc_initialization.py` 等 6 处。
 - `rl/sac_diagnostics.py`：冻结策略轨迹、Q / soft TD、参数指纹和 Replay 加载；调用者：`scripts/diagnostics/compare_sac_boundary.py`、`scripts/diagnostics/diagnose_sac_reach.py`、`scripts/train/train_sac_reach.py`、`src/realman_rl_simtoreal/rl/sac_monitoring.py` 等 8 处。
 - `rl/sac_monitoring.py`：原 SAC 训练/安全审计、只读 Q 与运动监控，消费 evaluation.metrics 与中立统计；调用者：`scripts/train/train_sac_reach.py`。
@@ -137,7 +142,7 @@
 - `simulation/observation_pose.py`：Traditional zero-to-fixed-observation motion, before policy execution.；调用者：`src/realman_rl_simtoreal/simulation/tabletop_runtime.py`、`tests/test_tabletop_cartesian.py`。
 - `simulation/observation_profiles.py`：Fixed robot observation poses, defined without any object or task state.；调用者：`src/realman_rl_simtoreal/envs/tabletop_cartesian_env.py`、`src/realman_rl_simtoreal/rl/ppo_tabletop_cartesian.py`、`src/realman_rl_simtoreal/simulation/observation_pose.py`、`src/realman_rl_simtoreal/tasks/tabletop_cartesian.py` 等 5 处。
 - `simulation/rgbd_camera.py`：MuJoCo RGB-D adapter at the existing camera_link optical center.；调用者：`src/realman_rl_simtoreal/envs/tabletop_cartesian_vision_env.py`。
-- `simulation/tabletop_runtime.py`：Real actuator dynamics, contact checks, and explicit reset/setup lifecycle.；调用者：`src/realman_rl_simtoreal/envs/tabletop_cartesian_env.py`、`src/realman_rl_simtoreal/utils/tabletop_cartesian_render.py`、`tests/test_tabletop_cartesian.py`。
+- `simulation/tabletop_runtime.py`：Real actuator dynamics, contact checks, and explicit reset/setup lifecycle.；调用者：`src/realman_rl_simtoreal/envs/tabletop_cartesian_env.py`、`src/realman_rl_simtoreal/visualization/tabletop_cartesian.py`、`tests/test_tabletop_cartesian.py`。
 - `simulation/tool_kinematics.py`：Rigid tool-frame selection over the existing, unchanged FK/IK solver.；调用者：`src/realman_rl_simtoreal/simulation/tabletop_runtime.py`、`tests/test_tabletop_cartesian.py`。
 
 ## src/realman_rl_simtoreal/tasks
@@ -152,19 +157,24 @@
 
 ## src/realman_rl_simtoreal/utils
 
-- `utils/__init__.py`：轻量包标识，无运行时初始化；由包导入、运行时或模型反序列化使用。
-- `utils/artifacts.py`：训练/评估/演示共享的抓取资源、源码与运行时指纹；不依赖算法；调用者：`scripts/demos/run_grasp_lift.py`、`scripts/train/train_ppo_grasp_lift.py`、`src/realman_rl_simtoreal/evaluation/grasp_lift.py`、`src/realman_rl_simtoreal/rl/ppo_grasp.py` 等 5 处。
+- `utils/__init__.py`：轻量包标识，无运行时初始化；调用者：`tests/test_refactor_contracts.py`。
+- `utils/artifacts.py`：训练/评估/演示共享的抓取资源、源码与运行时指纹；不依赖算法；调用者：`scripts/demos/run_grasp_lift.py`、`scripts/train/train_ppo_grasp_lift.py`、`src/realman_rl_simtoreal/evaluation/grasp_lift.py`、`src/realman_rl_simtoreal/rl/common/artifacts.py` 等 10 处。
 - `utils/demo_helpers.py`：FK 样本姿态、原关节演示序列和结果格式化；调用者：`scripts/demos/control_ee.py`、`scripts/demos/control_joints.py`、`scripts/diagnostics/compare_controllers.py`、`scripts/diagnostics/compare_fk.py` 等 5 处。
 - `utils/geometry.py`：共享 SE(3) 构造与逆变换；调用者：`scripts/diagnostics/compare_fk.py`、`scripts/diagnostics/compare_ik.py`。
 - `utils/metrics.py`：训练与评估共享 MotionStats 和原余弦函数；只依赖 NumPy；调用者：`scripts/diagnostics/probe_reach_env.py`、`src/realman_rl_simtoreal/evaluation/reach.py`、`src/realman_rl_simtoreal/imitation/bc.py`、`src/realman_rl_simtoreal/rl/ppo.py` 等 7 处。
-- `utils/tabletop_cartesian_cli.py`：Script argument handling for the Cartesian tabletop task.；调用者：`scripts/demos/move_to_observation_pose.py`、`scripts/demos/render_ppo_tabletop_cartesian.py`、`scripts/evaluate/evaluate_ppo_tabletop_cartesian.py`、`scripts/train/train_ppo_tabletop_cartesian.py`。
-- `utils/tabletop_cartesian_render.py`：Actual MuJoCo replay: overview, top view, and the wrist camera.；调用者：`src/realman_rl_simtoreal/utils/tabletop_cartesian_cli.py`。
+- `utils/tabletop_cartesian_cli.py`：Compatibility import for the retained Cartesian script entry points.；调用者：`tests/test_refactor_contracts.py`。
+- `utils/tabletop_cartesian_render.py`：Compatibility imports for historical Cartesian replay callers.；调用者：`tests/test_refactor_contracts.py`。
 
 ## src/realman_rl_simtoreal/vendor
 
 - `vendor/__init__.py`：轻量包标识，无运行时初始化；调用者：`tests/test_fk_comparison.py`、`tests/test_ik_comparison.py`。
 - `vendor/realman_fk.py`：可选厂家离线 FK SDK 适配与会话保护；调用者：`scripts/diagnostics/compare_fk.py`、`scripts/diagnostics/compare_ik.py`、`src/realman_rl_simtoreal/vendor/realman_ik.py`、`tests/test_fk_comparison.py` 等 5 处。
 - `vendor/realman_ik.py`：厂家离线 IK、解集与自模型复核；调用者：`scripts/diagnostics/compare_ik.py`、`tests/test_ik_comparison.py`。
+
+## src/realman_rl_simtoreal/visualization
+
+- `visualization/__init__.py`：Simulation replay and image generation; no training implementations.；由包导入、运行时或模型反序列化使用。
+- `visualization/tabletop_cartesian.py`：Actual MuJoCo replay: overview, top view, and the wrist camera.；调用者：`src/realman_rl_simtoreal/cli/tabletop_cartesian.py`、`src/realman_rl_simtoreal/utils/tabletop_cartesian_render.py`、`tests/test_refactor_contracts.py`。
 
 ## tests
 
@@ -189,6 +199,7 @@
 - `tests/test_reach_env.py`：Gymnasium、动作、观测、奖励、真实物理步与保护；入口：unittest discover。
 - `tests/test_reach_progress_reward.py`：25项奖励方向、批量、漏洞/边界、兼容、组件与单次512步PPO Smoke；入口：unittest discover。
 - `tests/test_reach_task.py`：随机可达目标、奖励一致性、基线及 CLI；入口：unittest discover。
+- `tests/test_refactor_contracts.py`：Behavioral contracts recorded before the progressive structure refactor.；入口：unittest discover。
 - `tests/test_rgbd_vision.py`：Camera geometry, true-state isolation, lost-target handling and visual PPO.；入口：unittest discover。
 - `tests/test_sac_bc_initialization.py`：历史 BC Actor 映射、受保护参数、短 SAC 更新与监控；入口：unittest discover。
 - `tests/test_sac_diagnostics.py`：冻结动作轨迹、Q / TD / Replay、随机状态与参数不变性；入口：unittest discover。

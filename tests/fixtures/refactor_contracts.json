@@ -1,0 +1,2513 @@
+{
+  "baseline": "0e3496b67bc818aab2d1c1a49264d0be6e435215",
+  "policy_class_ast_sha256": {
+    "src/realman_rl_simtoreal/rl/ppo_tabletop.py:SmoothJointPolicy": "7aed0b5483107064886387a515277ced291fbf52fe30d4006e0b60576bd4bbbb",
+    "src/realman_rl_simtoreal/rl/cartesian_policy.py:CartesianPPOPolicy": "b5c1adcff497ece9e78d136adfd9b4295c59ef5d3eae6d99b61656e54c13bcc6",
+    "src/realman_rl_simtoreal/rl/vision_policy.py:VisualCartesianGoalFeatures": "0bacd0eeb47528ebf0e3d70271e43fcad9539f5c8ac9412d5c262736799b1f52",
+    "src/realman_rl_simtoreal/rl/vision_policy.py:VisualReachGraspNetworks": "a99bce5c3f9796b30dd77ced5dbc63d45c9a5dd55d02de367a6ed13659c4ed21",
+    "src/realman_rl_simtoreal/rl/vision_policy.py:VisualReachGraspPPOPolicy": "4bb035caa675118c95f0e3b2cb3e8c1233bf50cb3942e065203f255c859faad6",
+    "src/realman_rl_simtoreal/rl/cartesian_reach_policy.py:CartesianGoalFeatures": "34848eba90a124855b05e558a3ef978e4338c4e134fb97fbc870b74acebcf415",
+    "src/realman_rl_simtoreal/rl/cartesian_reach_policy.py:ReachGraspNetworks": "431f466d6902a1ea1794eb75c02fec5e46fdc4c7b4f4671f05a621586d20f7c2",
+    "src/realman_rl_simtoreal/rl/cartesian_reach_policy.py:ReachGraspPPOPolicy": "d10ce08b1518de5d142c7cdc1345a67d16c83994156ef97513b73738713d46d4"
+  },
+  "reward_cases": [
+    {
+      "task": "grasp_lift",
+      "info": {
+        "support_normal": [
+          0.0,
+          0.0,
+          1.0
+        ],
+        "object_position_m": [
+          0.4,
+          0.0,
+          0.76
+        ],
+        "object_goal_m": [
+          0.4,
+          0.0,
+          0.79
+        ],
+        "grasp_distance_m": 0.04,
+        "actual_width_m": 0.06,
+        "contact_forces_n": [
+          0.0,
+          0.0,
+          0.01
+        ],
+        "support_clearance_m": 0.0,
+        "hold_time_s": 0.0,
+        "is_success": false,
+        "is_safety_failure": false,
+        "termination_reason": null,
+        "object_velocity_m_s": [
+          0.0,
+          0.0,
+          0.001
+        ],
+        "approach_complete": false,
+        "bilateral_contact": false,
+        "lift_joint_error_rad": 0.0,
+        "reach_joint_error_rad": 0.0,
+        "grasp_joint_error_rad": 0.0,
+        "reach_goal_distance_m": 0.0,
+        "orientation_error_rad": 0.0,
+        "action_rejected": false,
+        "lift_goal_joint_rad": [
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01
+        ],
+        "reach_goal_joint_rad": [
+          0.02,
+          0.02,
+          0.02,
+          0.02,
+          0.02,
+          0.02
+        ]
+      },
+      "previous": 0.0013932488314526083,
+      "terminated": false,
+      "kwargs": {},
+      "expected": -0.009857271699094667,
+      "terms": {
+        "potential_change": -6.966244157262944e-06,
+        "step_cost": -0.01,
+        "success_bonus": 0.0,
+        "safety_penalty": -0.0,
+        "drop_penalty": -0.0,
+        "dense_reach": 0.0001341400521865932,
+        "dense_aperture": 1.555449287600292e-05,
+        "dense_grip": 0.0,
+        "dense_height": 0.0,
+        "lateral_penalty": -0.0,
+        "dense_hold": 0.0,
+        "speed_cost": -0.0
+      },
+      "context": "grasp_lift_0"
+    },
+    {
+      "task": "grasp_lift",
+      "info": {
+        "support_normal": [
+          0.0,
+          0.0,
+          1.0
+        ],
+        "object_position_m": [
+          0.4001,
+          0.0,
+          0.761
+        ],
+        "object_goal_m": [
+          0.4,
+          0.0,
+          0.79
+        ],
+        "grasp_distance_m": 0.008,
+        "actual_width_m": 0.025,
+        "contact_forces_n": [
+          0.03,
+          0.0,
+          0.0
+        ],
+        "support_clearance_m": 0.003,
+        "hold_time_s": 0.1,
+        "is_success": false,
+        "is_safety_failure": false,
+        "termination_reason": null,
+        "object_velocity_m_s": [
+          0.001,
+          0.0,
+          0.001
+        ],
+        "approach_complete": false,
+        "bilateral_contact": false,
+        "lift_joint_error_rad": 0.01,
+        "reach_joint_error_rad": 0.002,
+        "grasp_joint_error_rad": 0.03,
+        "reach_goal_distance_m": 0.01,
+        "orientation_error_rad": 0.02,
+        "action_rejected": false,
+        "lift_goal_joint_rad": [
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01
+        ],
+        "reach_goal_joint_rad": [
+          0.02,
+          0.02,
+          0.02,
+          0.02,
+          0.02,
+          0.02
+        ]
+      },
+      "previous": 1.6965209742245126,
+      "terminated": false,
+      "kwargs": {},
+      "expected": 0.3360883955033708,
+      "terms": {
+        "potential_change": -0.008482604871122623,
+        "step_cost": -0.01,
+        "success_bonus": 0.0,
+        "safety_penalty": -0.0,
+        "drop_penalty": -0.0,
+        "dense_reach": 0.0671926459464302,
+        "dense_aperture": 0.2773783544280632,
+        "dense_grip": 0.0,
+        "dense_height": 0.0,
+        "lateral_penalty": -0.0,
+        "dense_hold": 0.010000000000000002,
+        "speed_cost": -0.0
+      },
+      "context": "grasp_lift_1"
+    },
+    {
+      "task": "grasp_lift",
+      "info": {
+        "support_normal": [
+          0.0,
+          0.0,
+          1.0
+        ],
+        "object_position_m": [
+          0.4002,
+          0.0,
+          0.762
+        ],
+        "object_goal_m": [
+          0.4,
+          0.0,
+          0.79
+        ],
+        "grasp_distance_m": 0.001,
+        "actual_width_m": 0.02,
+        "contact_forces_n": [
+          0.08,
+          0.06,
+          0.0
+        ],
+        "support_clearance_m": 0.006,
+        "hold_time_s": 0.2,
+        "is_success": false,
+        "is_safety_failure": false,
+        "termination_reason": null,
+        "object_velocity_m_s": [
+          0.002,
+          0.0,
+          0.001
+        ],
+        "approach_complete": false,
+        "bilateral_contact": true,
+        "lift_joint_error_rad": 0.02,
+        "reach_joint_error_rad": 0.004,
+        "grasp_joint_error_rad": 0.06,
+        "reach_goal_distance_m": 0.02,
+        "orientation_error_rad": 0.04,
+        "action_rejected": false,
+        "lift_goal_joint_rad": [
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01
+        ],
+        "reach_goal_joint_rad": [
+          0.02,
+          0.02,
+          0.02,
+          0.02,
+          0.02,
+          0.02
+        ]
+      },
+      "previous": 6.457927113393821,
+      "terminated": false,
+      "kwargs": {},
+      "expected": 0.7299346533385073,
+      "terms": {
+        "potential_change": -0.03228963556696929,
+        "step_cost": -0.01,
+        "success_bonus": 0.0,
+        "safety_penalty": -0.0,
+        "drop_penalty": -0.0,
+        "dense_reach": 0.18006640107500885,
+        "dense_aperture": 0.3,
+        "dense_grip": 0.1,
+        "dense_height": 0.1921578878304655,
+        "lateral_penalty": -0.019999999999997797,
+        "dense_hold": 0.020000000000000004,
+        "speed_cost": -0.0
+      },
+      "context": "grasp_lift_1"
+    },
+    {
+      "task": "grasp_lift",
+      "info": {
+        "support_normal": [
+          0.0,
+          0.0,
+          1.0
+        ],
+        "object_position_m": [
+          0.40030000000000004,
+          0.0,
+          0.763
+        ],
+        "object_goal_m": [
+          0.4,
+          0.0,
+          0.79
+        ],
+        "grasp_distance_m": 0.04,
+        "actual_width_m": 0.06,
+        "contact_forces_n": [
+          0.0,
+          0.0,
+          0.01
+        ],
+        "support_clearance_m": 0.009000000000000001,
+        "hold_time_s": 0.30000000000000004,
+        "is_success": false,
+        "is_safety_failure": false,
+        "termination_reason": null,
+        "object_velocity_m_s": [
+          0.003,
+          0.0,
+          0.001
+        ],
+        "approach_complete": true,
+        "bilateral_contact": false,
+        "lift_joint_error_rad": 0.03,
+        "reach_joint_error_rad": 0.006,
+        "grasp_joint_error_rad": 0.09,
+        "reach_goal_distance_m": 0.03,
+        "orientation_error_rad": 0.06,
+        "action_rejected": false,
+        "lift_goal_joint_rad": [
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01
+        ],
+        "reach_goal_joint_rad": [
+          0.02,
+          0.02,
+          0.02,
+          0.02,
+          0.02,
+          0.02
+        ]
+      },
+      "previous": 1.301341400521866,
+      "terminated": false,
+      "kwargs": {},
+      "expected": 0.31362743304957735,
+      "terms": {
+        "potential_change": -0.006506707002609247,
+        "step_cost": -0.01,
+        "success_bonus": 0.0,
+        "safety_penalty": -0.0,
+        "drop_penalty": -0.0,
+        "dense_reach": 0.0001341400521865932,
+        "dense_aperture": 0.3,
+        "dense_grip": 0.0,
+        "dense_height": 0.0,
+        "lateral_penalty": -0.0,
+        "dense_hold": 0.030000000000000006,
+        "speed_cost": -0.0
+      },
+      "context": "grasp_lift_1"
+    },
+    {
+      "task": "grasp_lift",
+      "info": {
+        "support_normal": [
+          0.0,
+          0.0,
+          1.0
+        ],
+        "object_position_m": [
+          0.40040000000000003,
+          0.0,
+          0.764
+        ],
+        "object_goal_m": [
+          0.4,
+          0.0,
+          0.79
+        ],
+        "grasp_distance_m": 0.008,
+        "actual_width_m": 0.025,
+        "contact_forces_n": [
+          0.03,
+          0.0,
+          0.0
+        ],
+        "support_clearance_m": 0.012,
+        "hold_time_s": 0.4,
+        "is_success": false,
+        "is_safety_failure": false,
+        "termination_reason": null,
+        "object_velocity_m_s": [
+          0.004,
+          0.0,
+          0.001
+        ],
+        "approach_complete": true,
+        "bilateral_contact": false,
+        "lift_joint_error_rad": 0.04,
+        "reach_joint_error_rad": 0.008,
+        "grasp_joint_error_rad": 0.12,
+        "reach_goal_distance_m": 0.04,
+        "orientation_error_rad": 0.08,
+        "action_rejected": false,
+        "lift_goal_joint_rad": [
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01
+        ],
+        "reach_goal_joint_rad": [
+          0.02,
+          0.02,
+          0.02,
+          0.02,
+          0.02,
+          0.02
+        ]
+      },
+      "previous": 1.9965209742245125,
+      "terminated": false,
+      "kwargs": {},
+      "expected": 0.36458839550337074,
+      "terms": {
+        "potential_change": -0.00998260487112268,
+        "step_cost": -0.01,
+        "success_bonus": 0.0,
+        "safety_penalty": -0.0,
+        "drop_penalty": -0.0,
+        "dense_reach": 0.0671926459464302,
+        "dense_aperture": 0.2773783544280632,
+        "dense_grip": 0.0,
+        "dense_height": 0.0,
+        "lateral_penalty": -0.0,
+        "dense_hold": 0.04000000000000001,
+        "speed_cost": -0.0
+      },
+      "context": "grasp_lift_1"
+    },
+    {
+      "task": "grasp_lift",
+      "info": {
+        "support_normal": [
+          0.0,
+          0.0,
+          1.0
+        ],
+        "object_position_m": [
+          0.4005,
+          0.0,
+          0.765
+        ],
+        "object_goal_m": [
+          0.4,
+          0.0,
+          0.79
+        ],
+        "grasp_distance_m": 0.001,
+        "actual_width_m": 0.02,
+        "contact_forces_n": [
+          0.08,
+          0.06,
+          0.0
+        ],
+        "support_clearance_m": 0.015,
+        "hold_time_s": 0.5,
+        "is_success": false,
+        "is_safety_failure": false,
+        "termination_reason": null,
+        "object_velocity_m_s": [
+          0.005,
+          0.0,
+          0.001
+        ],
+        "approach_complete": true,
+        "bilateral_contact": true,
+        "lift_joint_error_rad": 0.05,
+        "reach_joint_error_rad": 0.01,
+        "grasp_joint_error_rad": 0.15,
+        "reach_goal_distance_m": 0.05,
+        "orientation_error_rad": 0.1,
+        "action_rejected": false,
+        "lift_goal_joint_rad": [
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01
+        ],
+        "reach_goal_joint_rad": [
+          0.02,
+          0.02,
+          0.02,
+          0.02,
+          0.02,
+          0.02
+        ]
+      },
+      "previous": 8.720013682893928,
+      "terminated": false,
+      "kwargs": {},
+      "expected": 0.9788850416785184,
+      "terms": {
+        "potential_change": -0.04360006841447017,
+        "step_cost": -0.01,
+        "success_bonus": 0.0,
+        "safety_penalty": -0.0,
+        "drop_penalty": -0.0,
+        "dense_reach": 0.18006640107500885,
+        "dense_aperture": 0.3,
+        "dense_grip": 0.1,
+        "dense_height": 0.45241870901797976,
+        "lateral_penalty": -0.050000000000000044,
+        "dense_hold": 0.05,
+        "speed_cost": -0.0
+      },
+      "context": "grasp_lift_1"
+    },
+    {
+      "task": "grasp_lift",
+      "info": {
+        "support_normal": [
+          0.0,
+          0.0,
+          1.0
+        ],
+        "object_position_m": [
+          0.4006,
+          0.0,
+          0.766
+        ],
+        "object_goal_m": [
+          0.4,
+          0.0,
+          0.79
+        ],
+        "grasp_distance_m": 0.04,
+        "actual_width_m": 0.06,
+        "contact_forces_n": [
+          0.0,
+          0.0,
+          0.01
+        ],
+        "support_clearance_m": 0.018000000000000002,
+        "hold_time_s": 0.6000000000000001,
+        "is_success": false,
+        "is_safety_failure": false,
+        "termination_reason": null,
+        "object_velocity_m_s": [
+          0.006,
+          0.0,
+          0.001
+        ],
+        "approach_complete": true,
+        "bilateral_contact": false,
+        "lift_joint_error_rad": 0.06,
+        "reach_joint_error_rad": 0.012,
+        "grasp_joint_error_rad": 0.18,
+        "reach_goal_distance_m": 0.06,
+        "orientation_error_rad": 0.12,
+        "action_rejected": false,
+        "lift_goal_joint_rad": [
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01
+        ],
+        "reach_goal_joint_rad": [
+          0.02,
+          0.02,
+          0.02,
+          0.02,
+          0.02,
+          0.02
+        ]
+      },
+      "previous": 0.6013932488314527,
+      "terminated": false,
+      "kwargs": {},
+      "expected": 0.0471427283009053,
+      "terms": {
+        "potential_change": -0.0030069662441573053,
+        "step_cost": -0.01,
+        "success_bonus": 0.0,
+        "safety_penalty": -0.0,
+        "drop_penalty": -0.0,
+        "dense_reach": 0.0001341400521865932,
+        "dense_aperture": 1.555449287600292e-05,
+        "dense_grip": 0.0,
+        "dense_height": 0.0,
+        "lateral_penalty": -0.0,
+        "dense_hold": 0.06000000000000001,
+        "speed_cost": -0.0
+      },
+      "context": "grasp_lift_0"
+    },
+    {
+      "task": "grasp_lift",
+      "info": {
+        "support_normal": [
+          0.0,
+          0.0,
+          1.0
+        ],
+        "object_position_m": [
+          0.4007,
+          0.0,
+          0.767
+        ],
+        "object_goal_m": [
+          0.4,
+          0.0,
+          0.79
+        ],
+        "grasp_distance_m": 0.008,
+        "actual_width_m": 0.025,
+        "contact_forces_n": [
+          0.03,
+          0.0,
+          0.0
+        ],
+        "support_clearance_m": 0.021,
+        "hold_time_s": 0.7000000000000001,
+        "is_success": false,
+        "is_safety_failure": false,
+        "termination_reason": null,
+        "object_velocity_m_s": [
+          0.007,
+          0.0,
+          0.001
+        ],
+        "approach_complete": true,
+        "bilateral_contact": false,
+        "lift_joint_error_rad": 0.07,
+        "reach_joint_error_rad": 0.014,
+        "grasp_joint_error_rad": 0.21,
+        "reach_goal_distance_m": 0.07,
+        "orientation_error_rad": 0.14,
+        "action_rejected": true,
+        "lift_goal_joint_rad": [
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01
+        ],
+        "reach_goal_joint_rad": [
+          0.02,
+          0.02,
+          0.02,
+          0.02,
+          0.02,
+          0.02
+        ]
+      },
+      "previous": 2.2965209742245127,
+      "terminated": false,
+      "kwargs": {},
+      "expected": 0.3930883955033709,
+      "terms": {
+        "potential_change": -0.011482604871122515,
+        "step_cost": -0.01,
+        "success_bonus": 0.0,
+        "safety_penalty": -0.0,
+        "drop_penalty": -0.0,
+        "dense_reach": 0.0671926459464302,
+        "dense_aperture": 0.2773783544280632,
+        "dense_grip": 0.0,
+        "dense_height": 0.0,
+        "lateral_penalty": -0.0,
+        "dense_hold": 0.07,
+        "speed_cost": -0.0
+      },
+      "context": "grasp_lift_1"
+    },
+    {
+      "task": "grasp_lift",
+      "info": {
+        "support_normal": [
+          0.0,
+          0.0,
+          1.0
+        ],
+        "object_position_m": [
+          0.40080000000000005,
+          0.0,
+          0.768
+        ],
+        "object_goal_m": [
+          0.4,
+          0.0,
+          0.79
+        ],
+        "grasp_distance_m": 0.001,
+        "actual_width_m": 0.02,
+        "contact_forces_n": [
+          0.08,
+          0.06,
+          0.0
+        ],
+        "support_clearance_m": 0.024,
+        "hold_time_s": 0.8,
+        "is_success": false,
+        "is_safety_failure": false,
+        "termination_reason": null,
+        "object_velocity_m_s": [
+          0.008,
+          0.0,
+          0.001
+        ],
+        "approach_complete": true,
+        "bilateral_contact": true,
+        "lift_joint_error_rad": 0.08,
+        "reach_joint_error_rad": 0.016,
+        "grasp_joint_error_rad": 0.24,
+        "reach_goal_distance_m": 0.08,
+        "orientation_error_rad": 0.16,
+        "action_rejected": false,
+        "lift_goal_joint_rad": [
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01
+        ],
+        "reach_goal_joint_rad": [
+          0.02,
+          0.02,
+          0.02,
+          0.02,
+          0.02,
+          0.02
+        ]
+      },
+      "previous": 10.734384260133808,
+      "terminated": false,
+      "kwargs": {},
+      "expected": 1.1981095109473037,
+      "terms": {
+        "potential_change": -0.05367192130066911,
+        "step_cost": -0.01,
+        "success_bonus": 0.0,
+        "safety_penalty": -0.0,
+        "drop_penalty": -0.0,
+        "dense_reach": 0.18006640107500885,
+        "dense_aperture": 0.3,
+        "dense_grip": 0.1,
+        "dense_height": 0.6817150311729661,
+        "lateral_penalty": -0.08000000000000229,
+        "dense_hold": 0.08000000000000002,
+        "speed_cost": -0.0
+      },
+      "context": "grasp_lift_1"
+    },
+    {
+      "task": "grasp_lift",
+      "info": {
+        "support_normal": [
+          0.0,
+          0.0,
+          1.0
+        ],
+        "object_position_m": [
+          0.40090000000000003,
+          0.0,
+          0.769
+        ],
+        "object_goal_m": [
+          0.4,
+          0.0,
+          0.79
+        ],
+        "grasp_distance_m": 0.04,
+        "actual_width_m": 0.06,
+        "contact_forces_n": [
+          0.0,
+          0.0,
+          0.01
+        ],
+        "support_clearance_m": 0.027,
+        "hold_time_s": 0.9,
+        "is_success": true,
+        "is_safety_failure": false,
+        "termination_reason": "success",
+        "object_velocity_m_s": [
+          0.009000000000000001,
+          0.0,
+          0.001
+        ],
+        "approach_complete": true,
+        "bilateral_contact": false,
+        "lift_joint_error_rad": 0.09,
+        "reach_joint_error_rad": 0.018000000000000002,
+        "grasp_joint_error_rad": 0.27,
+        "reach_goal_distance_m": 0.09,
+        "orientation_error_rad": 0.18,
+        "action_rejected": false,
+        "lift_goal_joint_rad": [
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01
+        ],
+        "reach_goal_joint_rad": [
+          0.02,
+          0.02,
+          0.02,
+          0.02,
+          0.02,
+          0.02
+        ]
+      },
+      "previous": 1.9013414005218658,
+      "terminated": true,
+      "kwargs": {},
+      "expected": 998.4787927395303,
+      "terms": {
+        "potential_change": -1.9013414005218658,
+        "step_cost": -0.01,
+        "success_bonus": 1000.0,
+        "safety_penalty": -0.0,
+        "drop_penalty": -0.0,
+        "dense_reach": 0.0001341400521865932,
+        "dense_aperture": 0.3,
+        "dense_grip": 0.0,
+        "dense_height": 0.0,
+        "lateral_penalty": -0.0,
+        "dense_hold": 0.09000000000000001,
+        "speed_cost": -0.0
+      },
+      "context": "grasp_lift_1"
+    },
+    {
+      "task": "grasp_lift",
+      "info": {
+        "support_normal": [
+          0.0,
+          0.0,
+          1.0
+        ],
+        "object_position_m": [
+          0.401,
+          0.0,
+          0.77
+        ],
+        "object_goal_m": [
+          0.4,
+          0.0,
+          0.79
+        ],
+        "grasp_distance_m": 0.008,
+        "actual_width_m": 0.025,
+        "contact_forces_n": [
+          0.03,
+          0.0,
+          0.0
+        ],
+        "support_clearance_m": 0.03,
+        "hold_time_s": 1.0,
+        "is_success": false,
+        "is_safety_failure": true,
+        "termination_reason": "safety_failure",
+        "object_velocity_m_s": [
+          0.01,
+          0.0,
+          0.001
+        ],
+        "approach_complete": true,
+        "bilateral_contact": false,
+        "lift_joint_error_rad": 0.1,
+        "reach_joint_error_rad": 0.02,
+        "grasp_joint_error_rad": 0.3,
+        "reach_goal_distance_m": 0.1,
+        "orientation_error_rad": 0.2,
+        "action_rejected": false,
+        "lift_goal_joint_rad": [
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01
+        ],
+        "reach_goal_joint_rad": [
+          0.02,
+          0.02,
+          0.02,
+          0.02,
+          0.02,
+          0.02
+        ]
+      },
+      "previous": 2.5965209742245126,
+      "terminated": true,
+      "kwargs": {},
+      "expected": -27.161949973850017,
+      "terms": {
+        "potential_change": -2.5965209742245126,
+        "step_cost": -0.01,
+        "success_bonus": 0.0,
+        "safety_penalty": -25.0,
+        "drop_penalty": -0.0,
+        "dense_reach": 0.0671926459464302,
+        "dense_aperture": 0.2773783544280632,
+        "dense_grip": 0.0,
+        "dense_height": 0.0,
+        "lateral_penalty": -0.0,
+        "dense_hold": 0.1,
+        "speed_cost": -0.0
+      },
+      "context": "grasp_lift_1"
+    },
+    {
+      "task": "grasp_lift",
+      "info": {
+        "support_normal": [
+          0.0,
+          0.0,
+          1.0
+        ],
+        "object_position_m": [
+          0.4011,
+          0.0,
+          0.771
+        ],
+        "object_goal_m": [
+          0.4,
+          0.0,
+          0.79
+        ],
+        "grasp_distance_m": 0.001,
+        "actual_width_m": 0.02,
+        "contact_forces_n": [
+          0.08,
+          0.06,
+          0.0
+        ],
+        "support_clearance_m": 0.033,
+        "hold_time_s": 1.1,
+        "is_success": false,
+        "is_safety_failure": false,
+        "termination_reason": "dropped",
+        "object_velocity_m_s": [
+          0.011,
+          0.0,
+          0.001
+        ],
+        "approach_complete": true,
+        "bilateral_contact": true,
+        "lift_joint_error_rad": 0.11,
+        "reach_joint_error_rad": 0.022,
+        "grasp_joint_error_rad": 0.32999999999999996,
+        "reach_goal_distance_m": 0.11,
+        "orientation_error_rad": 0.22,
+        "action_rejected": false,
+        "lift_goal_joint_rad": [
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01
+        ],
+        "reach_goal_joint_rad": [
+          0.02,
+          0.02,
+          0.02,
+          0.02,
+          0.02,
+          0.02
+        ]
+      },
+      "previous": 11.880814394449933,
+      "terminated": true,
+      "kwargs": {},
+      "expected": -15.60822919541244,
+      "terms": {
+        "potential_change": -11.880814394449933,
+        "step_cost": -0.01,
+        "success_bonus": 0.0,
+        "safety_penalty": -0.0,
+        "drop_penalty": -5.0,
+        "dense_reach": 0.18006640107500885,
+        "dense_aperture": 0.3,
+        "dense_grip": 0.1,
+        "dense_height": 0.8025187979624802,
+        "lateral_penalty": -0.10999999999999899,
+        "dense_hold": 0.11000000000000001,
+        "speed_cost": -0.1
+      },
+      "context": "grasp_lift_1"
+    },
+    {
+      "task": "tabletop_pick",
+      "info": {
+        "support_normal": [
+          0.0,
+          0.0,
+          1.0
+        ],
+        "object_position_m": [
+          0.4,
+          0.0,
+          0.76
+        ],
+        "object_goal_m": [
+          0.4,
+          0.0,
+          0.79
+        ],
+        "grasp_distance_m": 0.04,
+        "actual_width_m": 0.06,
+        "contact_forces_n": [
+          0.0,
+          0.0,
+          0.01
+        ],
+        "support_clearance_m": 0.0,
+        "hold_time_s": 0.0,
+        "is_success": false,
+        "is_safety_failure": false,
+        "termination_reason": null,
+        "object_velocity_m_s": [
+          0.0,
+          0.0,
+          0.001
+        ],
+        "approach_complete": false,
+        "bilateral_contact": false,
+        "lift_joint_error_rad": 0.0,
+        "reach_joint_error_rad": 0.0,
+        "grasp_joint_error_rad": 0.0,
+        "reach_goal_distance_m": 0.0,
+        "orientation_error_rad": 0.0,
+        "action_rejected": false,
+        "lift_goal_joint_rad": [
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01
+        ],
+        "reach_goal_joint_rad": [
+          0.02,
+          0.02,
+          0.02,
+          0.02,
+          0.02,
+          0.02
+        ]
+      },
+      "previous": 2.5,
+      "terminated": false,
+      "kwargs": {
+        "action": [
+          1.0,
+          -2.0,
+          3.0,
+          -4.0,
+          5.0,
+          -6.0,
+          0.3
+        ]
+      },
+      "expected": 0.013774999999999999,
+      "terms": {
+        "potential_change": -0.0001250000000000018,
+        "step": -0.0001,
+        "joint_distance": -0.0,
+        "joint_alignment": 0.01,
+        "reach": 0.002,
+        "aperture": 0.002,
+        "grip": 0.0,
+        "height": 0.0,
+        "hold": 0.0,
+        "speed": -0.0,
+        "rejected": -0.0,
+        "success": 0.0,
+        "safety": -0.0,
+        "dropped": -0.0
+      },
+      "context": "tabletop_pick_0"
+    },
+    {
+      "task": "tabletop_pick",
+      "info": {
+        "support_normal": [
+          0.0,
+          0.0,
+          1.0
+        ],
+        "object_position_m": [
+          0.4001,
+          0.0,
+          0.761
+        ],
+        "object_goal_m": [
+          0.4,
+          0.0,
+          0.79
+        ],
+        "grasp_distance_m": 0.008,
+        "actual_width_m": 0.025,
+        "contact_forces_n": [
+          0.03,
+          0.0,
+          0.0
+        ],
+        "support_clearance_m": 0.003,
+        "hold_time_s": 0.1,
+        "is_success": false,
+        "is_safety_failure": false,
+        "termination_reason": null,
+        "object_velocity_m_s": [
+          0.001,
+          0.0,
+          0.001
+        ],
+        "approach_complete": false,
+        "bilateral_contact": false,
+        "lift_joint_error_rad": 0.01,
+        "reach_joint_error_rad": 0.002,
+        "grasp_joint_error_rad": 0.03,
+        "reach_goal_distance_m": 0.01,
+        "orientation_error_rad": 0.02,
+        "action_rejected": false,
+        "lift_goal_joint_rad": [
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01
+        ],
+        "reach_goal_joint_rad": [
+          0.02,
+          0.02,
+          0.02,
+          0.02,
+          0.02,
+          0.02
+        ]
+      },
+      "previous": 1.5084681646273577,
+      "terminated": false,
+      "kwargs": {
+        "action": [
+          1.0,
+          -2.0,
+          3.0,
+          -4.0,
+          5.0,
+          -6.0,
+          0.3
+        ]
+      },
+      "expected": -0.02189318463267542,
+      "terms": {
+        "potential_change": -7.542340823136761e-05,
+        "step": -0.0001,
+        "joint_distance": -4.0000000000000003e-07,
+        "joint_alignment": 0.009900498337491681,
+        "reach": 0.0017649938051691912,
+        "aperture": 9.354124476791804e-05,
+        "grip": 0.0,
+        "height": 0.0,
+        "hold": 5.000000000000001e-05,
+        "speed": -0.0,
+        "rejected": -0.0,
+        "success": 0.0,
+        "safety": -0.0,
+        "dropped": -0.0,
+        "action_target": -0.03221458030298367,
+        "far_jaw_action": -0.0013118143088891687
+      },
+      "context": "tabletop_pick_1"
+    },
+    {
+      "task": "tabletop_pick",
+      "info": {
+        "support_normal": [
+          0.0,
+          0.0,
+          1.0
+        ],
+        "object_position_m": [
+          0.4002,
+          0.0,
+          0.762
+        ],
+        "object_goal_m": [
+          0.4,
+          0.0,
+          0.79
+        ],
+        "grasp_distance_m": 0.001,
+        "actual_width_m": 0.02,
+        "contact_forces_n": [
+          0.08,
+          0.06,
+          0.0
+        ],
+        "support_clearance_m": 0.006,
+        "hold_time_s": 0.2,
+        "is_success": false,
+        "is_safety_failure": false,
+        "termination_reason": null,
+        "object_velocity_m_s": [
+          0.002,
+          0.0,
+          0.001
+        ],
+        "approach_complete": false,
+        "bilateral_contact": true,
+        "lift_joint_error_rad": 0.02,
+        "reach_joint_error_rad": 0.004,
+        "grasp_joint_error_rad": 0.06,
+        "reach_goal_distance_m": 0.02,
+        "orientation_error_rad": 0.04,
+        "action_rejected": false,
+        "lift_goal_joint_rad": [
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01
+        ],
+        "reach_goal_joint_rad": [
+          0.02,
+          0.02,
+          0.02,
+          0.02,
+          0.02,
+          0.02
+        ]
+      },
+      "previous": 5.812874103904703,
+      "terminated": false,
+      "kwargs": {
+        "action": [
+          1.0,
+          -2.0,
+          3.0,
+          -4.0,
+          5.0,
+          -6.0,
+          0.3
+        ]
+      },
+      "expected": -0.010518787607836179,
+      "terms": {
+        "potential_change": -0.0002906437051952349,
+        "step": -0.0001,
+        "joint_distance": -4.000000000000001e-06,
+        "joint_alignment": 0.009048374180359597,
+        "reach": 0.00155760156614281,
+        "aperture": 0.002,
+        "grip": 0.005,
+        "height": 0.0015372631026437241,
+        "hold": 0.00010000000000000002,
+        "speed": -0.0,
+        "rejected": -0.0,
+        "success": 0.0,
+        "safety": -0.0,
+        "dropped": -0.0,
+        "action_target": -0.029367382751787074
+      },
+      "context": "tabletop_pick_1"
+    },
+    {
+      "task": "tabletop_pick",
+      "info": {
+        "support_normal": [
+          0.0,
+          0.0,
+          1.0
+        ],
+        "object_position_m": [
+          0.40030000000000004,
+          0.0,
+          0.763
+        ],
+        "object_goal_m": [
+          0.4,
+          0.0,
+          0.79
+        ],
+        "grasp_distance_m": 0.04,
+        "actual_width_m": 0.06,
+        "contact_forces_n": [
+          0.0,
+          0.0,
+          0.01
+        ],
+        "support_clearance_m": 0.009000000000000001,
+        "hold_time_s": 0.30000000000000004,
+        "is_success": false,
+        "is_safety_failure": false,
+        "termination_reason": null,
+        "object_velocity_m_s": [
+          0.003,
+          0.0,
+          0.001
+        ],
+        "approach_complete": true,
+        "bilateral_contact": false,
+        "lift_joint_error_rad": 0.03,
+        "reach_joint_error_rad": 0.006,
+        "grasp_joint_error_rad": 0.09,
+        "reach_goal_distance_m": 0.03,
+        "orientation_error_rad": 0.06,
+        "action_rejected": false,
+        "lift_goal_joint_rad": [
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01
+        ],
+        "reach_goal_joint_rad": [
+          0.02,
+          0.02,
+          0.02,
+          0.02,
+          0.02,
+          0.02
+        ]
+      },
+      "previous": 2.420140870852194,
+      "terminated": false,
+      "kwargs": {
+        "action": [
+          1.0,
+          -2.0,
+          3.0,
+          -4.0,
+          5.0,
+          -6.0,
+          0.3
+        ]
+      },
+      "expected": -0.029405292344755526,
+      "terms": {
+        "potential_change": -0.00012100704354260916,
+        "step": -0.0001,
+        "joint_distance": -1.2000000000000002e-06,
+        "joint_alignment": 0.000818730753077982,
+        "reach": 0.0013745785575819444,
+        "aperture": 0.002,
+        "grip": 0.0,
+        "height": 0.0,
+        "hold": 0.00015000000000000004,
+        "speed": -0.0,
+        "rejected": -0.0,
+        "success": 0.0,
+        "safety": -0.0,
+        "dropped": -0.0,
+        "action_target": -0.03221458030298367,
+        "far_jaw_action": -0.0013118143088891687
+      },
+      "context": "tabletop_pick_1"
+    },
+    {
+      "task": "tabletop_pick",
+      "info": {
+        "support_normal": [
+          0.0,
+          0.0,
+          1.0
+        ],
+        "object_position_m": [
+          0.40040000000000003,
+          0.0,
+          0.764
+        ],
+        "object_goal_m": [
+          0.4,
+          0.0,
+          0.79
+        ],
+        "grasp_distance_m": 0.008,
+        "actual_width_m": 0.025,
+        "contact_forces_n": [
+          0.03,
+          0.0,
+          0.0
+        ],
+        "support_clearance_m": 0.012,
+        "hold_time_s": 0.4,
+        "is_success": false,
+        "is_safety_failure": false,
+        "termination_reason": null,
+        "object_velocity_m_s": [
+          0.004,
+          0.0,
+          0.001
+        ],
+        "approach_complete": true,
+        "bilateral_contact": false,
+        "lift_joint_error_rad": 0.04,
+        "reach_joint_error_rad": 0.008,
+        "grasp_joint_error_rad": 0.12,
+        "reach_goal_distance_m": 0.04,
+        "orientation_error_rad": 0.08,
+        "action_rejected": false,
+        "lift_goal_joint_rad": [
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01
+        ],
+        "reach_goal_joint_rad": [
+          0.02,
+          0.02,
+          0.02,
+          0.02,
+          0.02,
+          0.02
+        ]
+      },
+      "previous": 2.4077386578347686,
+      "terminated": false,
+      "kwargs": {
+        "action": [
+          1.0,
+          -2.0,
+          3.0,
+          -4.0,
+          5.0,
+          -6.0,
+          0.3
+        ]
+      },
+      "expected": -0.028269886483443023,
+      "terms": {
+        "potential_change": -0.00012038693289174063,
+        "step": -0.0001,
+        "joint_distance": -1.6000000000000001e-06,
+        "joint_alignment": 0.0007659283383646487,
+        "reach": 0.001213061319425267,
+        "aperture": 0.0019876910946424763,
+        "grip": 0.0,
+        "height": 0.0,
+        "hold": 0.00020000000000000004,
+        "speed": -0.0,
+        "rejected": -0.0,
+        "success": 0.0,
+        "safety": -0.0,
+        "dropped": -0.0,
+        "action_target": -0.03221458030298367
+      },
+      "context": "tabletop_pick_1"
+    },
+    {
+      "task": "tabletop_pick",
+      "info": {
+        "support_normal": [
+          0.0,
+          0.0,
+          1.0
+        ],
+        "object_position_m": [
+          0.4005,
+          0.0,
+          0.765
+        ],
+        "object_goal_m": [
+          0.4,
+          0.0,
+          0.79
+        ],
+        "grasp_distance_m": 0.001,
+        "actual_width_m": 0.02,
+        "contact_forces_n": [
+          0.08,
+          0.06,
+          0.0
+        ],
+        "support_clearance_m": 0.015,
+        "hold_time_s": 0.5,
+        "is_success": false,
+        "is_safety_failure": false,
+        "termination_reason": null,
+        "object_velocity_m_s": [
+          0.005,
+          0.0,
+          0.001
+        ],
+        "approach_complete": true,
+        "bilateral_contact": true,
+        "lift_joint_error_rad": 0.05,
+        "reach_joint_error_rad": 0.01,
+        "grasp_joint_error_rad": 0.15,
+        "reach_goal_distance_m": 0.05,
+        "orientation_error_rad": 0.1,
+        "action_rejected": false,
+        "lift_goal_joint_rad": [
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01
+        ],
+        "reach_goal_joint_rad": [
+          0.02,
+          0.02,
+          0.02,
+          0.02,
+          0.02,
+          0.02
+        ]
+      },
+      "previous": 7.63500582023899,
+      "terminated": false,
+      "kwargs": {
+        "action": [
+          1.0,
+          -2.0,
+          3.0,
+          -4.0,
+          5.0,
+          -6.0,
+          0.3
+        ]
+      },
+      "expected": -0.016030504485241587,
+      "terms": {
+        "potential_change": -0.0003817502910119508,
+        "step": -0.0001,
+        "joint_distance": -1e-05,
+        "joint_alignment": 0.0018887560283756184,
+        "reach": 0.0010705228570379807,
+        "aperture": 0.002,
+        "grip": 0.005,
+        "height": 0.0036193496721438384,
+        "hold": 0.00025,
+        "speed": -0.0,
+        "rejected": -0.0,
+        "success": 0.0,
+        "safety": -0.0,
+        "dropped": -0.0,
+        "action_target": -0.029367382751787074
+      },
+      "context": "tabletop_pick_1"
+    },
+    {
+      "task": "tabletop_pick",
+      "info": {
+        "support_normal": [
+          0.0,
+          0.0,
+          1.0
+        ],
+        "object_position_m": [
+          0.4006,
+          0.0,
+          0.766
+        ],
+        "object_goal_m": [
+          0.4,
+          0.0,
+          0.79
+        ],
+        "grasp_distance_m": 0.04,
+        "actual_width_m": 0.06,
+        "contact_forces_n": [
+          0.0,
+          0.0,
+          0.01
+        ],
+        "support_clearance_m": 0.018000000000000002,
+        "hold_time_s": 0.6000000000000001,
+        "is_success": false,
+        "is_safety_failure": false,
+        "termination_reason": null,
+        "object_velocity_m_s": [
+          0.006,
+          0.0,
+          0.001
+        ],
+        "approach_complete": true,
+        "bilateral_contact": false,
+        "lift_joint_error_rad": 0.06,
+        "reach_joint_error_rad": 0.012,
+        "grasp_joint_error_rad": 0.18,
+        "reach_goal_distance_m": 0.06,
+        "orientation_error_rad": 0.12,
+        "action_rejected": false,
+        "lift_goal_joint_rad": [
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01
+        ],
+        "reach_goal_joint_rad": [
+          0.02,
+          0.02,
+          0.02,
+          0.02,
+          0.02,
+          0.02
+        ]
+      },
+      "previous": 0.7443802941999329,
+      "terminated": false,
+      "kwargs": {
+        "action": [
+          1.0,
+          -2.0,
+          3.0,
+          -4.0,
+          5.0,
+          -6.0,
+          0.3
+        ]
+      },
+      "expected": 0.003073992842948699,
+      "terms": {
+        "potential_change": -3.721901470999711e-05,
+        "step": -0.0001,
+        "joint_distance": -3.6e-05,
+        "joint_alignment": 2.4787521766663587e-06,
+        "reach": 0.0009447331054820295,
+        "aperture": 0.002,
+        "grip": 0.0,
+        "height": 0.0,
+        "hold": 0.0003000000000000001,
+        "speed": -0.0,
+        "rejected": -0.0,
+        "success": 0.0,
+        "safety": -0.0,
+        "dropped": -0.0
+      },
+      "context": "tabletop_pick_0"
+    },
+    {
+      "task": "tabletop_pick",
+      "info": {
+        "support_normal": [
+          0.0,
+          0.0,
+          1.0
+        ],
+        "object_position_m": [
+          0.4007,
+          0.0,
+          0.767
+        ],
+        "object_goal_m": [
+          0.4,
+          0.0,
+          0.79
+        ],
+        "grasp_distance_m": 0.008,
+        "actual_width_m": 0.025,
+        "contact_forces_n": [
+          0.03,
+          0.0,
+          0.0
+        ],
+        "support_clearance_m": 0.021,
+        "hold_time_s": 0.7000000000000001,
+        "is_success": false,
+        "is_safety_failure": false,
+        "termination_reason": null,
+        "object_velocity_m_s": [
+          0.007,
+          0.0,
+          0.001
+        ],
+        "approach_complete": true,
+        "bilateral_contact": false,
+        "lift_joint_error_rad": 0.07,
+        "reach_joint_error_rad": 0.014,
+        "grasp_joint_error_rad": 0.21,
+        "reach_goal_distance_m": 0.07,
+        "orientation_error_rad": 0.14,
+        "action_rejected": true,
+        "lift_goal_joint_rad": [
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01
+        ],
+        "reach_goal_joint_rad": [
+          0.02,
+          0.02,
+          0.02,
+          0.02,
+          0.02,
+          0.02
+        ]
+      },
+      "previous": 2.433004824379852,
+      "terminated": false,
+      "kwargs": {
+        "action": [
+          1.0,
+          -2.0,
+          3.0,
+          -4.0,
+          5.0,
+          -6.0,
+          0.3
+        ]
+      },
+      "expected": -0.029140526324930114,
+      "terms": {
+        "potential_change": -0.00012165024121899126,
+        "step": -0.0001,
+        "joint_distance": -2.8000000000000003e-06,
+        "joint_alignment": 0.0006270890852730561,
+        "reach": 0.0008337240393570167,
+        "aperture": 0.0019876910946424763,
+        "grip": 0.0,
+        "height": 0.0,
+        "hold": 0.00035000000000000005,
+        "speed": -0.0,
+        "rejected": -0.0005,
+        "success": 0.0,
+        "safety": -0.0,
+        "dropped": -0.0,
+        "action_target": -0.03221458030298367
+      },
+      "context": "tabletop_pick_1"
+    },
+    {
+      "task": "tabletop_pick",
+      "info": {
+        "support_normal": [
+          0.0,
+          0.0,
+          1.0
+        ],
+        "object_position_m": [
+          0.40080000000000005,
+          0.0,
+          0.768
+        ],
+        "object_goal_m": [
+          0.4,
+          0.0,
+          0.79
+        ],
+        "grasp_distance_m": 0.001,
+        "actual_width_m": 0.02,
+        "contact_forces_n": [
+          0.08,
+          0.06,
+          0.0
+        ],
+        "support_clearance_m": 0.024,
+        "hold_time_s": 0.8,
+        "is_success": false,
+        "is_safety_failure": false,
+        "termination_reason": null,
+        "object_velocity_m_s": [
+          0.008,
+          0.0,
+          0.001
+        ],
+        "approach_complete": true,
+        "bilateral_contact": true,
+        "lift_joint_error_rad": 0.08,
+        "reach_joint_error_rad": 0.016,
+        "grasp_joint_error_rad": 0.24,
+        "reach_goal_distance_m": 0.08,
+        "orientation_error_rad": 0.16,
+        "action_rejected": false,
+        "lift_goal_joint_rad": [
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01
+        ],
+        "reach_goal_joint_rad": [
+          0.02,
+          0.02,
+          0.02,
+          0.02,
+          0.02,
+          0.02
+        ]
+      },
+      "previous": 9.272933896595642,
+      "terminated": false,
+      "kwargs": {
+        "action": [
+          1.0,
+          -2.0,
+          3.0,
+          -4.0,
+          5.0,
+          -6.0,
+          0.3
+        ]
+      },
+      "expected": -0.015662715802662226,
+      "terms": {
+        "potential_change": -0.00046364669482978015,
+        "step": -0.0001,
+        "joint_distance": -1.6000000000000003e-05,
+        "joint_alignment": 0.0006948345122280152,
+        "reach": 0.0007357588823428847,
+        "aperture": 0.002,
+        "grip": 0.005,
+        "height": 0.005453720249383729,
+        "hold": 0.0004000000000000001,
+        "speed": -0.0,
+        "rejected": -0.0,
+        "success": 0.0,
+        "safety": -0.0,
+        "dropped": -0.0,
+        "action_target": -0.029367382751787074
+      },
+      "context": "tabletop_pick_1"
+    },
+    {
+      "task": "tabletop_pick",
+      "info": {
+        "support_normal": [
+          0.0,
+          0.0,
+          1.0
+        ],
+        "object_position_m": [
+          0.40090000000000003,
+          0.0,
+          0.769
+        ],
+        "object_goal_m": [
+          0.4,
+          0.0,
+          0.79
+        ],
+        "grasp_distance_m": 0.04,
+        "actual_width_m": 0.06,
+        "contact_forces_n": [
+          0.0,
+          0.0,
+          0.01
+        ],
+        "support_clearance_m": 0.027,
+        "hold_time_s": 0.9,
+        "is_success": true,
+        "is_safety_failure": false,
+        "termination_reason": "success",
+        "object_velocity_m_s": [
+          0.009000000000000001,
+          0.0,
+          0.001
+        ],
+        "approach_complete": true,
+        "bilateral_contact": false,
+        "lift_joint_error_rad": 0.09,
+        "reach_joint_error_rad": 0.018000000000000002,
+        "grasp_joint_error_rad": 0.27,
+        "reach_goal_distance_m": 0.09,
+        "orientation_error_rad": 0.18,
+        "action_rejected": false,
+        "lift_goal_joint_rad": [
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01
+        ],
+        "reach_goal_joint_rad": [
+          0.02,
+          0.02,
+          0.02,
+          0.02,
+          0.02,
+          0.02
+        ]
+      },
+      "previous": 2.4838758370333154,
+      "terminated": true,
+      "kwargs": {
+        "action": [
+          1.0,
+          -2.0,
+          3.0,
+          -4.0,
+          5.0,
+          -6.0,
+          0.3
+        ]
+      },
+      "expected": 9.945179363588604,
+      "terms": {
+        "potential_change": -0.024838758370333155,
+        "step": -0.0001,
+        "joint_distance": -3.6000000000000003e-06,
+        "joint_alignment": 0.0005488116360940265,
+        "reach": 0.0006493049347166995,
+        "aperture": 0.002,
+        "grip": 0.0,
+        "height": 0.0,
+        "hold": 0.00045000000000000004,
+        "speed": -0.0,
+        "rejected": -0.0,
+        "success": 10.0,
+        "safety": -0.0,
+        "dropped": -0.0,
+        "action_target": -0.03221458030298367,
+        "far_jaw_action": -0.0013118143088891687
+      },
+      "context": "tabletop_pick_1"
+    },
+    {
+      "task": "tabletop_pick",
+      "info": {
+        "support_normal": [
+          0.0,
+          0.0,
+          1.0
+        ],
+        "object_position_m": [
+          0.401,
+          0.0,
+          0.77
+        ],
+        "object_goal_m": [
+          0.4,
+          0.0,
+          0.79
+        ],
+        "grasp_distance_m": 0.008,
+        "actual_width_m": 0.025,
+        "contact_forces_n": [
+          0.03,
+          0.0,
+          0.0
+        ],
+        "support_clearance_m": 0.03,
+        "hold_time_s": 1.0,
+        "is_success": false,
+        "is_safety_failure": true,
+        "termination_reason": "safety_failure",
+        "object_velocity_m_s": [
+          0.01,
+          0.0,
+          0.001
+        ],
+        "approach_complete": true,
+        "bilateral_contact": false,
+        "lift_joint_error_rad": 0.1,
+        "reach_joint_error_rad": 0.02,
+        "grasp_joint_error_rad": 0.3,
+        "reach_goal_distance_m": 0.1,
+        "orientation_error_rad": 0.2,
+        "action_rejected": false,
+        "lift_goal_joint_rad": [
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01
+        ],
+        "reach_goal_joint_rad": [
+          0.02,
+          0.02,
+          0.02,
+          0.02,
+          0.02,
+          0.02
+        ]
+      },
+      "previous": 2.506422238664534,
+      "terminated": true,
+      "kwargs": {
+        "action": [
+          1.0,
+          -2.0,
+          3.0,
+          -4.0,
+          5.0,
+          -6.0,
+          0.3
+        ]
+      },
+      "expected": -0.5538086848822336,
+      "terms": {
+        "potential_change": -0.02506422238664534,
+        "step": -0.0001,
+        "joint_distance": -4.000000000000001e-06,
+        "joint_alignment": 0.000513417119032592,
+        "reach": 0.0005730095937203802,
+        "aperture": 0.0019876910946424763,
+        "grip": 0.0,
+        "height": 0.0,
+        "hold": 0.0005,
+        "speed": -0.0,
+        "rejected": -0.0,
+        "success": 0.0,
+        "safety": -0.5,
+        "dropped": -0.0,
+        "action_target": -0.03221458030298367
+      },
+      "context": "tabletop_pick_1"
+    },
+    {
+      "task": "tabletop_pick",
+      "info": {
+        "support_normal": [
+          0.0,
+          0.0,
+          1.0
+        ],
+        "object_position_m": [
+          0.4011,
+          0.0,
+          0.771
+        ],
+        "object_goal_m": [
+          0.4,
+          0.0,
+          0.79
+        ],
+        "grasp_distance_m": 0.001,
+        "actual_width_m": 0.02,
+        "contact_forces_n": [
+          0.08,
+          0.06,
+          0.0
+        ],
+        "support_clearance_m": 0.033,
+        "hold_time_s": 1.1,
+        "is_success": false,
+        "is_safety_failure": false,
+        "termination_reason": "dropped",
+        "object_velocity_m_s": [
+          0.011,
+          0.0,
+          0.001
+        ],
+        "approach_complete": true,
+        "bilateral_contact": true,
+        "lift_joint_error_rad": 0.11,
+        "reach_joint_error_rad": 0.022,
+        "grasp_joint_error_rad": 0.32999999999999996,
+        "reach_goal_distance_m": 0.11,
+        "orientation_error_rad": 0.22,
+        "action_rejected": false,
+        "lift_goal_joint_rad": [
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01,
+          0.01
+        ],
+        "reach_goal_joint_rad": [
+          0.02,
+          0.02,
+          0.02,
+          0.02,
+          0.02,
+          0.02
+        ]
+      },
+      "previous": 10.084983696170438,
+      "terminated": true,
+      "kwargs": {
+        "action": [
+          1.0,
+          -2.0,
+          3.0,
+          -4.0,
+          5.0,
+          -6.0,
+          0.3
+        ]
+      },
+      "expected": -0.21560777480611706,
+      "terms": {
+        "potential_change": -0.10084983696170438,
+        "step": -0.0001,
+        "joint_distance": -2.2000000000000003e-05,
+        "joint_alignment": 0.00025561533206507395,
+        "reach": 0.000505679191609493,
+        "aperture": 0.002,
+        "grip": 0.005,
+        "height": 0.006420150383699842,
+        "hold": 0.00055,
+        "speed": -0.0,
+        "rejected": -0.0,
+        "success": 0.0,
+        "safety": -0.0,
+        "dropped": -0.1,
+        "action_target": -0.029367382751787074
+      },
+      "context": "tabletop_pick_1"
+    }
+  ],
+  "cartesian_cli_arguments": [
+    "Call(func=Attribute(value=Name(id='setup', ctx=Load()), attr='add_argument', ctx=Load()), args=[Constant(value='--json')], keywords=[keyword(arg='type', value=Name(id='Path', ctx=Load())), keyword(arg='default', value=Call(func=Name(id='Path', ctx=Load()), args=[Constant(value='outputs/grasp/ppo/tabletop_cartesian/validation/setup.json')], keywords=[]))])",
+    "Call(func=Attribute(value=Name(id='setup', ctx=Load()), attr='add_argument', ctx=Load()), args=[Constant(value='--output')], keywords=[keyword(arg='type', value=Name(id='Path', ctx=Load())), keyword(arg='help', value=Constant(value='Render traditional startup to GIF'))])",
+    "Call(func=Attribute(value=Name(id='train', ctx=Load()), attr='add_argument', ctx=Load()), args=[Constant(value='--stage')], keywords=[keyword(arg='choices', value=List(elts=[Constant(value='easy'), Constant(value='pinch'), Constant(value='approach'), Constant(value='lift'), Constant(value='full')], ctx=Load())), keyword(arg='default', value=Constant(value='full'))])",
+    "Call(func=Attribute(value=Name(id='train', ctx=Load()), attr='add_argument', ctx=Load()), args=[Constant(value='--run-dir')], keywords=[keyword(arg='required', value=Constant(value=True)), keyword(arg='type', value=Name(id='Path', ctx=Load()))])",
+    "Call(func=Attribute(value=Name(id='initialization', ctx=Load()), attr='add_argument', ctx=Load()), args=[Constant(value='--init-model')], keywords=[keyword(arg='type', value=Name(id='Path', ctx=Load()))])",
+    "Call(func=Attribute(value=Name(id='initialization', ctx=Load()), attr='add_argument', ctx=Load()), args=[Constant(value='--init-reach-model')], keywords=[keyword(arg='type', value=Name(id='Path', ctx=Load())), keyword(arg='help', value=Constant(value='Initialize a neural arm branch from the original PPO Reach'))])",
+    "Call(func=Attribute(value=Name(id='train', ctx=Load()), attr='add_argument', ctx=Load()), args=[Constant(value='--arm-speed-factor')], keywords=[keyword(arg='type', value=Name(id='float', ctx=Load())), keyword(arg='default', value=Constant(value=0.25))])",
+    "Call(func=Attribute(value=Name(id='train', ctx=Load()), attr='add_argument', ctx=Load()), args=[Constant(value='--freeze-arm-steps')], keywords=[keyword(arg='type', value=Name(id='int', ctx=Load())), keyword(arg='default', value=Constant(value=0)), keyword(arg='help', value=Constant(value='Keep the pretrained arm weights fixed during initial PPO updates'))])",
+    "Call(func=Attribute(value=Name(id='train', ctx=Load()), attr='add_argument', ctx=Load()), args=[Constant(value='--batch-size')], keywords=[keyword(arg='type', value=Name(id='int', ctx=Load()))])",
+    "Call(func=Attribute(value=Name(id='train', ctx=Load()), attr='add_argument', ctx=Load()), args=[Constant(value='--jaw-control')], keywords=[keyword(arg='choices', value=List(elts=[Constant(value='absolute'), Constant(value='delta')], ctx=Load()))])",
+    "Call(func=Attribute(value=Name(id='train', ctx=Load()), attr='add_argument', ctx=Load()), args=[Constant(value='--jaw-delta-scale')], keywords=[keyword(arg='type', value=Name(id='float', ctx=Load())), keyword(arg='help', value=Constant(value='Metres of jaw reference change per normalized action'))])",
+    "Call(func=Attribute(value=Name(id='train', ctx=Load()), attr='add_argument', ctx=Load()), args=[Constant(value='--reset-goal-gate')], keywords=[keyword(arg='action', value=Constant(value='store_true')), keyword(arg='help', value=Constant(value='Reinitialize the learnable lift gate for a secure grip'))])",
+    "Call(func=Attribute(value=Name(id='train', ctx=Load()), attr='add_argument', ctx=Load()), args=[Constant(value='--timesteps')], keywords=[keyword(arg='type', value=Name(id='int', ctx=Load())), keyword(arg='default', value=Constant(value=32768))])",
+    "Call(func=Attribute(value=Name(id='train', ctx=Load()), attr='add_argument', ctx=Load()), args=[Constant(value='--n-envs')], keywords=[keyword(arg='type', value=Name(id='int', ctx=Load())), keyword(arg='default', value=Constant(value=4))])",
+    "Call(func=Attribute(value=Name(id='train', ctx=Load()), attr='add_argument', ctx=Load()), args=[Constant(value='--n-steps')], keywords=[keyword(arg='type', value=Name(id='int', ctx=Load())), keyword(arg='default', value=Constant(value=256))])",
+    "Call(func=Attribute(value=Name(id='train', ctx=Load()), attr='add_argument', ctx=Load()), args=[Constant(value='--seed')], keywords=[keyword(arg='type', value=Name(id='int', ctx=Load())), keyword(arg='default', value=Constant(value=2027))])",
+    "Call(func=Attribute(value=Name(id='train', ctx=Load()), attr='add_argument', ctx=Load()), args=[Constant(value='--learning-rate')], keywords=[keyword(arg='type', value=Name(id='float', ctx=Load())), keyword(arg='default', value=Constant(value=0.0003))])",
+    "Call(func=Attribute(value=Name(id='train', ctx=Load()), attr='add_argument', ctx=Load()), args=[Constant(value='--std')], keywords=[keyword(arg='type', value=Name(id='float', ctx=Load())), keyword(arg='default', value=Constant(value=0.3))])",
+    "Call(func=Attribute(value=Name(id='train', ctx=Load()), attr='add_argument', ctx=Load()), args=[Constant(value='--jaw-std')], keywords=[keyword(arg='type', value=Name(id='float', ctx=Load())), keyword(arg='help', value=Constant(value='Override only the initial jaw standard deviation'))])",
+    "Call(func=Attribute(value=Name(id='train', ctx=Load()), attr='add_argument', ctx=Load()), args=[Constant(value='--exploration-profile')], keywords=[keyword(arg='choices', value=List(elts=[Constant(value='distance'), Constant(value='grasp_lift')], ctx=Load())), keyword(arg='default', value=Constant(value='grasp_lift')), keyword(arg='help', value=Constant(value='Use grasp geometry and real grip feedback to schedule noise; network means are unchanged'))])",
+    "Call(func=Attribute(value=Name(id='train', ctx=Load()), attr='add_argument', ctx=Load()), args=[Constant(value='--reset-exploration')], keywords=[keyword(arg='action', value=Constant(value='store_true'))])",
+    "Call(func=Attribute(value=Name(id='train', ctx=Load()), attr='add_argument', ctx=Load()), args=[Constant(value='--eval-every')], keywords=[keyword(arg='type', value=Name(id='int', ctx=Load())), keyword(arg='default', value=Constant(value=4096))])",
+    "Call(func=Attribute(value=Name(id='train', ctx=Load()), attr='add_argument', ctx=Load()), args=[Constant(value='--reset-critic')], keywords=[keyword(arg='action', value=Constant(value='store_true')), keyword(arg='help', value=Constant(value='Reset only the value network when changing rewards'))])",
+    "Call(func=Attribute(value=Name(id='train', ctx=Load()), attr='add_argument', ctx=Load()), args=[Constant(value='--reset-jaw')], keywords=[keyword(arg='action', value=Constant(value='store_true')), keyword(arg='help', value=Constant(value='Reinitialize only the jaw output at the fixed initial opening'))])",
+    "Call(func=Attribute(value=Name(id='train', ctx=Load()), attr='add_argument', ctx=Load()), args=[Constant(value='--adaptive-exploration')], keywords=[keyword(arg='action', value=Attribute(value=Name(id='argparse', ctx=Load()), attr='BooleanOptionalAction', ctx=Load())), keyword(arg='default', value=Constant(value=True)), keyword(arg='help', value=Constant(value='Reduce sampling noise near contact; learned action means are unchanged'))])",
+    "Call(func=Attribute(value=Name(id='train', ctx=Load()), attr='add_argument', ctx=Load()), args=[Constant(value='--max-steps')], keywords=[keyword(arg='type', value=Name(id='int', ctx=Load()))])",
+    "Call(func=Attribute(value=Name(id='train', ctx=Load()), attr='add_argument', ctx=Load()), args=[Constant(value='--control-mode')], keywords=[keyword(arg='choices', value=List(elts=[Constant(value='auto'), Constant(value='position'), Constant(value='pose')], ctx=Load()))])",
+    "Call(func=Attribute(value=Name(id='train', ctx=Load()), attr='add_argument', ctx=Load()), args=[Constant(value='--observation-source')], keywords=[keyword(arg='choices', value=List(elts=[Constant(value='state'), Constant(value='rgbd_hsv')], ctx=Load())), keyword(arg='help', value=Constant(value='Use camera-only object estimates; visual checkpoints have a separate observation contract'))])",
+    "Call(func=Attribute(value=Name(id='train', ctx=Load()), attr='add_argument', ctx=Load()), args=[Constant(value='--cache-startup')], keywords=[keyword(arg='action', value=Constant(value='store_true')), keyword(arg='help', value=Constant(value='Opt in to restoring a physically verified observation reset during training'))])",
+    "Call(func=Attribute(value=Name(id='evaluate', ctx=Load()), attr='add_argument', ctx=Load()), args=[Constant(value='--model')], keywords=[keyword(arg='required', value=Constant(value=True)), keyword(arg='type', value=Name(id='Path', ctx=Load()))])",
+    "Call(func=Attribute(value=Name(id='evaluate', ctx=Load()), attr='add_argument', ctx=Load()), args=[Constant(value='--episodes')], keywords=[keyword(arg='type', value=Name(id='int', ctx=Load())), keyword(arg='default', value=Constant(value=5))])",
+    "Call(func=Attribute(value=Name(id='evaluate', ctx=Load()), attr='add_argument', ctx=Load()), args=[Constant(value='--seed-start')], keywords=[keyword(arg='type', value=Name(id='int', ctx=Load())), keyword(arg='default', value=Constant(value=360000))])",
+    "Call(func=Attribute(value=Name(id='evaluate', ctx=Load()), attr='add_argument', ctx=Load()), args=[Constant(value='--saved-task')], keywords=[keyword(arg='action', value=Constant(value='store_true'))])",
+    "Call(func=Attribute(value=Name(id='evaluate', ctx=Load()), attr='add_argument', ctx=Load()), args=[Constant(value='--json')], keywords=[keyword(arg='required', value=Constant(value=True)), keyword(arg='type', value=Name(id='Path', ctx=Load()))])",
+    "Call(func=Attribute(value=Name(id='render', ctx=Load()), attr='add_argument', ctx=Load()), args=[Constant(value='--model')], keywords=[keyword(arg='required', value=Constant(value=True)), keyword(arg='type', value=Name(id='Path', ctx=Load()))])",
+    "Call(func=Attribute(value=Name(id='render', ctx=Load()), attr='add_argument', ctx=Load()), args=[Constant(value='--output')], keywords=[keyword(arg='required', value=Constant(value=True)), keyword(arg='type', value=Name(id='Path', ctx=Load()))])",
+    "Call(func=Attribute(value=Name(id='render', ctx=Load()), attr='add_argument', ctx=Load()), args=[Constant(value='--seed')], keywords=[keyword(arg='type', value=Name(id='int', ctx=Load())), keyword(arg='default', value=Constant(value=360000))])",
+    "Call(func=Attribute(value=Name(id='render', ctx=Load()), attr='add_argument', ctx=Load()), args=[Constant(value='--saved-task')], keywords=[keyword(arg='action', value=Constant(value='store_true'))])",
+    "Call(func=Attribute(value=Name(id='command', ctx=Load()), attr='add_argument', ctx=Load()), args=[Constant(value='--object-radius')], keywords=[keyword(arg='type', value=Name(id='float', ctx=Load())), keyword(arg='help', value=Constant(value='Evaluation disk radius in metres, up to 0.05; preserves full grasp criteria'))])",
+    "Call(func=Attribute(value=Name(id='command', ctx=Load()), attr='add_argument', ctx=Load()), args=[Constant(value='--observation-pose')], keywords=[keyword(arg='choices', value=List(elts=[Constant(value='table_down'), Constant(value='forward')], ctx=Load())), keyword(arg='help', value=Constant(value='Fixed task preset, independent of object location'))])"
+  ],
+  "checkpoint_cases": {
+    "reach_ppo": {
+      "path": "outputs/reach/ppo/random_goal_relative_seed2026/final/model.zip",
+      "file_sha256": "5772649162dd4635551f8b9acb32e4b90d7dfc6220c74d1cb75b2c51ac9ae52a",
+      "policy_class": "stable_baselines3.common.policies.MultiInputActorCriticPolicy",
+      "weights": "088f61ce75ff3f71ac3b592783c8d407d4a5475baef751f7b404d27cfb118b98",
+      "optimizer": "c83124bd3a2f3aaaad071fcaac7d4a97b7449611de34921bb33b42819c6241d3",
+      "action": [
+        -0.02759821154177189,
+        -0.12724295258522034,
+        0.007821556180715561
+      ],
+      "raw_action": [
+        -0.02759821154177189,
+        -0.12724295258522034,
+        0.007821556180715561
+      ]
+    },
+    "reach_sac": {
+      "path": "outputs/reach/sac/formal_seed2026/final/model.zip",
+      "file_sha256": "34f1b1ddfa172e16b8e3861c4feab1db12ab1972b9191c8d300766b69dbfd418",
+      "policy_class": "stable_baselines3.sac.policies.MultiInputPolicy",
+      "weights": "60db653d0826f30b942b8299809f3f357cf64b2b30b2398fd3dd8c73fe0236c1",
+      "optimizer": "a43c8f2da50ee42f193fab2df8183b174846da759019c65948f0a296d7394892",
+      "action": [
+        -0.034802258014678955,
+        -0.06382590532302856,
+        0.23234057426452637
+      ],
+      "raw_action": [
+        -0.034802258014678955,
+        -0.06382590532302856,
+        0.23234057426452637
+      ]
+    },
+    "bc": {
+      "path": "outputs/imitation/bc/fit_seed2026/best_bc.pt",
+      "file_sha256": "af059a26c78f0cb5eb40075ddfdf16ad1e1e18821660396ac44bd9dfe04eb8b8",
+      "policy_class": "realman_rl_simtoreal.imitation.bc.BCNetwork",
+      "weights": "6544af76c7ca6c4e59ee9119051322117f8df7bdc4bb55c55fe193b9818698d4",
+      "optimizer": null,
+      "action": [
+        0.9936542510986328,
+        -0.40895482897758484,
+        -1.0
+      ],
+      "raw_action": [
+        0.9936542510986328,
+        -0.40895482897758484,
+        -1.0
+      ]
+    },
+    "grasp_ppo": {
+      "path": "outputs/grasp/ppo/precision_goal_seed2027/final/model.zip",
+      "file_sha256": "0e4c7837ec7e2b608b67a6accb52a970a6490cf2d9852aacd3be8489bbec1f1a",
+      "policy_class": "stable_baselines3.common.policies.ActorCriticPolicy",
+      "weights": "faaf1cba510df424f2565f00c925b85858e87ed849eae2087a0a17ac6630da27",
+      "optimizer": "59f854122cc8e76fe70fbfa01c9e067e922d34247381158f316a9c03a83269bd",
+      "action": [
+        -0.009801884181797504,
+        -0.006972464732825756,
+        -0.017187900841236115,
+        -0.7575911283493042
+      ],
+      "raw_action": [
+        -0.009801884181797504,
+        -0.006972464732825756,
+        -0.017187900841236115,
+        -0.7575911283493042
+      ]
+    },
+    "joint_tabletop_ppo": {
+      "path": "outputs/grasp/ppo/tabletop_unfold25_explore_seed2027/checkpoints/step_00016384/model.zip",
+      "file_sha256": "f74182bc00a41cd0d468ed736eeaa0cf8f95f070fd73bdff304a90f98ec6bfc9",
+      "policy_class": "realman_rl_simtoreal.rl.ppo_tabletop.SmoothJointPolicy",
+      "weights": "5b1041de9a588a58ca99fcc55a5375c45079ceff224d02faec438cf61ee30d66",
+      "optimizer": "65db2e167f10bfe7902576996a8e8fe1284f9cca4c88e442585b3519e49a4f4a",
+      "action": [
+        0.10950333625078201,
+        19.236852645874023,
+        89.66939544677734,
+        0.002017700346186757,
+        71.09403228759766,
+        0.019474392756819725,
+        -0.8758389353752136
+      ],
+      "raw_action": [
+        0.10950333625078201,
+        19.236852645874023,
+        89.66939544677734,
+        0.002017700346186757,
+        71.09403228759766,
+        0.019474392756819725,
+        -0.8758389353752136
+      ]
+    },
+    "cartesian_ppo": {
+      "path": "outputs/grasp/ppo/tabletop_cartesian/fixed_observation_v2/full_table_down_seed2029_r13_secure_grip/checkpoints/step_00003072/model.zip",
+      "file_sha256": "86294aff70798e7b55db23440163121326a937cd90e73eb5e3479429858e3a8c",
+      "policy_class": "realman_rl_simtoreal.rl.cartesian_reach_policy.ReachGraspPPOPolicy",
+      "weights": "1464d504c04395248cbc67787e96872b3dae1dd23e0a5dca065ab8556768b4e6",
+      "optimizer": "71dd390539d54a6ce673b9ca574b69f14a6984631e04c3e6ae5f289afa60440a",
+      "action": [
+        -0.04518596827983856,
+        -0.1669597029685974,
+        0.6091794371604919,
+        -0.010094009339809418
+      ],
+      "raw_action": [
+        -0.04518596827983856,
+        -0.1669597029685974,
+        0.6091794371604919,
+        -0.010094009339809418
+      ]
+    },
+    "visual_ppo": {
+      "path": "outputs/grasp/ppo/tabletop_cartesian/vision_rgbd_v1/full_table_down_seed2031_r4_zero_anchored/checkpoints/step_00000768/model.zip",
+      "file_sha256": "64045c9a8ebadf1ce4cdd8d0faf750439ed1f69722412865786747434cae3542",
+      "policy_class": "realman_rl_simtoreal.rl.vision_policy.VisualReachGraspPPOPolicy",
+      "weights": "2d7d856c5a044f7a2ff5cda000e416422d60c5b4c1791f2955c1e679d5c8cec5",
+      "optimizer": "fec5c07eccbf212765d54b9e226225680c84db9df6aed46026010f19bcd7bd40",
+      "action": [
+        -0.025160832330584526,
+        -0.14687082171440125,
+        0.6048567891120911,
+        -0.007801570929586887
+      ],
+      "raw_action": [
+        -0.025160832330584526,
+        -0.14687082171440125,
+        0.6048567891120911,
+        -0.007801570929586887
+      ]
+    }
+  },
+  "physics_method_ast_sha256": {
+    "src/realman_rl_simtoreal/simulation/tabletop_runtime.py:TabletopRuntime:advance": "31bf886885a11cc923fc51f202c43328b6b6309ce96619db66da9acbdcaa41e7",
+    "src/realman_rl_simtoreal/simulation/tabletop_runtime.py:TabletopRuntime:prepare": "3ed1fd1f318b6afd11430a52fbb24403186679eae5c61971528127bd067824af",
+    "src/realman_rl_simtoreal/simulation/tabletop_runtime.py:TabletopRuntime:reset_zero": "8db0d86b4ca6fd8b39bbf351396c6430a6af38e375a23b2cd46ef89594841744",
+    "src/realman_rl_simtoreal/simulation/tabletop_runtime.py:TabletopRuntime:reference_is_safe": "148d545b4c5b970cb224d851b2f44406d777139c807fb0e6dd9c630845524f26",
+    "src/realman_rl_simtoreal/simulation/tabletop_runtime.py:TabletopRuntime:path_is_safe": "a7de635c3f63b82f7c898e6b680f41e321a202d122b8eab5a7453c4dbb760193",
+    "src/realman_rl_simtoreal/envs/tabletop_cartesian_env.py:TabletopCartesianEnv:step": "b93bcfcdccc601bd7f080ef6fd6bcded23047bd440dfb237ce070c841c762fcb",
+    "src/realman_rl_simtoreal/envs/tabletop_cartesian_env.py:TabletopCartesianEnv:_hold_tick": "28ad04c4d996597fbbc8b807a24de01863ca2a4d50ae21a294260e311c171f9c",
+    "src/realman_rl_simtoreal/envs/tabletop_cartesian_vision_env.py:VisionTabletopCartesianEnv:step": "2e2aac448817d237fcafb779ed2ff1efba4008b2e80e93bc8200a4934d7de83f",
+    "src/realman_rl_simtoreal/envs/tabletop_cartesian_vision_env.py:VisionTabletopCartesianEnv:reset": "9b65d975bae79898842acd346dd86faf328ad8fd8a5ddb58200c7fb2efc0aa06"
+  },
+  "reward_contexts": {
+    "grasp_lift_0": {
+      "config": {
+        "mass": 0.01,
+        "friction": 0.7,
+        "object_radius": 0.002,
+        "approach_distance": 0.02,
+        "initial_width": 0.06,
+        "lift_height": 0.03,
+        "height_tolerance": 0.002,
+        "hold_seconds": 2.0,
+        "action_scale": 0.001,
+        "control_period": 0.05,
+        "physics_timestep": 0.001,
+        "max_episode_steps": 700,
+        "workspace_radius": 0.06,
+        "max_home_joint_delta": 0.4363323129985824,
+        "gripper_reference_speed": 0.5,
+        "record_physics": false
+      },
+      "reward": {
+        "name": "grasp_goal_dense_v5",
+        "gamma": 0.995,
+        "reach_scale_m": 0.01,
+        "width_scale_m": 0.025,
+        "cube_width_m": 0.02,
+        "reach_weight": 2.0,
+        "aperture_weight": 1.0,
+        "grip_weight": 2.0,
+        "height_weight": 8.0,
+        "hold_weight": 2.0,
+        "step_cost": 0.01,
+        "success_bonus": 1000.0,
+        "safety_penalty": 25.0,
+        "drop_penalty": 5.0,
+        "dense_reach": 0.2,
+        "dense_aperture": 0.3,
+        "dense_grip": 0.1,
+        "dense_height": 1.0,
+        "dense_hold": 0.2,
+        "speed_cost": 0.1,
+        "dense_lateral": 0.5,
+        "close_distance_m": 0.005,
+        "open_distance_m": 0.015
+      }
+    },
+    "grasp_lift_1": {
+      "config": {
+        "mass": 0.01,
+        "friction": 0.7,
+        "object_radius": 0.002,
+        "approach_distance": 0.02,
+        "initial_width": 0.06,
+        "lift_height": 0.03,
+        "height_tolerance": 0.002,
+        "hold_seconds": 2.0,
+        "action_scale": 0.001,
+        "control_period": 0.05,
+        "physics_timestep": 0.001,
+        "max_episode_steps": 700,
+        "workspace_radius": 0.06,
+        "max_home_joint_delta": 0.4363323129985824,
+        "gripper_reference_speed": 0.5,
+        "record_physics": false
+      },
+      "reward": {
+        "name": "grasp_goal_dense_v5",
+        "gamma": 0.995,
+        "reach_scale_m": 0.01,
+        "width_scale_m": 0.025,
+        "cube_width_m": 0.02,
+        "reach_weight": 2.0,
+        "aperture_weight": 1.0,
+        "grip_weight": 2.0,
+        "height_weight": 8.0,
+        "hold_weight": 2.0,
+        "step_cost": 0.01,
+        "success_bonus": 1000.0,
+        "safety_penalty": 25.0,
+        "drop_penalty": 5.0,
+        "dense_reach": 0.2,
+        "dense_aperture": 0.3,
+        "dense_grip": 0.1,
+        "dense_height": 1.0,
+        "dense_hold": 0.2,
+        "speed_cost": 0.1,
+        "goal_lateral_scale_m": 0.005,
+        "lateral_potential_weight": 2.0,
+        "dense_lateral": 0.5,
+        "pregrasp_width_m": 0.06,
+        "close_distance_m": 0.005,
+        "open_distance_m": 0.015
+      }
+    },
+    "tabletop_pick_0": {
+      "config": {
+        "initial_q_deg": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "initial_pose_name": "zero_development",
+        "initial_pose_source": "https://github.com/RealManRobot/ros2_rm_robot/blob/humble/rm_moveit2_config/rm_63_config/config/initial_positions.yaml",
+        "object_xy": [
+          0.4,
+          0.0
+        ],
+        "object_radius": 0.0,
+        "mass": 0.01,
+        "friction": 0.7,
+        "initial_width": 0.06,
+        "lift_height": 0.03,
+        "goal_height": null,
+        "height_tolerance": 0.002,
+        "hold_seconds": 2.0,
+        "joint_action_scale": 0.008726646259971648,
+        "control_period": 0.05,
+        "physics_timestep": 0.001,
+        "max_episode_steps": 1200,
+        "gripper_reference_speed": 0.5,
+        "gripper_command_margin": 0.002,
+        "record_physics": false,
+        "reference_smoothing": 1.0,
+        "start_fraction": 1.0,
+        "pregrasp_height": 0.06,
+        "reject_unsafe_targets": true,
+        "approach_waypoint_height": 0.0,
+        "approach_waypoint_tolerance": 0.015
+      },
+      "reward": {
+        "name": "tabletop_pick_action_regularized_v6",
+        "gamma": 0.995,
+        "scale": 0.01,
+        "success": 1000.0,
+        "safety": 50.0,
+        "drop": 10.0,
+        "joint_potential": 10.0,
+        "reach_potential": 1.0,
+        "orientation_potential": 0.5,
+        "aperture_potential": 1.0,
+        "grip_potential": 2.0,
+        "height_potential": 8.0,
+        "hold_potential": 2.0,
+        "step": 0.01,
+        "rejection": 0.05,
+        "dense_joint": 1.0,
+        "dense_reach": 0.2,
+        "dense_aperture": 0.2,
+        "dense_grip": 0.5,
+        "dense_height": 0.8,
+        "dense_hold": 0.1,
+        "speed_cost": 0.1,
+        "pregrasp_joint_weight": 0.1,
+        "approach_joint_scale": 0.2,
+        "grasp_joint_scale": 0.03,
+        "action_target_scale_rad": 0.1,
+        "far_jaw_action_weight": 0.5
+      }
+    },
+    "tabletop_pick_1": {
+      "config": {
+        "initial_q_deg": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "initial_pose_name": "zero_development",
+        "initial_pose_source": "https://github.com/RealManRobot/ros2_rm_robot/blob/humble/rm_moveit2_config/rm_63_config/config/initial_positions.yaml",
+        "object_xy": [
+          0.4,
+          0.0
+        ],
+        "object_radius": 0.0,
+        "mass": 0.01,
+        "friction": 0.7,
+        "initial_width": 0.06,
+        "lift_height": 0.03,
+        "goal_height": null,
+        "height_tolerance": 0.002,
+        "hold_seconds": 2.0,
+        "joint_action_scale": 0.008726646259971648,
+        "control_period": 0.05,
+        "physics_timestep": 0.001,
+        "max_episode_steps": 1200,
+        "gripper_reference_speed": 0.5,
+        "gripper_command_margin": 0.002,
+        "record_physics": false,
+        "reference_smoothing": 1.0,
+        "start_fraction": 1.0,
+        "pregrasp_height": 0.06,
+        "reject_unsafe_targets": true,
+        "approach_waypoint_height": 0.0,
+        "approach_waypoint_tolerance": 0.015
+      },
+      "reward": {
+        "name": "tabletop_pick_action_regularized_v6",
+        "gamma": 0.995,
+        "scale": 0.01,
+        "success": 1000.0,
+        "safety": 50.0,
+        "drop": 10.0,
+        "joint_potential": 10.0,
+        "reach_potential": 1.0,
+        "orientation_potential": 0.5,
+        "aperture_potential": 1.0,
+        "grip_potential": 2.0,
+        "height_potential": 8.0,
+        "hold_potential": 2.0,
+        "step": 0.01,
+        "rejection": 0.05,
+        "dense_joint": 1.0,
+        "dense_reach": 0.2,
+        "dense_aperture": 0.2,
+        "dense_grip": 0.5,
+        "dense_height": 0.8,
+        "dense_hold": 0.1,
+        "speed_cost": 0.1,
+        "binary_contact_joint_goal": true,
+        "pregrasp_joint_weight": 0.1,
+        "approach_joint_scale": 0.2,
+        "grasp_joint_scale": 0.03,
+        "action_target_weight": 1.0,
+        "action_target_scale_rad": 0.1,
+        "far_jaw_action_weight": 0.5
+      }
+    }
+  }
+}

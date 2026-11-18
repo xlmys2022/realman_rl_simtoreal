@@ -4,7 +4,6 @@ Training and inference never construct the staged grasp controller. Curriculum
 stages change only the declared reset distance, lift height and hold duration.
 """
 import copy
-import hashlib
 import json
 from pathlib import Path
 
@@ -17,9 +16,10 @@ from stable_baselines3.common.monitor import Monitor
 from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv, VecCheckNan
 
 from ..envs.grasp_lift_env import GraspLiftEnv
+from .common.artifacts import parameter_hashes, optimizer_steps
+from ..utils.artifacts import experiment_metadata
 from ..tasks.grasp_lift import GRASP_LIFT_CONFIG
 from ..evaluation.grasp_lift import evaluate
-from ..utils.artifacts import experiment_metadata
 from .common.artifacts import append_json,write_json
 
 
@@ -175,20 +175,6 @@ def make_training_env(config,n_envs,seed,reward=None,randomize_height=False,rand
     vector=DummyVecEnv([factory]) if n_envs==1 else SubprocVecEnv([factory for _ in range(n_envs)],start_method='fork')
     vector.seed(seed)
     return VecCheckNan(vector,raise_exception=True)
-
-
-def parameter_hashes(model):
-    groups={key:hashlib.sha256() for key in ('actor','critic','all')}
-    for name,tensor in model.policy.state_dict().items():
-        data=name.encode()+tensor.detach().cpu().contiguous().numpy().tobytes()
-        groups['all'].update(data)
-        if name.startswith(('mlp_extractor.policy_net.','action_net.','log_std')):groups['actor'].update(data)
-        if name.startswith(('mlp_extractor.value_net.','value_net.')):groups['critic'].update(data)
-    return {key:value.hexdigest() for key,value in groups.items()}
-
-
-def optimizer_steps(model):
-    return max((int(s['step'].item()) for s in model.policy.optimizer.state.values() if 'step' in s),default=0)
 
 
 def validate_model(model,config):

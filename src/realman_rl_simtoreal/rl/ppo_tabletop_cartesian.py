@@ -11,6 +11,8 @@ from stable_baselines3.common.callbacks import BaseCallback
 from stable_baselines3.common.monitor import Monitor
 from stable_baselines3.common.vec_env import DummyVecEnv,SubprocVecEnv,VecCheckNan
 from stable_baselines3.common.logger import configure
+from ..utils.artifacts import write_json as _write_json, append_json, file_hashes, archive_sources, file_sha256
+from .common.artifacts import optimizer_steps
 from ..tasks.tabletop_cartesian import CartesianTabletopConfig as Config
 from ..paths import PROJECT_ROOT as ROOT, TABLETOP_CARTESIAN_SCENE as DEFAULT_SCENE
 from ..envs.factory import make_tabletop_cartesian_env as TabletopEnv
@@ -42,8 +44,7 @@ def environment_config(stage,*,observation_pose='table_down',control_mode='auto'
 
 
 def write_json(path,value):
-    path=Path(path);path.parent.mkdir(parents=True,exist_ok=True)
-    path.write_text(json.dumps(value,indent=2,ensure_ascii=False)+'\n')
+    return _write_json(path,value,ensure_ascii=False,allow_nan=True)
 
 
 def hashes(model):
@@ -56,25 +57,18 @@ def hashes(model):
     return {k:v.hexdigest() for k,v in result.items()}
 
 
-def optimizer_steps(model):
-    return max((int(s['step'].item()) for s in model.policy.optimizer.state.values() if 'step' in s),default=0)
-
-
 def provenance():
     files=list((ROOT/'src/realman_rl_simtoreal').rglob('*.py'))+[DEFAULT_SCENE]
-    return {str(p.relative_to(ROOT)):hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(files)}
+    return file_hashes(sorted(files),root=ROOT)
 
 
 def capture_sources(folder):
     """Archive this feature's sources and shared assets as training provenance."""
-    import zipfile
     files={ROOT/name for name in provenance()}
     files.update((ROOT/'assets').rglob('*'))
     files.update((ROOT/'scripts').rglob('*.py'))
     files.update(ROOT/name for name in ('pyproject.toml','requirements.txt','requirements-rl.txt','requirements-vision.txt'))
-    with zipfile.ZipFile(Path(folder)/'source_snapshot.zip','w',zipfile.ZIP_DEFLATED) as archive:
-        for path in sorted(files):
-            if path.is_file():archive.write(path,path.relative_to(ROOT))
+    archive_sources(Path(folder)/'source_snapshot.zip',sorted(files),root=ROOT)
 
 
 def save(model,folder,config,complete=True):
@@ -187,7 +181,7 @@ class Audit(BaseCallback):
                          max_clearance_m=info['max_clearance_m'],max_bilateral_force_n=info['max_bilateral_force_n'],
                          min_tcp_object_distance_m=info['min_tcp_object_distance_m'])
                 self.episodes.append(row)
-                with (self.folder/'episodes.jsonl').open('a') as f:f.write(json.dumps(row)+'\n')
+                append_json(self.folder/'episodes.jsonl',row,allow_nan=True)
         return True
 
 
@@ -287,14 +281,14 @@ def train(args):
         gain=arm_speed_factor*reach_saved['environment']['action_scale']/(cfg.action_scale*cfg.cartesian_smoothing)
         initialize_reach_arm(model.policy,reach_source.policy,gain)
         transfer=dict(kind='ppo_reach_arm',model=str(Path(init_reach).resolve()),
-            sha256=hashlib.sha256(Path(init_reach).read_bytes()).hexdigest(),source_steps=reach_source.num_timesteps,
+            sha256=file_sha256(init_reach),source_steps=reach_source.num_timesteps,
             source_parameter_hashes=hashes(reach_source),optimizer_reset=True,source_observation_transform=reach_transform.config,
             action_gain=gain,arm_speed_factor=arm_speed_factor,source_environment=reach_saved['environment'])
     elif args.init_model:
         state=json.loads((Path(args.init_model).parent/'state.json').read_text())
         if not state['completed_update']:raise ValueError('Transfer requires a completed PPO update')
         model.policy.load_state_dict(source.policy.state_dict(),strict=True)
-        transfer=dict(model=str(Path(args.init_model).resolve()),sha256=hashlib.sha256(Path(args.init_model).read_bytes()).hexdigest(),
+        transfer=dict(model=str(Path(args.init_model).resolve()),sha256=file_sha256(args.init_model),
                       source_steps=source.num_timesteps,source_parameter_hashes=hashes(source),optimizer_reset=True,
                       source_startup_contract=saved.get('startup_contract'),
                       startup_changed=saved.get('startup_contract')!=startup_contract(cfg.observation_pose),

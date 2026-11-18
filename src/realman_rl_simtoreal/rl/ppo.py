@@ -10,6 +10,7 @@ from stable_baselines3 import PPO
 from stable_baselines3.common.callbacks import BaseCallback
 
 from ..utils.metrics import MotionStats
+from .common.artifacts import parameter_hashes, optimizer_steps
 from ..tasks.reach import task_environment, ENV_CONFIG, OBSERVATION_MODES, TASKS
 from ..tasks.rewards import REWARD_COMPONENT_KEYS, validate_checkpoint_reward
 from .common.observation import checkpoint_transform, validate_model_observation
@@ -65,21 +66,6 @@ def make_ppo(env,seed,*,n_steps=512,batch_size=64,n_epochs=10,initial_model=None
             optimizer_reset=True, rollout_reset=True)
         model.set_random_seed(seed)
     return model, parameters
-
-
-def parameter_hashes(model):
-    groups={key:hashlib.sha256() for key in ('actor','critic','all')}
-    for name,tensor in model.policy.state_dict().items():
-        data=name.encode()+tensor.detach().cpu().contiguous().numpy().tobytes()
-        groups['all'].update(data)
-        if name.startswith(('mlp_extractor.policy_net.','action_net.','log_std')):groups['actor'].update(data)
-        if name.startswith(('mlp_extractor.value_net.','value_net.')):groups['critic'].update(data)
-    return {key:value.hexdigest() for key,value in groups.items()}
-
-
-def optimizer_steps(model):
-    # Adam's own per-parameter counters: different from PPO._n_updates (epochs).
-    return max((int(state['step'].item()) for state in model.policy.optimizer.state.values() if 'step' in state),default=0)
 
 
 def crossed_thresholds(previous,current,interval):

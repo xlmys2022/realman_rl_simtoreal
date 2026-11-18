@@ -1,6 +1,5 @@
 """PPO-only joint-space tabletop pickup, goal features and immutable evaluation."""
 import copy
-import hashlib
 from pathlib import Path
 import json
 
@@ -16,6 +15,7 @@ from stable_baselines3.common.vec_env import DummyVecEnv,SubprocVecEnv,VecCheckN
 
 from ..envs.tabletop_pick_env import TabletopPickEnv
 from ..paths import PROJECT_ROOT,TABLETOP_PICK_SCENE
+from ..utils.artifacts import file_hashes
 from ..tasks.tabletop_pick import TABLETOP_PICK_CONFIG
 from ..evaluation.grasp_lift import rollout
 from ..evaluation.metrics import summarize_grasp_episodes
@@ -226,8 +226,8 @@ def metadata():
         'envs/tabletop_pick_env.py','tasks/tabletop_pick.py','envs/grasp_lift_env.py','rl/ppo_tabletop.py',
         'simulation/model.py','simulation/control.py','simulation/kinematics.py',
         'simulation/grasp_contact.py','simulation/gripper.py','evaluation/grasp_lift.py')]
-    def hashes(paths):return {str(p.relative_to(PROJECT_ROOT)):hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(paths)}
-    return dict(assets=hashes(assets),sources=hashes(sources),observation_dim=56,action_dim=7,
+    return dict(assets=file_hashes(sorted(assets),root=PROJECT_ROOT),
+        sources=file_hashes(sorted(sources),root=PROJECT_ROOT),observation_dim=56,action_dim=7,
         action_semantics=[f'joint_{j}_position_deg' for j in range(1,7)]+['absolute_gripper_opening'])
 
 

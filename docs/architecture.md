@@ -4,7 +4,7 @@
 
 ## 当前结构审计（2026-11-18）
 
-以实际代码为准的目录、依赖和六阶段计划见 [STRUCTURE_AUDIT](validation/STRUCTURE_AUDIT.md)。新增桌面笛卡尔 / RGB-D 代码目前包括 `simulation/tabletop_runtime.py`、`cartesian_controller.py`、`tool_kinematics.py`、`rgbd_camera.py`，`envs/tabletop_cartesian_env.py` / `tabletop_cartesian_vision_env.py`，`perception/rgbd.py` 和三个独立可序列化 Policy 模块。后文早期任务说明保留其语义，不能据旧目录简图认为视觉功能尚不存在。
+以实际代码为准的目录、依赖和六阶段计划见 [STRUCTURE_AUDIT](validation/STRUCTURE_AUDIT.md)。桌面笛卡尔 / RGB-D 代码包括 `simulation/tabletop_runtime.py`、`cartesian_controller.py`、`tool_kinematics.py`、`rgbd_camera.py`，`envs/tabletop_cartesian_env.py` / `tabletop_cartesian_vision_env.py`，`perception/rgbd.py` 和三个独立可序列化 Policy 模块。后文早期任务说明保留其语义，不能据旧目录简图认为视觉功能尚不存在。
 
 ## 目录
 
@@ -26,6 +26,8 @@ realman_rl_simtoreal/
 │   │   ├── ppo_tabletop.py
 │   │   ├── sac_monitoring.py
 │   │   └── sac_diagnostics.py
+│   ├── cli/{__init__,tabletop_cartesian}.py
+│   ├── visualization/{__init__,tabletop_cartesian}.py
 │   ├── evaluation/{__init__,reach,grasp_lift,metrics,baselines}.py
 │   ├── perception/rgbd.py
 │   ├── imitation/{bc,bc_to_sac}.py
@@ -77,7 +79,9 @@ flowchart TD
 
 `rl/` 负责模型创建、训练、优化状态和 checkpoint。`evaluate_ppo` / `evaluate_model` 是保留的算法薄适配：选择确定性预测、编码观测、核对原始动作与 Box 裁剪、保护参数 / 训练计数，然后调用 Evaluation 执行 Episode；它们不创建第二套环境步进循环。SAC 直接用共享 Reach 协议。BC 的薄适配只提供权重指纹检查，训练与示范采集继续在 imitation。
 
-`utils/metrics.py` 保存训练与评估都使用的 `MotionStats` 及余弦辅助，只有 NumPy 依赖；没有让训练基础设施反向依赖 Reach 或 GraspLift 的执行器。`utils/artifacts.py` 的 `experiment_metadata()` 为训练、评估和演示共享资源 / 源码指纹，避免来源记录依赖一个评估实现。
+`utils/metrics.py` 保存训练与评估都使用的 `MotionStats` 及余弦辅助，只有 NumPy 依赖；没有让训练基础设施反向依赖 Reach 或 GraspLift 的执行器。`utils/artifacts.py` 提供公共 JSON / JSONL、文件 SHA256、版本、源码归档与空目录检查；调用者保留各自 JSON 选项、来源集合、排序和路径键。`experiment_metadata()` 继续保留局部抓取的原始来源定义。`rl/common/artifacts.py` 兼容原文件操作名称，另保存模型参数 / Adam 计数等 RL 状态工具。
+
+`cli/tabletop_cartesian.py` 统一四个笛卡尔命令的参数和调度；`visualization/tabletop_cartesian.py` 负责 MuJoCo 回放与图像生成。原 scripts 路径不变，原 `utils/tabletop_cartesian_cli.py` / `tabletop_cartesian_render.py` 只保留兼容转发。
 
 `TabletopPickEnv` 使用独立的 `tabletop_pick.xml`，复用现有抓取环境的逐物理步保持判据及执行器保护。完整 reset 在仿真时间零设置用户批准的全零起点和 60 mm 开口；课程 reset 显式记录与抓取上方关节姿态的插值比例。七维动作直接给出六轴绝对角度（度）和夹爪绝对开口，经过同步限速及碰撞预检后由真实执行器执行。私有 IK 计算观测目标、奖励和探索坐标，可选的接近子目标仅切换目标特征。目标高度与课程成功门槛可分别配置。
 

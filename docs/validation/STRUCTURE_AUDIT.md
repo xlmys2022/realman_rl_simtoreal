@@ -262,3 +262,12 @@ MUJOCO_GL=egl python -I -m unittest discover -s tests -v
 真值 / 视觉各一组固定与半径 0.02 m 随机位置基准：seed 850000 / 870000 / 910000 / 920000；分别 1290 / 1297 / 1513 / 1475 个策略步，87950 / 88300 / 99100 / 97200 个 1 ms 物理步，均 success。记录每个物理步的 qpos / qvel / ctrl / actuator force，以及每个策略步的 TCP 位姿、夹爪开口、接触、动作接受比例、奖励、完整 info、观测和 RGB-D 帧摘要，供后续逐元素对照。权重、优化器和计数均保持不变。以上为本轮真实执行结果，不引用历史成功率代替新验证。
 
 变更文件：本审计、architecture.md、FILE_MAP.md、README.md。文件地图现在列出实际全部 Python 文件和静态调用者；历史报告原样保留。此阶段只修正文档与现状不一致的问题，没有移动任务或合并算法。
+
+## 阶段 2：公共产物工具与入口职责
+
+- `utils/artifacts.py` 成为 JSON / JSONL、单文件与调用者指定集合的 SHA256、依赖版本、ZIP 快照、空输出目录检查的唯一文件操作实现。`rl/common/artifacts.py` 保留原导入接口和 Reach 的原来源文件集合。Cartesian、GraspLift、关节桌面的来源范围 / 排序 / 路径键不变；新实验按当前源码计算真实指纹，旧实验不改写。
+- 完全相同的 `parameter_hashes`、Adam `optimizer_steps` 进入 `rl/common/artifacts.py`；原 PPO / Grasp / Cartesian 名称继续可导入。Cartesian 的 actor_mean 排除 log_std 的不同定义保留。所有模型保存 / 加载留在算法模块。
+- 笛卡尔解析实现进入 `cli/tabletop_cartesian.py`，回放实现进入 `visualization/tabletop_cartesian.py`，原 utils 两个路径仅转发公开名称；原四个 scripts 路径及所有参数不变。没有把单个调用者的离线分析脚本抽成框架。
+- 新增 `tests/test_refactor_contracts.py` 和基线 fixture：测试原 JSON 字节 / NaN 规则、ZIP 内容 / 成员顺序、来源选择、不可覆盖目录、共享 helper、全量旧 CLI 参数 AST、旧导入转发、24 组奖励基准、8 个策略类及关键物理 / 完成方法冻结，以及 7 类旧模型只读加载 / 推理。扩充 package 测试，覆盖新轻量包和四个旧 CLI help。
+
+验证：`MUJOCO_GL=egl python -I -m unittest discover -s tests -p test_refactor_contracts.py -v`：12 / 12 通过，0 失败 / 错误 / 跳过；同样命令 `-p test_package.py`：10 / 10 通过，0 失败 / 错误 / 跳过。七类模型固定输入的 raw / applied 动作、完整权重和优化器摘要均与修改前逐位相同；没有训练。变更文件为上述公共工具、4 个 PPO 模块、两个新包及旧兼容模块、4 个脚本、2 个测试与 fixture、架构 / 文件地图 / 本报告。
