@@ -283,3 +283,15 @@ MUJOCO_GL=egl python -I -m unittest discover -s tests -v
 另实际执行真值旧模型 seed 850000 / 870000 两个完整回合，分别 1290 / 1297 策略步、87950 / 88300 物理步。与修改前记录相比，physics、states、observations、raw_actions、actions 最大绝对差均 **0**；比较容差为物理 / 观测 `atol=1e-12, rtol=0`、动作 `atol=0, rtol=0`。完整任务结果 / 每步 JSON（除当前源码 sources）逐字段相同。权重、完整优化器和训练计数不变。独立 `python -I -c` 验证只导入新评估器不会加载 Torch 或 SB3。
 
 变更：新评估器、新评估接口测试、PPO 薄适配、common 中 optimizer_state_hash、原 Cartesian 测试 mock、架构 / 文件地图 / 本报告。
+
+## 阶段 4：最小 Runtime 接口与局部迁移
+
+保留既有 TabletopRuntime，不新建平行机器人类。新增 get_joint_state（位置、速度、实际参考的独立副本）与 get_gripper_state（开口、速度），复用原 Gripper；同一夹爪导数公式提取为 Gripper.get_velocity，原 absolute-jaw 参考换算提取为 get_reference_width。最新真值 / 视觉环境及 CartesianController 改用这些读取，原数据字段 / 单位不变。
+
+避免了一个潜在行为改变：视觉观测不需要实际参考角度的验证，因此 measured gripper state 不额外转换 / 验证 ctrl；get_reference_width 仅在原本进行该换算的真值 absolute 路径使用。没有改变 FK / IK 算法、controller 回溯、Runtime.advance / prepare / reset_zero / 安全方法或环境 step / hold 方法。没有提取奖励、视觉检测或成功条件到 Runtime。
+
+最小接口设计及单位、所有权见 architecture.md。旧 Reach 的 TCP / 25×2ms、本地抓取保护和关节桌面动作语义不同，未强制迁移；它们本来已经复用 model / kinematics / control / gripper。这个阶段解决已确认重复的状态读取与夹爪速度公式，不声称所有任务初始化都可等价合并。
+
+实际测试：同前述 discover 命令，`-p test_tabletop_runtime.py` 3 项；`-p test_tabletop_cartesian.py -k CartesianPhysicsTests -k FixedObservationTests -k PoseControlTests` 18 项；`-p test_refactor_contracts.py` 12 项，合计 **33 通过，0 失败 / 错误 / 跳过**。覆盖副本不改变 live qpos / qvel / ctrl、请求宽度与实际参考的区别、50 次 1ms observer、真实夹持与保持、IK/Jacobian、位置 / 姿态动作及 7 类模型兼容。
+
+旧真值模型两个完整 seed 850000 / 870000 再次执行，逐物理步 / 策略步所有数组最大差 **0**，完整结果 / 每步 JSON（sources 除外）相同，优化器 / 参数 / 计数不变。改动文件：Runtime、Gripper、CartesianController、两个最新环境、新 Runtime 测试与文档。

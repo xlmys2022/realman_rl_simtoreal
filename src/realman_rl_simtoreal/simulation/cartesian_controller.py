@@ -43,7 +43,7 @@ class CartesianController:
         workspace_limited=not np.array_equal(candidate,clipped)
         candidate=clipped
         self.last_fraction=0.;self.last_reason='no_bounded_solution'
-        start=robot.data.ctrl[robot.actuator_ids].copy()
+        start=robot.get_joint_state()['reference_rad']
         target=start.copy();accepted=self.reference.copy();accepted_rotation=self.orientation.copy()
         if (workspace_limited and np.linalg.norm(candidate-self.reference)<1e-12
                 and np.linalg.norm(rotation_vector(candidate_rotation,self.orientation))<1e-12):

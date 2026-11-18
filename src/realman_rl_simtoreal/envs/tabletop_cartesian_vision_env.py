@@ -9,7 +9,7 @@ import numpy as np
 from .tabletop_cartesian_env import TabletopCartesianEnv
 from ..perception.rgbd import OrangeCubeDetector,VisualTracker
 from ..simulation.rgbd_camera import MujocoRgbdCamera
-from ..simulation.gripper import MAX_WIDTH,LINK_X,LINK_Z
+from ..simulation.gripper import MAX_WIDTH
 from ..tasks.tabletop_cartesian_reward import calculate
 
 VISION_CONTRACT=dict(name='wrist_rgbd_hsv_cube_v4',
@@ -51,9 +51,8 @@ class VisionTabletopCartesianEnv(TabletopCartesianEnv):
         tcp_world,_=robot.tcp_pose();tcp=base_rotation.T@(tcp_world-base_position)
         tcp_velocity=base_rotation.T@robot.tcp_velocity()
         position=visual['position_m'];offset=position-tcp;goal_error=self._visual_goal-position
-        angle=float(robot.data.qpos[robot.gripper.qadr[0]])
-        width=robot.gripper.get_width()
-        width_speed=2*(LINK_X*np.sin(angle)+LINK_Z*np.cos(angle))*robot.data.qvel[robot.gripper.vadr[0]]
+        gripper=robot.get_gripper_state()
+        width=gripper['width_m'];width_speed=gripper['velocity_m_s']
         enclosure=np.exp(-(np.linalg.norm(offset[:2])/.006)**2-(max(0.,abs(offset[2]+.003)-.012)/.01)**2)
         aperture=np.exp(-((width-self.config.vision_cube_size)/.004)**2)
         compression=np.clip((width-self._jaw_reference-.010)/.010,0,1)

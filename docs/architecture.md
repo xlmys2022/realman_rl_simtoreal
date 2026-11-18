@@ -152,6 +152,20 @@ PPO 指纹覆盖全体参数、num_timesteps、_n_updates、Adam 每参数 step�
 
 SE(3)、演示序列和文本格式仍位于 utils。没有新的抽象基类、训练器、第三方依赖或自动环境注册。
 
+## 最新机器人运行时的最小接口
+
+保留具体 `simulation.TabletopRuntime`，不增加只有一个实现的抽象基类，也不强制迁移全部历史环境。当前公共接口为：
+
+- `reset_zero(object_xy)` / `prepare(object_xy, tick)`：明确复位与传统启动；prepare 仍沿用原物理轨迹或显式训练缓存。
+- `get_joint_state()`：SI 单位的关节位置、速度和实际参考，返回独立数组副本。
+- `get_gripper_state()`：实际开口与编码器推算的开口速度；`Gripper.get_reference_width()` 独立读取实际执行器参考，仅在原本需要它的路径调用，避免新增安全验证时机。
+- `tcp_pose()` / `tcp_velocity()` / `tcp_angular_velocity()`：现有真实工具位姿与 Jacobian 运动量。
+- `kinematics.solve_ik()` 与 `CartesianController.execute()`：复用原 ToolKinematics / DLS IK 和笛卡尔回溯，不另建 FK / IK。
+- `reference_is_safe()` / `path_is_safe()` / `advance(target, width, observer)`：原安全检查与 50 × 1 ms 同步物理执行。
+- `forces()` / `raw_forces()`：保持 inward grasp force 与原接触法向力的不同定义和读取顺序。
+
+最新笛卡尔环境、视觉环境与控制器只迁移状态读取；关节参考限幅、夹爪约束、每个 1 ms 的 recorder → grasp_forces → observer 顺序及任务 hold 计算不变。Runtime 不计算任务奖励 / 完成，也不检测视觉目标。Reach 的旧 TCP 与 25 × 2 ms、局部抓取保护和关节桌面动作不同，未强行替换；继续复用已有 model / kinematics / control / gripper。
+
 ## 观测、动作和奖励契约
 
 默认 `observation_mode="legacy"` 的原始 Dict 保持 `observation(27)`、`achieved_goal(3)`、`desired_goal(3)`。27维依次为：q(6)、qvel(6)、实际末端(3)、目标减实际(3)、命令位置(3)、实际ctrl(6)。原始观测为float64，位置单位为米，角度为弧度。
