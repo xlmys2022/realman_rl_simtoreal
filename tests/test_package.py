@@ -16,7 +16,11 @@ from unittest.mock import Mock, patch
 from realman_rl_simtoreal.paths import PROJECT_ROOT as ROOT
 
 
-SCRIPT_PATHS = {'train_ppo_reach': 'train/train_ppo_reach.py',
+SCRIPT_PATHS = {'train_ppo_tabletop_cartesian':'train/train_ppo_tabletop_cartesian.py',
+ 'evaluate_ppo_tabletop_cartesian':'evaluate/evaluate_ppo_tabletop_cartesian.py',
+ 'render_ppo_tabletop_cartesian':'demos/render_ppo_tabletop_cartesian.py',
+ 'move_to_observation_pose':'demos/move_to_observation_pose.py',
+ 'train_ppo_reach': 'train/train_ppo_reach.py',
  'train_sac_reach': 'train/train_sac_reach.py',
  'train_bc_reach': 'train/train_bc_reach.py',
  'collect_reach_demonstrations': 'train/collect_reach_demonstrations.py',
@@ -65,6 +69,8 @@ import realman_rl_simtoreal.rl.common
 import realman_rl_simtoreal.imitation
 import realman_rl_simtoreal.utils
 import realman_rl_simtoreal.evaluation
+import realman_rl_simtoreal.cli
+import realman_rl_simtoreal.visualization
 assert '/src/realman_rl_simtoreal/' in package.__file__
 assert not any(n in sys.modules for n in ('mujoco','glfw','Robotic_Arm','torch','stable_baselines3'))
 ''')
@@ -138,7 +144,7 @@ for constructor in (lambda:RealManFK(),lambda:RealManIK(kin.limits)):
         self.assertTrue(direct['dir_info']['editable'])
         from setuptools import find_packages
         discovered = set(find_packages(where=str(ROOT/'src'), include=['realman_rl_simtoreal*']))
-        for suffix in ('tasks','rl','rl.common','imitation','utils','evaluation'):
+        for suffix in ('tasks','rl','rl.common','imitation','utils','evaluation','cli','visualization'):
             self.assertIn('realman_rl_simtoreal.'+suffix, discovered)
 
     def test_canonical_import_graph_has_no_scripts_or_cycles(self):
@@ -204,8 +210,17 @@ for constructor in (lambda:RealManFK(),lambda:RealManIK(kin.limits)):
 
     def test_existing_argparse_entries_help_from_other_directory(self):
         # Builders have no argparse interface and are exercised by byte-for-byte asset tests.
-        names = [name for name in SCRIPT_PATHS if not name.startswith('build_')]
-        for name in names:
+        script_paths = {name:path for name,path in SCRIPT_PATHS.items() if not name.startswith('build_')}
+        # Include every actual argparse/shared-CLI entry, including later task additions.
+        for path in (ROOT/'scripts').rglob('*.py'):
+            imports = [node for node in ast.walk(ast.parse(path.read_text()))
+                       if isinstance(node, (ast.Import, ast.ImportFrom))]
+            if any((isinstance(node, ast.Import) and any(a.name=='argparse' for a in node.names))
+                   or (isinstance(node, ast.ImportFrom) and
+                       (node.module=='argparse' or (node.module or '').endswith('cli.tabletop_cartesian')))
+                   for node in imports):
+                script_paths[path.stem] = str(path.relative_to(ROOT/'scripts'))
+        for name,script_path in sorted(script_paths.items()):
             if name in ('train_ppo_reach','train_sac_reach','train_bc_reach',
                         'collect_reach_demonstrations','evaluate_ppo_reach','evaluate_sac_reach',
                         'evaluate_bc_reach','compare_sac_boundary','diagnose_sac_reach',
@@ -214,7 +229,7 @@ for constructor in (lambda:RealManFK(),lambda:RealManIK(kin.limits)):
             if name.startswith('plot_') and util.find_spec('matplotlib') is None:
                 continue
             with self.subTest(script=name):
-                result = subprocess.run([sys.executable,'-I',str(ROOT/'scripts'/SCRIPT_PATHS[name]),'--help'],
+                result = subprocess.run([sys.executable,'-I',str(ROOT/'scripts'/script_path),'--help'],
                                         cwd='/tmp',capture_output=True,text=True,timeout=30)
                 self.assertEqual(result.returncode,0,result.stderr)
                 self.assertIn('usage:',result.stdout)

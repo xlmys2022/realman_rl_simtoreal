@@ -8,7 +8,7 @@ import numpy as np
 from ..tasks.tabletop_cartesian import CartesianTabletopConfig as Config
 from ..simulation.tabletop_runtime import TabletopRuntime as Runtime
 from ..simulation.cartesian_controller import CartesianController
-from ..simulation.gripper import MAX_WIDTH,angle_to_width,LINK_X,LINK_Z
+from ..simulation.gripper import MAX_WIDTH
 from ..tasks.tabletop_cartesian_reward import calculate,potential
 from ..simulation.observation_profiles import OBSERVATION_POSES
 from ..simulation.grasp_metrics import CONTACT_MEASUREMENT
@@ -104,6 +104,7 @@ class TabletopCartesianEnv(gym.Env):
 
     def _info(self):
         r=self.robot;data=r.data
+        joints=r.get_joint_state()
         position=data.qpos[r.object_qadr:r.object_qadr+3].copy()
         object_rotation=data.xmat[r.object_body].reshape(3,3)
         bottom_radius=.01*np.sum(abs(object_rotation[2,:]))
@@ -128,22 +129,22 @@ class TabletopCartesianEnv(gym.Env):
             grasp_orientation_error_rad=float(np.linalg.norm(orientation_error)),
             grasp_orientation_error_vector=orientation_error.tolist(),
             angular_tracking_error=tracking_error.tolist(),tcp_angular_velocity_rad_s=r.tcp_angular_velocity().tolist(),
-            joint_position_rad=data.qpos[r.kinematics.qadr].tolist(),
-            joint_reference_rad=data.ctrl[r.actuator_ids].tolist(),camera=r.camera_frame(),
+            joint_position_rad=joints['position_rad'].tolist(),
+            joint_reference_rad=joints['reference_rad'].tolist(),camera=r.camera_frame(),
             startup=copy.deepcopy(self.startup),observation_valid=True,is_success=False,
             is_safety_failure=False,termination_reason=None,detail=None,**self._last_ik)
 
     def _observation(self,info):
         r=self.robot;tcp=np.asarray(info['tcp_position_m']);position=np.asarray(info['object_position_m'])
-        gripper=r.gripper;angle=float(r.data.qpos[gripper.qadr[0]])
-        width_speed=2*(LINK_X*np.sin(angle)+LINK_Z*np.cos(angle))*r.data.qvel[gripper.vadr[0]]
+        gripper=r.gripper
+        width_speed=gripper.get_velocity()
         value=np.concatenate([
             (tcp-r.base_position)/.5,np.asarray(info['tcp_velocity_m_s'])/.05,
             (position-tcp)/.05,(self.goal-position)/.05,
             np.asarray(info['object_velocity_m_s'])/.05,np.asarray(info['object_angular_velocity_rad_s'])/.1,
             [info['gripper_width_m']/MAX_WIDTH,width_speed/.04,
              (self._jaw_reference if self.config.jaw_control=='delta' else
-              angle_to_width(float(r.data.ctrl[gripper.actuator_id])))/MAX_WIDTH],
+              gripper.get_reference_width())/MAX_WIDTH],
             np.asarray(info['contact_forces_n'])/np.array([.2,.2,.1]),[self._stable_ticks/self._required_ticks],
             (self.controller.reference-tcp)/.01,[self.controller.last_fraction]]).astype(np.float32)
         # Fixed metric scaling; no IK-solved joint targets enter the observation.

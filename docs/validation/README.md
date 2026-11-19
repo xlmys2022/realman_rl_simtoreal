@@ -4,6 +4,8 @@
 
 2026-11-15 的输出整理保留所有原始实验文件。当前结果入口见 [outputs 导航](../../outputs/README.md)；历史输出地址与新地址的对应关系见 [输出目录说明](../OUTPUTS.md)。旧目录链接已从 outputs 根目录移除，历史报告中的输出路径统一按迁移表查找。
 
+- [渐进式结构审计](STRUCTURE_AUDIT.md)：实际基线树、全部源码依赖、确认重复与语义差异、六阶段记录。
+- [六阶段结构重构验证](STRUCTURE_REFACTOR_VALIDATION.md)：共享产物、CLI / 回放、独立桌面评估、Runtime、视觉组合、原任务奖励迁移及模型 / 物理回归。
 - [腕部 RGB-D 视觉 PPO 完整抓取](TABLETOP_VISION_VALIDATION.md)：固定位置 3/3、半径 2 cm 随机位置 3/3，无安全终止。物体观测、目标和结束判断来自相机；79 项相关测试以及 10,601 个控制周期的观测与网络动作重算通过。仅验证理想仿真 RGB-D、20 mm 正立方块，未部署真机。
 - [固定观测起点的桌面末端 PPO](TABLETOP_CARTESIAN_VALIDATION.md)：保留的真值观测模式，固定位置 3/3，半径 1/2/5 cm 各 18/20，合计 54/60；与视觉成绩分别记录。
 - [零位起点的桌面 PPO 抓取抬升](TABLETOP_PPO_VALIDATION.md)：七维 PPO，从六轴全零、60 mm 开口开始，固定场景复测 20/20，离台 28.679 mm、稳定保持 2.031 秒；437 项回归通过。选中来源链 112640 步，模型、原始动作、权重来源和回放均已保存。
@@ -13,7 +15,7 @@
 - [20 cm 随机 Reach 续训及验证](../../README.md#20-cm-随机-reach-续训)使用 goal_relative_v3 观测、限速笛卡尔参考轨迹和 PPO 权重迁移，新增 49152 步训练。独立 100 目标成功 97/100，2 次超时、1 次 IK 失败；目标半径 3.19–19.99 cm，成功回合平均误差 0.773 mm，351 项回归测试通过。
 - [5 mm 三维随机 Reach 验证及复现命令](../../README.md#5-mm-三维随机-reach-验证)采用 goal_relative_v1 观测与 reach_progress_v1 奖励。训练种子 2026、2027、2028 的模型在相同 1000 个新目标上分别成功 1000/1000，共计 3000 回合，八个空间象限均通过，平均实际末端误差 0.859–0.862 mm，零超时、零安全终止。
 - [Evaluation 层重构](EVALUATION_REFACTOR_VALIDATION.md)：独立 Reach / GraspLift、规则与 BC 闭环评估，指标和历史 JSON 协议兼容。
-- [项目结构重构（本次）](PROJECT_ORGANIZATION_REFACTOR.md)
+- [早期项目布局重构](PROJECT_ORGANIZATION_REFACTOR.md)
 - [初始模型检查](VALIDATION.md)
 - [动力学](DYNAMICS_VALIDATION.md)
 - [运动学](KINEMATICS_VALIDATION.md)

@@ -4,7 +4,6 @@ Training and inference never construct the staged grasp controller. Curriculum
 stages change only the declared reset distance, lift height and hold duration.
 """
 import copy
-import hashlib
 import json
 from pathlib import Path
 
@@ -17,36 +16,15 @@ from stable_baselines3.common.monitor import Monitor
 from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv, VecCheckNan
 
 from ..envs.grasp_lift_env import GraspLiftEnv
-from ..tasks.grasp_lift import GRASP_LIFT_CONFIG
-from ..evaluation.grasp_lift import evaluate
 from ..utils.artifacts import experiment_metadata
-from .common.artifacts import append_json,write_json
+from ..tasks.grasp_lift import GRASP_LIFT_CONFIG, CURRICULUM, REWARD, aperture_score, goal_alignment, potential, shaped_reward
+from ..evaluation.grasp_lift import evaluate
+from .common.artifacts import append_json, write_json, parameter_hashes, optimizer_steps
 
 
 ENCODING=dict(name='grasp_relative_v1',input_dim=41,output_dim=41,
     method='asinh on position errors/displacements at 1mm; all other features unchanged',
     position_slice=[12,21],command_lag_slice=[38,41],running_normalization=False)
-REWARD=dict(name='grasp_goal_dense_v5',gamma=.995,reach_scale_m=.01,
-    width_scale_m=.025,cube_width_m=.02,reach_weight=2.,aperture_weight=1.,
-    grip_weight=2.,height_weight=8.,hold_weight=2.,step_cost=.01,
-    success_bonus=1000.,safety_penalty=25.,drop_penalty=5.,dense_reach=.2,
-    dense_aperture=.3,dense_grip=.1,dense_height=1.,dense_hold=.2,speed_cost=.1,
-    goal_lateral_scale_m=.005,lateral_potential_weight=2.,dense_lateral=.5,
-    pregrasp_width_m=.06,close_distance_m=.005,open_distance_m=.015)
-CURRICULUM=dict(
-    pinch=dict(approach_distance=0.,initial_width=.022,lift_height=.005,hold_seconds=.2,max_episode_steps=300),
-    easy=dict(approach_distance=.005,initial_width=.04,lift_height=.005,hold_seconds=.2,max_episode_steps=300),
-    precision=dict(approach_distance=.005,initial_width=.04,lift_height=.005,height_tolerance=.005/15,
-                   hold_seconds=.2,max_episode_steps=500),
-    lift=dict(approach_distance=.005,initial_width=.04,lift_height=.015,height_tolerance=.001,
-              hold_seconds=.5,max_episode_steps=500),
-    lift_full=dict(approach_distance=.005,initial_width=.04,lift_height=.03,hold_seconds=2.,max_episode_steps=700),
-    approach=dict(approach_distance=.01,initial_width=.06,lift_height=.03,hold_seconds=2.,max_episode_steps=700),
-    approach_mid=dict(approach_distance=.015,initial_width=.06,lift_height=.03,hold_seconds=2.,max_episode_steps=700),
-    approach_easy=dict(approach_distance=.02,initial_width=.06,lift_height=.005,height_tolerance=.005/15,
-                       hold_seconds=.2,max_episode_steps=500),
-    medium=dict(approach_distance=.01,lift_height=.015,hold_seconds=.5,max_episode_steps=500),
-    full=dict())
 PPO_PARAMETERS=dict(learning_rate=3e-4,n_steps=128,batch_size=256,n_epochs=10,
     gamma=.995,gae_lambda=.95,clip_range=.2,ent_coef=.001,vf_coef=.5,max_grad_norm=.5,
     target_kl=.05,policy_kwargs=dict(net_arch=dict(pi=[128,128],vf=[128,128]),log_std_init=-1.),device='cpu')
@@ -64,67 +42,6 @@ def encode(observation):
     value[...,12:21]=np.arcsinh(value[...,12:21]*50.)
     value[...,38:41]=np.arcsinh(value[...,38:41]*10.)
     return value
-
-
-def goal_alignment(info,reward):
-    if 'goal_lateral_scale_m' not in reward:return 1.,0.
-    n=np.asarray(info['support_normal'])
-    error=np.asarray(info['object_position_m'])-info['object_goal_m']
-    ratio=float(np.linalg.norm(error-n*(error@n))/reward['goal_lateral_scale_m'])
-    return float(np.exp(-ratio)),min(ratio,5.)
-
-
-def aperture_score(info,reward):
-    """Reward room to approach before rewarding a cube-sized aperture.
-
-    This changes only the state reward. All four commands still come from PPO.
-    Historical reward contracts retain their original near-weighted score.
-    """
-    near=1-np.tanh(info['grasp_distance_m']/reward['reach_scale_m'])
-    desired=reward['cube_width_m']
-    if 'pregrasp_width_m' in reward:
-        fraction=np.clip((info['grasp_distance_m']-reward['close_distance_m'])/
-                         (reward['open_distance_m']-reward['close_distance_m']),0,1)
-        desired+=fraction*(reward['pregrasp_width_m']-desired)
-        weight=1.
-    else:weight=near
-    return float(weight*np.exp(-((info['actual_width_m']-desired)/reward['width_scale_m'])**2))
-
-
-def potential(info,config,reward=REWARD):
-    near=1-np.tanh(info['grasp_distance_m']/reward['reach_scale_m'])
-    aperture=aperture_score(info,reward)
-    grip=float(np.clip(min(info['contact_forces_n'][:2])/.05,0,1))
-    height=float(np.clip(info['support_clearance_m']/config['lift_height'],0,1))
-    held=float(np.clip(info['hold_time_s']/config['hold_seconds'],0,1))
-    alignment,lateral=goal_alignment(info,reward)
-    return float(reward['reach_weight']*near+reward['aperture_weight']*aperture
-                 +reward['grip_weight']*grip+reward['height_weight']*grip*height*alignment+reward['hold_weight']*held
-                 -reward.get('lateral_potential_weight',0)*grip*lateral)
-
-
-def shaped_reward(previous,info,terminated,config,reward=REWARD):
-    next_phi=0. if terminated else potential(info,config,reward)
-    terms=dict(potential_change=reward['gamma']*next_phi-previous,step_cost=-reward['step_cost'],
-        success_bonus=reward['success_bonus']*info['is_success'],
-        safety_penalty=-reward['safety_penalty']*info['is_safety_failure'],
-        drop_penalty=-reward['drop_penalty']*(info['termination_reason'] in ('dropped','object_lost')))
-    near=1-np.tanh(info['grasp_distance_m']/reward['reach_scale_m'])
-    aperture=aperture_score(info,reward)
-    grip=float(np.clip(min(info['contact_forces_n'][:2])/.05,0,1))
-    height=float(np.clip(info['support_clearance_m']/config['lift_height'],0,1))
-    held=float(np.clip(info['hold_time_s']/config['hold_seconds'],0,1))
-    alignment,lateral=goal_alignment(info,reward)
-    terms.update(dense_reach=reward.get('dense_reach',0)*near,
-        dense_aperture=reward.get('dense_aperture',0)*aperture,
-        dense_grip=reward.get('dense_grip',0)*grip,dense_height=reward.get('dense_height',0)*grip*height*alignment,
-        lateral_penalty=-reward.get('dense_lateral',0)*grip*lateral,
-        dense_hold=reward.get('dense_hold',0)*held,
-        speed_cost=-reward.get('speed_cost',0)*grip*(height>.9)*min(np.linalg.norm(info['object_velocity_m_s'])/.01,1))
-    terms={key:float(value*reward.get('scale',1.)) for key,value in terms.items()}
-    result=float(sum(terms.values()))
-    if not np.isfinite(result):raise ValueError('Non-finite PPO grasp reward')
-    return result,terms
 
 
 class PPOGraspEnv(gym.Wrapper):
@@ -175,20 +92,6 @@ def make_training_env(config,n_envs,seed,reward=None,randomize_height=False,rand
     vector=DummyVecEnv([factory]) if n_envs==1 else SubprocVecEnv([factory for _ in range(n_envs)],start_method='fork')
     vector.seed(seed)
     return VecCheckNan(vector,raise_exception=True)
-
-
-def parameter_hashes(model):
-    groups={key:hashlib.sha256() for key in ('actor','critic','all')}
-    for name,tensor in model.policy.state_dict().items():
-        data=name.encode()+tensor.detach().cpu().contiguous().numpy().tobytes()
-        groups['all'].update(data)
-        if name.startswith(('mlp_extractor.policy_net.','action_net.','log_std')):groups['actor'].update(data)
-        if name.startswith(('mlp_extractor.value_net.','value_net.')):groups['critic'].update(data)
-    return {key:value.hexdigest() for key,value in groups.items()}
-
-
-def optimizer_steps(model):
-    return max((int(s['step'].item()) for s in model.policy.optimizer.state.values() if 'step' in s),default=0)
 
 
 def validate_model(model,config):

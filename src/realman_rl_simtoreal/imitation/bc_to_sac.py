@@ -1,5 +1,4 @@
 """Strict one-time BC -> stock SAC deterministic mean-path initialization."""
-import hashlib
 from pathlib import Path
 
 from gymnasium import spaces
@@ -9,6 +8,7 @@ from torch import nn
 from stable_baselines3.common.distributions import SquashedDiagGaussianDistribution
 from stable_baselines3.common.torch_layers import CombinedExtractor
 
+from ..utils.artifacts import file_sha256
 from ..rl.common.observation import FEATURE_KEYS, require_legacy
 from .bc import load_policy, weight_digest
 
@@ -56,7 +56,7 @@ def load_reference(model, path, transform):
     validate_compatibility(model, reference, transform)
     for parameter in reference.network.parameters():
         parameter.requires_grad_(False)
-    metadata = dict(path=str(path), file_sha256=hashlib.sha256(path.read_bytes()).hexdigest(),
+    metadata = dict(path=str(path), file_sha256=file_sha256(path),
                     network_sha256=weight_digest(reference.network),
                     observation_transform=config['observation_transform'],
                     bc_train_seeds=config['train_seeds'], bc_validation_seeds=config['validation_seeds'])

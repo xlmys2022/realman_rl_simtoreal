@@ -121,6 +121,15 @@ class Gripper:
         axis = self._probe.xmat[self.base].reshape(3, 3)[:, 0]
         return float((right-left) @ axis)  # Signed gap; tiny contact compression is reported.
 
+    def get_velocity(self):
+        """Opening velocity from the same primary encoder and jaw geometry (m/s)."""
+        angle = float(self.data.qpos[self.qadr[0]])
+        return 2*(LINK_X*np.sin(angle)+LINK_Z*np.cos(angle))*self.data.qvel[self.vadr[0]]
+
+    def get_reference_width(self):
+        """Actual actuator reference, distinct from a requested target opening."""
+        return angle_to_width(float(self.data.ctrl[self.actuator_id]))
+
     def _check_state(self):
         m, d = self.model, self.data
         require(np.all(d.eq_active[self.equality_ids]), 'Gripper mimic constraints must remain active')

@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Independent evaluation of four-action PPO, with no staged-controller fallback."""
 import argparse
-import hashlib
 from pathlib import Path
 
+from realman_rl_simtoreal.utils.artifacts import file_sha256
 from realman_rl_simtoreal.rl.ppo_grasp import CURRICULUM,environment_config,load_checkpoint,evaluate_model
 from realman_rl_simtoreal.rl.common.artifacts import write_json
 
@@ -22,7 +22,7 @@ def main():
         stage=config['curriculum_stage'] if args.stage is None else args.stage
         if args.stage is not None:config=dict(config,environment=environment_config(stage))
         result=evaluate_model(model,config,range(args.seed_start,args.seed_start+args.episodes))
-        result.update(model=str(args.model.resolve()),model_sha256=hashlib.sha256(args.model.read_bytes()).hexdigest(),
+        result.update(model=str(args.model.resolve()),model_sha256=file_sha256(args.model),
             training_stage=config['curriculum_stage'],evaluation_stage=stage,staged_controller_used=False)
         write_json(args.json,result)
         print(result['summary']);print('Saved',args.json)

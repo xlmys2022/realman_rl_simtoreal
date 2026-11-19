@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Read-only PPO evaluation from the saved pose, or the full tabletop task."""
 import argparse
-import hashlib
 from pathlib import Path
 
+from realman_rl_simtoreal.utils.artifacts import file_sha256
 from realman_rl_simtoreal.rl.ppo_tabletop import load_checkpoint,evaluate_model
 from realman_rl_simtoreal.rl.common.artifacts import write_json
 
@@ -18,7 +18,7 @@ def main():
     if args.episodes<1 or args.seed_start<0:p.error('Positive episode count and nonnegative seed required')
     model,config=load_checkpoint(args.model)
     result=evaluate_model(model,config,range(args.seed_start,args.seed_start+args.episodes),full=args.full)
-    result.update(model=str(args.model.resolve()),model_sha256=hashlib.sha256(args.model.read_bytes()).hexdigest(),
+    result.update(model=str(args.model.resolve()),model_sha256=file_sha256(args.model),
                   training_stage=config['curriculum_stage'],full_task_override=args.full)
     write_json(args.json,result);print(result['summary']);print('Saved',args.json)
     return 0

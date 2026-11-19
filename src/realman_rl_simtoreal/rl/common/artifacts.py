@@ -1,28 +1,13 @@
-"""Shared JSON artifacts and unchanged dependency/resource fingerprints."""
+"""Reach provenance and shared model-state helpers; filesystem I/O lives in utils."""
 import hashlib
-import importlib.metadata as metadata
-import json
-from pathlib import Path
-import torch
-
 from ...paths import PROJECT_ROOT
-
-
-def write_json(path, value):
-    path = Path(path)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(value, indent=2, allow_nan=False)+'\n')
-
-
-def append_json(path, value):
-    with Path(path).open('a') as file:
-        file.write(json.dumps(value, allow_nan=False)+'\n')
+from ...utils.artifacts import append_json, empty_directory, file_hashes, runtime_versions, write_json
 
 
 def versions():
-    import sys
-    return dict(python=sys.version, executable=sys.executable, torch_cuda=torch.version.cuda,
-                packages={d.metadata['Name']: d.version for d in metadata.distributions()})
+    # Keep Torch optional for callers using only JSON and provenance helpers.
+    import torch
+    return runtime_versions(torch_cuda=torch.version.cuda)
 
 
 def asset_hashes():
@@ -30,12 +15,40 @@ def asset_hashes():
     files += [PROJECT_ROOT/'src/realman_rl_simtoreal'/name for name in
               ('envs/reach_env.py', 'envs/sequence_reach_env.py', 'envs/factory.py',
                'simulation/kinematics.py', 'simulation/control.py', 'simulation/model.py')]
-    return {str(p.relative_to(PROJECT_ROOT)): hashlib.sha256(p.read_bytes()).hexdigest() for p in files}
+    return file_hashes(files, root=PROJECT_ROOT)
 
 
-def empty_directory(path):
-    path = Path(path).resolve()
-    if path.exists() and any(path.iterdir()):
-        raise ValueError('Output directory must be empty; never overwrite an experiment')
-    path.mkdir(parents=True, exist_ok=True)
-    return path
+def parameter_hashes(model):
+    groups={key:hashlib.sha256() for key in ('actor','critic','all')}
+    for name,tensor in model.policy.state_dict().items():
+        data=name.encode()+tensor.detach().cpu().contiguous().numpy().tobytes()
+        groups['all'].update(data)
+        if name.startswith(('mlp_extractor.policy_net.','action_net.','log_std')):groups['actor'].update(data)
+        if name.startswith(('mlp_extractor.value_net.','value_net.')):groups['critic'].update(data)
+    return {key:value.hexdigest() for key,value in groups.items()}
+
+
+def optimizer_steps(model):
+    # Adam's own per-parameter counters: different from PPO._n_updates (epochs).
+    return max((int(state['step'].item()) for state in model.policy.optimizer.state.values() if 'step' in state),default=0)
+
+
+def optimizer_state_hash(model):
+    """Fingerprint Adam moments and parameter groups, including per-parameter steps."""
+    import torch
+    digest = hashlib.sha256()
+    def update(value):
+        if isinstance(value, dict):
+            for key in sorted(value, key=str):
+                digest.update(repr(key).encode())
+                update(value[key])
+        elif isinstance(value, (list, tuple)):
+            for item in value:
+                update(item)
+        elif torch.is_tensor(value):
+            digest.update(str(value.dtype).encode()+str(tuple(value.shape)).encode())
+            digest.update(value.detach().cpu().contiguous().numpy().tobytes())
+        else:
+            digest.update(repr(value).encode())
+    update(model.policy.optimizer.state_dict())
+    return digest.hexdigest()

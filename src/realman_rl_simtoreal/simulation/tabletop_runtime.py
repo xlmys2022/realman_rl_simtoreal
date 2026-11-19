@@ -52,6 +52,16 @@ class TabletopRuntime:
         self.recorder=ContactRecorder(self.model,self.data,self.gripper,self.contact_policy,keep_history=False)
         self._grasp_forces=np.zeros(3)
 
+    def get_joint_state(self):
+        """Read-only SI state; returned arrays never alias live MuJoCo storage."""
+        return dict(position_rad=self.data.qpos[self.kinematics.qadr].copy(),
+                    velocity_rad_s=self.data.qvel[self.kinematics.vadr].copy(),
+                    reference_rad=self.data.ctrl[self.actuator_ids].copy())
+
+    def get_gripper_state(self):
+        """Measured opening and velocity, without adding command validation."""
+        return dict(width_m=self.gripper.get_width(),velocity_m_s=self.gripper.get_velocity())
+
     def tcp_pose(self):
         site=self.kinematics.site_id
         return self.data.site_xpos[site].copy(),self.data.site_xmat[site].reshape(3,3).copy()

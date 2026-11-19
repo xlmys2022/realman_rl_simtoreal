@@ -1,6 +1,5 @@
 """PPO-only joint-space tabletop pickup, goal features and immutable evaluation."""
 import copy
-import hashlib
 from pathlib import Path
 import json
 
@@ -16,33 +15,16 @@ from stable_baselines3.common.vec_env import DummyVecEnv,SubprocVecEnv,VecCheckN
 
 from ..envs.tabletop_pick_env import TabletopPickEnv
 from ..paths import PROJECT_ROOT,TABLETOP_PICK_SCENE
-from ..tasks.tabletop_pick import TABLETOP_PICK_CONFIG
+from ..utils.artifacts import file_hashes
+from ..tasks.tabletop_pick import TABLETOP_PICK_CONFIG, CURRICULUM, REWARD, features, potential, shaped_reward
 from ..evaluation.grasp_lift import rollout
 from ..evaluation.metrics import summarize_grasp_episodes
-from .ppo_grasp import parameter_hashes,optimizer_steps
-from .common.artifacts import append_json,write_json
+from .common.artifacts import append_json, write_json, parameter_hashes, optimizer_steps
 
 ENCODING=dict(name='joint_goal_tabletop_v1',input_dim=56,output_dim=56,
     position_scale_m=.01,command_lag_scale_m=.001,joint_goal_scale_rad=.05,running_normalization=False)
 ACTION_CONTRACT=dict(name='absolute_joint_positions_deg_v1',dimension=7,
     joint_units='degree',jaw_units='normalized_absolute_opening',rate_limited=True)
-REWARD=dict(name='tabletop_pick_action_regularized_v6',gamma=.995,scale=.01,success=1000.,safety=50.,drop=10.,
-    joint_potential=10.,reach_potential=1.,orientation_potential=.5,aperture_potential=1.,
-    grip_potential=2.,height_potential=8.,hold_potential=2.,step=.01,rejection=.05,
-    dense_joint=1.,dense_reach=.2,dense_aperture=.2,dense_grip=.5,dense_height=.8,dense_hold=.1,speed_cost=.1,
-    binary_contact_joint_goal=True,pregrasp_joint_weight=.1,
-    approach_joint_scale=.2,grasp_joint_scale=.03,action_target_weight=1.,action_target_scale_rad=.1,
-    far_jaw_action_weight=.5)
-CURRICULUM=dict(
-    pinch=dict(start_fraction=0.,pregrasp_height=.003,initial_width=.022,lift_height=.005,
-               height_tolerance=.0005,hold_seconds=.2,max_episode_steps=300,object_radius=0.),
-    approach=dict(start_fraction=0.,pregrasp_height=.03,initial_width=.06,lift_height=.005,
-                  height_tolerance=.0005,hold_seconds=.2,max_episode_steps=500,object_radius=0.),
-    lift=dict(start_fraction=0.,pregrasp_height=.03,object_radius=0.,max_episode_steps=700),
-    unfold25=dict(start_fraction=.25,object_radius=0.,max_episode_steps=900),
-    unfold50=dict(start_fraction=.5,object_radius=0.,max_episode_steps=1000),
-    unfold75=dict(start_fraction=.75,object_radius=0.,max_episode_steps=1100),
-    full=dict(),full_random=dict(object_radius=.02))
 PPO_PARAMETERS=dict(learning_rate=3e-4,n_steps=256,batch_size=256,n_epochs=10,
     gamma=.995,gae_lambda=.95,clip_range=.2,ent_coef=.001,vf_coef=.5,max_grad_norm=.5,
     target_kl=.05,policy_kwargs=dict(net_arch=dict(pi=[128,128],vf=[128,128])),device='cpu')
@@ -128,66 +110,6 @@ def encode(observation):
     return value
 
 
-def features(info,config,reward=REWARD):
-    grip=float(np.clip(min(info['contact_forces_n'][:2])/.05,0,1))
-    distance=info['grasp_distance_m']
-    fraction=float(np.clip((distance-.005)/.035,0,1))
-    approaching=not info.get('approach_complete',True)
-    if approaching:fraction=1.
-    if info['bilateral_contact']:fraction=0.
-    desired=.02+.04*fraction
-    aperture=float(np.exp(-((info['actual_width_m']-desired)/.02)**2))
-    goal_height=config.get('goal_height') or config['lift_height']
-    height=float(np.clip(info['support_clearance_m']/goal_height,0,1))
-    held=float(np.clip(info['hold_time_s']/config['hold_seconds'],0,1))
-    error=np.asarray(info['object_position_m'])-info['object_goal_m']
-    alignment=float(np.exp(-np.linalg.norm(error[:2])/.005))
-    if reward.get('binary_contact_joint_goal',False):
-        joint=info['lift_joint_error_rad'] if info['bilateral_contact'] else info.get('reach_joint_error_rad',info['grasp_joint_error_rad'])
-    else:joint=(1-grip)*info['grasp_joint_error_rad']+grip*info['lift_joint_error_rad']
-    joint_weight=1. if info['bilateral_contact'] or approaching else reward.get('pregrasp_joint_weight',1.)
-    return dict(joint=joint,reach=float(np.exp(-info.get('reach_goal_distance_m',distance)/.08)),
-        orientation=float(np.exp(-(info['orientation_error_rad']/.5)**2)),
-        aperture=aperture,grip=grip,height=height*alignment,hold=held,joint_weight=joint_weight,
-        joint_scale=reward.get('approach_joint_scale',.2) if approaching else reward.get('grasp_joint_scale',.03))
-
-
-def potential(info,config,reward=REWARD):
-    f=features(info,config,reward)
-    return float(-reward['joint_potential']*f['joint']+reward['reach_potential']*f['reach']
-        +reward['orientation_potential']*f['orientation']+reward['aperture_potential']*f['aperture']
-        +reward['grip_potential']*f['grip']+reward['height_potential']*f['grip']*f['height']
-        +reward['hold_potential']*f['hold'])
-
-
-def shaped_reward(previous,info,terminated,config,reward=REWARD,*,action=None,action_info=None):
-    f=features(info,config,reward)
-    terms=dict(potential_change=reward['gamma']*(0 if terminated else potential(info,config,reward))-previous,
-        step=-reward['step'],joint_distance=-.02*f['joint'],
-        joint_alignment=reward.get('dense_joint',0)*f['joint_weight']*np.exp(-f['joint']/f['joint_scale']),
-        reach=reward['dense_reach']*f['reach'],aperture=reward['dense_aperture']*f['aperture'],
-        grip=reward['dense_grip']*f['grip'],height=reward['dense_height']*f['grip']*f['height'],
-        hold=reward['dense_hold']*f['hold'],
-        speed=-reward['speed_cost']*f['grip']*(f['height']>.9)*min(np.linalg.norm(info['object_velocity_m_s'])/.01,1),
-        rejected=-reward['rejection']*info['action_rejected'],
-        success=reward['success']*info['is_success'],safety=-reward['safety']*info['is_safety_failure'],
-        dropped=-reward['drop']*(info['termination_reason'] in ('dropped','object_lost')))
-    if reward.get('action_target_weight',0):
-        if action is None or action_info is None:raise ValueError('Action regularization requires the observed pre-action goal')
-        target=action_info['lift_goal_joint_rad'] if action_info['bilateral_contact'] else action_info['reach_goal_joint_rad']
-        error=(np.deg2rad(np.asarray(action[:6],dtype=float))-target)/reward['action_target_scale_rad']
-        terms['action_target']=-reward['action_target_weight']*float(error@error)
-        if (not action_info['bilateral_contact'] and
-                (not action_info.get('approach_complete',True) or action_info['grasp_distance_m']>.03)):
-            from ..simulation.gripper import MAX_WIDTH
-            open_action=2*config['initial_width']/MAX_WIDTH-1
-            terms['far_jaw_action']=-reward.get('far_jaw_action_weight',0)*(float(action[6])-open_action)**2
-    terms={k:float(v*reward['scale']) for k,v in terms.items()}
-    result=float(sum(terms.values()))
-    if not np.isfinite(result):raise ValueError('Non-finite tabletop reward')
-    return result,terms
-
-
 class PPOTabletopEnv(gym.Wrapper):
     def __init__(self,config,reward=None):
         super().__init__(TabletopPickEnv(**config))
@@ -226,8 +148,8 @@ def metadata():
         'envs/tabletop_pick_env.py','tasks/tabletop_pick.py','envs/grasp_lift_env.py','rl/ppo_tabletop.py',
         'simulation/model.py','simulation/control.py','simulation/kinematics.py',
         'simulation/grasp_contact.py','simulation/gripper.py','evaluation/grasp_lift.py')]
-    def hashes(paths):return {str(p.relative_to(PROJECT_ROOT)):hashlib.sha256(p.read_bytes()).hexdigest() for p in sorted(paths)}
-    return dict(assets=hashes(assets),sources=hashes(sources),observation_dim=56,action_dim=7,
+    return dict(assets=file_hashes(sorted(assets),root=PROJECT_ROOT),
+        sources=file_hashes(sorted(sources),root=PROJECT_ROOT),observation_dim=56,action_dim=7,
         action_semantics=[f'joint_{j}_position_deg' for j in range(1,7)]+['absolute_gripper_opening'])
 
 

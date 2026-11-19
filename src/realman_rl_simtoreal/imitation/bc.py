@@ -14,6 +14,7 @@ import numpy as np
 import torch
 from torch import nn
 
+from ..utils.artifacts import file_sha256
 from ..envs.reach_env import ReachEnv
 from ..evaluation.reach import evaluate_bc
 from ..utils.metrics import cosine
@@ -201,7 +202,7 @@ def save_demonstrations(folder, train_seeds, validation_seeds):
     folder = empty_directory(folder)
     arrays, manifest = collect_demonstrations(train_seeds, validation_seeds)
     np.savez_compressed(folder/'demonstrations.npz', **arrays)
-    manifest['archive_sha256'] = hashlib.sha256((folder/'demonstrations.npz').read_bytes()).hexdigest()
+    manifest['archive_sha256'] = file_sha256(folder/'demonstrations.npz')
     write_json(folder/'manifest.json', manifest)
     return manifest
 
@@ -209,7 +210,7 @@ def save_demonstrations(folder, train_seeds, validation_seeds):
 def load_demonstrations(path):
     path = Path(path).resolve()
     manifest = json.loads((path.parent/'manifest.json').read_text())
-    if hashlib.sha256(path.read_bytes()).hexdigest() != manifest['archive_sha256']:
+    if file_sha256(path) != manifest['archive_sha256']:
         raise ValueError('Demonstration archive hash mismatch')
     with np.load(path, allow_pickle=False) as file:
         data = dict(file)
@@ -257,7 +258,7 @@ def train_bc(data_path, folder, *, epochs=300, batch_size=256, learning_rate=.00
                   train_seeds=manifest['train_seeds'],validation_seeds=manifest['validation_seeds'],
                   heldout_final_seeds=list(FINAL_SEEDS),dataset_path=str(Path(data_path).resolve()),
                   dataset_digest=manifest['data_digest'],checkpoint_selection='minimum validation MSE',
-                  augmentation='none', source_sha256=hashlib.sha256(Path(__file__).read_bytes()).hexdigest())
+                  augmentation='none', source_sha256=file_sha256(Path(__file__)))
     write_json(folder/'config.json', config)
     write_json(folder/'dependencies.json', versions())
     save_policy(folder/'untrained_bc.pt',network,config)

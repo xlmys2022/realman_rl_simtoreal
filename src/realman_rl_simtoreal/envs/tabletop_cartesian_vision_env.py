@@ -9,7 +9,7 @@ import numpy as np
 from .tabletop_cartesian_env import TabletopCartesianEnv
 from ..perception.rgbd import OrangeCubeDetector,VisualTracker
 from ..simulation.rgbd_camera import MujocoRgbdCamera
-from ..simulation.gripper import MAX_WIDTH,LINK_X,LINK_Z
+from ..simulation.gripper import MAX_WIDTH
 from ..tasks.tabletop_cartesian_reward import calculate
 
 VISION_CONTRACT=dict(name='wrist_rgbd_hsv_cube_v4',
@@ -19,6 +19,33 @@ VISION_CONTRACT=dict(name='wrist_rgbd_hsv_cube_v4',
     privileged_hold_progress=False,completion_source='camera_visual_hold_with_settling_margin',
     neural_control='zero_anchored_cartesian_network',
     privileged_reward_and_success_audit=True)
+
+
+def visual_grip_and_hold(visual,offset,goal_error,*,width,jaw_reference,cube_size,
+                         timeout,previous_grip,previous_hold,dt):
+    """Camera/proprioception-only progress; no simulator task or contact input."""
+    enclosure=np.exp(-(np.linalg.norm(offset[:2])/.006)**2-(max(0.,abs(offset[2]+.003)-.012)/.01)**2)
+    aperture=np.exp(-((width-cube_size)/.004)**2)
+    compression=np.clip((width-jaw_reference-.010)/.010,0,1)
+    measured_grip=float(enclosure*aperture*compression*visual['confidence'])
+    alpha=1-np.exp(-dt/.08) if dt else 1.
+    grip=previous_grip
+    grip+=alpha*(measured_grip-grip)
+    stable=(visual['visible'] and visual['age']<=timeout
+        and np.linalg.norm(goal_error[:2])<.003 and abs(goal_error[2])<.001
+        and np.linalg.norm(visual['velocity_m_s'])<.0015 and grip>.5)
+    hold=previous_hold+dt if stable else 0.
+    return grip,hold
+
+
+def encode_visual_observation(tcp,tcp_velocity,offset,goal_error,visual,*,width,width_speed,
+                              jaw_reference,grip,hold,timeout,hold_required,tracking_error,ik_fraction):
+    """Encode the existing 29 visual channels from explicit allowed inputs."""
+    return np.concatenate([tcp/.5,tcp_velocity/.05,
+        np.arcsinh(offset/.01),np.arcsinh(goal_error/.01),visual['velocity_m_s']/.05,visual['normal'],
+        [width/MAX_WIDTH,width_speed/.04,jaw_reference/MAX_WIDTH],
+        [grip,visual['confidence'],min(visual['age']/timeout,2.)],
+        [min(hold/hold_required,1.)],tracking_error/.01,[ik_fraction]]).astype(np.float32)
 
 
 class VisionTabletopCartesianEnv(TabletopCartesianEnv):
@@ -51,27 +78,20 @@ class VisionTabletopCartesianEnv(TabletopCartesianEnv):
         tcp_world,_=robot.tcp_pose();tcp=base_rotation.T@(tcp_world-base_position)
         tcp_velocity=base_rotation.T@robot.tcp_velocity()
         position=visual['position_m'];offset=position-tcp;goal_error=self._visual_goal-position
-        angle=float(robot.data.qpos[robot.gripper.qadr[0]])
-        width=robot.gripper.get_width()
-        width_speed=2*(LINK_X*np.sin(angle)+LINK_Z*np.cos(angle))*robot.data.qvel[robot.gripper.vadr[0]]
-        enclosure=np.exp(-(np.linalg.norm(offset[:2])/.006)**2-(max(0.,abs(offset[2]+.003)-.012)/.01)**2)
-        aperture=np.exp(-((width-self.config.vision_cube_size)/.004)**2)
-        compression=np.clip((width-self._jaw_reference-.010)/.010,0,1)
-        measured_grip=float(enclosure*aperture*compression*visual['confidence'])
+        gripper=robot.get_gripper_state()
+        width=gripper['width_m'];width_speed=gripper['velocity_m_s']
         dt=0. if self._last_observation_time is None else max(0.,now-self._last_observation_time)
         self._last_observation_time=now
-        alpha=1-np.exp(-dt/.08) if dt else 1.
-        self._visual_grip+=alpha*(measured_grip-self._visual_grip)
-        visual_stable=(visual['visible'] and visual['age']<=self.config.vision_timeout
-            and np.linalg.norm(goal_error[:2])<.003 and abs(goal_error[2])<.001
-            and np.linalg.norm(visual['velocity_m_s'])<.0015 and self._visual_grip>.5)
-        self._visual_hold=self._visual_hold+dt if visual_stable else 0.
-        value=np.concatenate([tcp/.5,tcp_velocity/.05,
-            np.arcsinh(offset/.01),np.arcsinh(goal_error/.01),visual['velocity_m_s']/.05,visual['normal'],
-            [width/MAX_WIDTH,width_speed/.04,self._jaw_reference/MAX_WIDTH],
-            [self._visual_grip,visual['confidence'],min(visual['age']/self.config.vision_timeout,2.)],
-            [min(self._visual_hold/(self.config.hold_seconds+self.config.vision_hold_margin),1.)],
-            (base_rotation.T@(self.controller.reference-tcp_world))/.01,[self.controller.last_fraction]]).astype(np.float32)
+        self._visual_grip,self._visual_hold=visual_grip_and_hold(visual,offset,goal_error,
+            width=width,jaw_reference=self._jaw_reference,cube_size=self.config.vision_cube_size,
+            timeout=self.config.vision_timeout,previous_grip=self._visual_grip,
+            previous_hold=self._visual_hold,dt=dt)
+        value=encode_visual_observation(tcp,tcp_velocity,offset,goal_error,visual,
+            width=width,width_speed=width_speed,jaw_reference=self._jaw_reference,
+            grip=self._visual_grip,hold=self._visual_hold,timeout=self.config.vision_timeout,
+            hold_required=self.config.hold_seconds+self.config.vision_hold_margin,
+            tracking_error=base_rotation.T@(self.controller.reference-tcp_world),
+            ik_fraction=self.controller.last_fraction)
         if self.config.uses_orientation_actions:
             _,rotation=robot.tcp_pose()
             value=np.r_[value,robot.rotation_error(self.grasp_orientation,rotation)/np.pi,

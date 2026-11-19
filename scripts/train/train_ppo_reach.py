@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """Pure official PPO Reach; evaluate/save only after complete rollout updates."""
 import argparse
-import hashlib
 import inspect
 import math
 from pathlib import Path
@@ -11,6 +10,7 @@ import numpy as np
 import torch
 from stable_baselines3.common.logger import configure
 
+from realman_rl_simtoreal.utils.artifacts import file_sha256
 from realman_rl_simtoreal.rl.ppo import (
     PPOAudit,
     environment_config,
@@ -78,7 +78,7 @@ def train(folder,*,timesteps=16384,seed=2026,task='fixed_reach',reward_mode=None
             squash_output=model.policy.squash_output,orthogonal_init=model.policy.ortho_init,
             log_std_initial=model.policy.log_std.detach().cpu().tolist(),
             action_handling='Stock Gaussian raw actions; SB3 clips to the original Box before env.step'),
-        assets=asset_hashes(),experiment_sources={str(p):hashlib.sha256(p.read_bytes()).hexdigest() for p in
+        assets=asset_hashes(),experiment_sources={str(p):file_sha256(p) for p in
             (Path(__file__).resolve(),Path(inspect.getfile(PPOAudit)).resolve(),Path(inspect.getfile(training_env)).resolve())},
         checkpoint_note='Independent random run. No BC/SAC weights, expert data, replay prefill or implicit resume. '
                         'One complete rollout per learn call, constant learning rate/clip range; policy and env stay alive.')
