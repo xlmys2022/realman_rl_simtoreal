@@ -1,6 +1,6 @@
 # Python 文件地图
 
-当前共 150 个 Python 文件：核心包 75、入口 42、测试 33。下列清单来自实际文件与静态导入；函数内导入纳入统计，动态加载和 checkpoint 的类引用另外由测试验证。
+当前共 151 个 Python 文件：核心包 75、入口 43、测试 33。下列清单来自实际文件与静态导入；函数内导入纳入统计，动态加载和 checkpoint 的类引用另外由测试验证。
 
 当前边界见 [architecture.md](architecture.md)，本轮的基线、确认重复与阶段验证见 [结构审计](validation/STRUCTURE_AUDIT.md)。[此前 Evaluation 报告](validation/EVALUATION_REFACTOR_VALIDATION.md)和其他历史验证报告描述当时版本，不能代替当前地图。
 
@@ -8,6 +8,7 @@
 
 ## scripts/demos
 
+- `scripts/demos/calibrate_cube_hsv.py`：选择实物相机，对照实时掩膜调整 HSV 阈值并保存 JSON。
 - `scripts/demos/control_ee.py`：末端 IK / 控制演示；入口：用户 CLI。
 - `scripts/demos/control_joints.py`：关节控制演示与验收；入口：用户 CLI。
 - `scripts/demos/demo_gripper.py`：夹爪开合、带载保持演示；入口：用户 CLI。
@@ -106,7 +107,7 @@
 ## src/realman_rl_simtoreal/perception
 
 - `perception/__init__.py`：Camera-only measurements; independent of simulation state and learning.；由包导入、运行时或模型反序列化使用。
-- `perception/rgbd.py`：Orange cube localization from aligned RGB-D and calibrated camera geometry.；调用者：`src/realman_rl_simtoreal/envs/tabletop_cartesian_vision_env.py`、`src/realman_rl_simtoreal/simulation/rgbd_camera.py`、`tests/test_rgbd_vision.py`。
+- `perception/rgbd.py`：Orange cube localization from aligned RGB-D and calibrated camera geometry.；调用者：`scripts/demos/calibrate_cube_hsv.py`、`src/realman_rl_simtoreal/envs/tabletop_cartesian_vision_env.py`、`src/realman_rl_simtoreal/simulation/rgbd_camera.py`、`tests/test_rgbd_vision.py`。
 
 ## src/realman_rl_simtoreal/rl
 

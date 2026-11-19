@@ -26,6 +26,8 @@
 
 [视觉模型](outputs/grasp/ppo/tabletop_cartesian/vision_rgbd_v1/full_table_down_seed2031_r4_zero_anchored/checkpoints/step_00000768/model.zip) · [完整视觉回放](outputs/grasp/ppo/tabletop_cartesian/vision_rgbd_v1/full_table_down_seed2031_r4_zero_anchored/review/full_rgbd_grasp_step768.gif) · [接口与复现命令](docs/tabletop_vision.md) · [验证报告](docs/validation/TABLETOP_VISION_VALIDATION.md)。模型由既有 PPO 迁移，选中检查点新增 768 步；原真值模型与下述历史成绩单独保留。
 
+实物方块可用 `scripts/demos/calibrate_cube_hsv.py` 选择部署相机、对照实时掩膜调整 HSV 滑块并保存阈值。[HSV 标定操作步骤](docs/tabletop_vision.md#标定实物方块的-hsv)
+
 ## 桌面末端控制任务（真值观测模式）
 
 `tabletop_cartesian` 与现有 reach、lift、tabletop_pick 并列，使用同一工程和 `realman_rl` 环境。流程固定为零位 → 传统控制到固定观测姿态 → PPO 执行任务，课程和物体位置都不会把启动点移到方块附近。预设包含面向桌面的 `table_down` 和夹爪与桌面平行、平视正前方的 `forward`。

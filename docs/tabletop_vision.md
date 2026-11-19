@@ -91,6 +91,23 @@ python -I scripts/train/train_ppo_tabletop_cartesian.py --stage full \
 
 ## 真机接口准备
 
+### 标定实物方块的 HSV
+
+把方块放到实际抓取的桌面上，用部署时的彩色相机、观测角度和灯光标定。在桌面会话中打开终端，从仓库根目录运行以下命令。界面使用 Tkinter。如果尚未安装 OpenCV，先执行 `python -m pip install -r requirements-vision.txt`。
+
+```bash
+conda activate realman_rl
+python -I scripts/demos/calibrate_cube_hsv.py
+```
+
+1. 在 **摄像头** 下拉框中选设备。也可以直接输入设备编号并点击 **打开**。插入新设备后点击 **刷新列表**。
+2. 左侧是相机原图，右侧是二值掩膜。拖动 H、S、V 的六个上下限滑块，直到方块为白色，桌面和夹爪为黑色。H 采用 OpenCV 的 `0–179`，S 和 V 为 `0–255`。调参时可把方块挪到几个典型位置，观察掩膜是否稳定。
+3. 点击 **保存 HSV**。窗口显示 `hsv.json` 的路径，默认在 `outputs/calibration/` 下按保存时间创建目录。启动时可以加 `--camera 2` 直接打开指定编号，或者加 `--output-dir outputs/calibration/cube_hsv_01` 指定首次保存的新目录。
+
+单个色相区间可把 `hsv.json` 的 `vision_hsv_low` 和 `vision_hsv_high` 传给 `CartesianTabletopConfig` 的同名参数，或传给 `OrangeCubeDetector` 的 `hsv_low` 和 `hsv_high` 参数。需要匹配跨过 `179/0` 的红色色相时，把 H 下限调到高于 H 上限。界面会合并两段掩膜，`hsv_ranges` 会保存两组边界，部署代码可对两次 `inRange` 的结果按位或。
+
+### 三维定位接口
+
 `perception.RgbdFrame` 只需要 RGB、对齐的米制深度、内参 K、相机到基座的刚性变换及时间戳，不依赖 MuJoCo。真实相机可由硬件适配器提供同样数据：
 
 1. 深度对齐到 RGB，统一深度单位为米，提供 RGB 相机实际内参和畸变系数。
