@@ -2,7 +2,7 @@
 
 基于 MuJoCo 的 RealMan **RML63II-6F-V** 机械臂强化学习仿真项目，长期方向为 Reach → Grasp → 视觉 → 真机部署。当前采用 Python 3.11、Gymnasium、Stable-Baselines3 和 PyTorch；代码组织与算法实验分别维护。
 
-当前结构与兼容性验证见 [2026-11-18 重构报告](docs/validation/STRUCTURE_REFACTOR_VALIDATION.md)。下列训练成绩与复现记录对应各链接报告当时的版本；本轮未重新执行正式长训练。
+当前目录与回归结果见 [src 重构报告](docs/validation/SRC_LAYOUT_REFACTOR_VALIDATION.md)。下列训练成绩与复现记录对应各链接报告当时的版本；本轮未重新执行正式长训练。
 
 实验产物按仿真、Reach、抓取、模仿学习和验证分类。找模型、评估结果及动图，请先看 [outputs 导航](outputs/README.md)；目录约定与旧路径对照见 [输出目录说明](docs/OUTPUTS.md)。
 
@@ -10,12 +10,12 @@
 
 - 六轴动力学、关节与末端控制、FK / DLS IK、厂家离线 FK / IK 对照。
 - EG2-4C2 夹爪模型、同步控制和接触 / 抬升 / 释放案例。
-- 固定及随机目标 ReachEnv，PPO、SAC 训练、独立评估、checkpoint 和 TensorBoard。
+- 固定及随机目标 ReachEnv，PPO 训练、独立评估、checkpoint 和 TensorBoard。
 - 四维 PPO 局部夹取与抬升训练、课程 checkpoint 和独立评估。
 - 七维 PPO 水平桌面抓取环境，支持六轴零位起点、同步关节参考和夹爪控制。
 - `tabletop_cartesian` 桌面末端控制任务：传统控制到固定观测姿态，PPO 输出末端位移/姿态和夹爪动作，复用独立 FK/IK 执行层。
 - 腕部 RGB-D 视觉抓取：OpenCV HSV 二值 Mask、深度反投影到基座坐标，PPO 的全部物体观测来自相机；保留原真值观测模式。
-- 独立 BC 示范采集、训练和推理；保留历史 BC→SAC Actor 初始化、边界对照与 Q/TD 诊断。
+- 独立 BC 示范采集、训练和推理。历史 SAC 实验和 BC→SAC 产物可从输出目录与验证索引查阅。
 - 自动化回归测试、环境探针及只读训练曲线绘图。
 
 ## 腕部 RGB-D 视觉完整抓取
@@ -174,7 +174,7 @@ RL 接口为 4 维 `Box(-1,1)`：前三维是世界 XYZ 增量，每轴最多 1 
 
 负对照中，不闭合和不抬升均在 700 步超时、保持计时为零；摩擦降为 0.05 时触发 mimic 保护，30 g 方块未达到高度与保持条件、在 700 步超时。失败记录分别保存在 [no_close](outputs/grasp/controller/controls_1ms/no_close.json)、[no_lift](outputs/grasp/controller/controls_1ms/no_lift.json)、[low_friction](outputs/grasp/controller/controls_1ms/low_friction.json)和[heavy](outputs/grasp/controller/controls_1ms/heavy.json)。开发阶段的 2 ms 失败案例与控制时序诊断仍保存在 `outputs/grasp/controller/`。
 
-实现入口为 [GraspLiftEnv](src/realman_rl_simtoreal/envs/grasp_lift_env.py)、[任务配置](src/realman_rl_simtoreal/tasks/grasp_lift.py)、[夹取控制器](src/realman_rl_simtoreal/simulation/grasp_controller.py)与[回合评估](src/realman_rl_simtoreal/evaluation/grasp_lift.py)。
+实现入口为 [GraspLiftEnv](src/realman_rl_simtoreal/envs/grasp/grasp_lift_env.py)、[任务配置](src/realman_rl_simtoreal/tasks/grasp/lift.py)、[夹取控制器](src/realman_rl_simtoreal/simulation/motion/staged_grasp_controller.py)与[回合评估](src/realman_rl_simtoreal/evaluation/grasp_lift.py)。
 
 ## 随机起点与连续多目标 Reach
 
@@ -318,7 +318,7 @@ python -I scripts/demos/control_joints.py --viewer
 python -I scripts/demos/control_ee.py --viewer
 python -I scripts/demos/demo_gripper.py --viewer
 python -I scripts/diagnostics/smoke_reach_env.py --check
-python -I -m unittest discover -s tests -v
+MUJOCO_GL=egl python -I -m unittest discover -s tests -v
 ```
 
 接触案例入口为 `scripts/demos/run_grasp_contact_cases.py`；环境与奖励探针入口为 `scripts/diagnostics/probe_reach_env.py`。前者是演示，后者不训练网络。其他脚本参数见 `--help`；三个 `scripts/models/build_*.py` 沿用无参数生成器接口。
@@ -407,18 +407,7 @@ python -I scripts/plots/plot_ppo_training.py --run-dir outputs/reach/ppo/axis_pa
 
 JSON、终端和TensorBoard分别报告±X结果、误差、步数、首动作、结束原因、实际路径和动作方向比例；PNG增加两方向曲线及训练成功率/保护分类。所有输出目录须为新位置，不覆盖原产物。两方向均稳定成功后才考虑六方向；`axis_six_reach`5mm目前会拒绝±Y，不能直接启动。显式3mm六方向仅用于已完成的合法reset敏感性诊断，没有偷偷替换训练配置。证据、文件说明和课程边界见[04-F3验证报告](docs/validation/PPO_GOAL_CONDITIONED_VALIDATION.md)。早期 04-F3 没有权重迁移入口；当前 `--init-model` 支持受契约校验的权重迁移并重建优化器，仍不提供完整跨进程训练状态续训。
 
-纯 SAC 的手动入口仍保留：
-
-```bash
-python -I scripts/train/train_sac_reach.py \
-  --task fixed_reach --reward-mode safe_dense --action-scale 0.001 \
-  --timesteps 5000 --seed 2026 --init-mode scratch \
-  --run-dir outputs/reach/sac_reward_comparison/fixed_safe_seed2026_new \
-  --eval-at-start --eval-every 1000 --checkpoint-every 1000 \
-  --eval-episodes 1 --eval-seed-start 85000 --tensorboard
-```
-
-`--task fixed_reach|easy_random_reach|random_reach` 使用同一环境，不自动升级任务难度。历史 BC 初始化只在明确指定 `--init-mode bc_actor --bc-model PATH` 的旧实验分支加载，纯 RL 任务拒绝 BC 参照或初始化。
+SAC 训练、评估、诊断和绘图命令已退役。历史模型、配置和实验记录见 [SAC 验证](docs/validation/SAC_REACH_VALIDATION.md) 与 [BC→SAC 验证](docs/validation/SAC_BC_INIT_VALIDATION.md)。
 
 ## Reach 奖励实验
 
@@ -490,27 +479,25 @@ python -I scripts/plots/plot_ppo_training.py \
   --run-dir outputs/reach/ppo/fixed_seed2026_pilot --out /tmp/realman_ppo_plots_new
 ```
 
-SAC、BC 分别使用 `scripts/evaluate/evaluate_sac_reach.py`、`scripts/evaluate/evaluate_bc_reach.py`。评估读取保存的环境与观测变换；绘图只读 JSON，不加载策略、不推断未测量的成功率。早期 schema 1 SAC smoke 文件不受当前 schema 2 加载器支持；本次未改写这些历史文件，详见 [重构报告](docs/validation/PROJECT_ORGANIZATION_REFACTOR.md)。
+BC 使用 `scripts/evaluate/evaluate_bc_reach.py`。评估读取保存的环境与观测变换，绘图读取已测量的 JSON。
 
 ## 项目结构
 
-2026-11-18 的实际目录、确认重复与兼容边界见 [结构审计](docs/validation/STRUCTURE_AUDIT.md)，六阶段变更及逐步回归见 [重构验证](docs/validation/STRUCTURE_REFACTOR_VALIDATION.md)。视觉策略类保持各自原模块路径，真值、RGB-D、关节空间与笛卡尔任务保留不同契约。
+- `simulation/{physics,motion,devices,runtime}/` 负责模型与物理步进、运动学与控制、模拟设备和桌面运行时。
+- `envs/{reach,grasp}/` 提供 Gymnasium 接口，`envs/factory.py` 按保存的配置选择环境。
+- `tasks/{reach,grasp}/` 定义配置、课程与奖励。
+- `rl/` 管理 PPO 模型、网络、分布、checkpoint 和采样回调，`imitation/` 保留 BC。
+- `apps/{cli,training,visualization}/` 组织命令、训练流程、Viewer 与回放。
+- `evaluation/` 负责独立回合和原统计口径，`perception/` 负责 RGB-D 数据与检测、反投影和跟踪。
+- `hardware/` 预留真实机械臂、夹爪和相机适配，`deployment/` 预留真机观测、模型推理与执行。
+- `vendor/` 提供厂家离线 FK/IK，`utils/` 提供共享几何、演示、统计及产物工具。
+- `scripts/{train,evaluate,demos,models,diagnostics,plots}/` 保留现行命令的位置。模型和实验结果按 [outputs 导航](outputs/README.md) 查找。
 
-- `assets/`：机器人、夹爪与场景资源。
-- `src/realman_rl_simtoreal/simulation/`、`envs/`：物理控制与 Gymnasium 环境；`perception/`：不依赖模拟器的 RGB-D 感知与坐标转换。
-- `tasks/`：任务目标、配置、原奖励与课程；`rl/common/`：公共观测、训练包装、模型状态和日志写入。
-- `rl/`：PPO / SAC 创建、训练、优化、checkpoint 与算法薄适配；`imitation/`：BC 模型和训练、历史 BC→SAC 转移。
-- `evaluation/`：独立 Reach / GraspLift / 真值及 RGB-D 笛卡尔桌面评估、Episode 指标和规则基线；`scripts/evaluate/` 负责 CLI、加载和输出，`tests/` 负责正确性与回归验证。
-- `cli/`：笛卡尔命令的共用参数与调度；`visualization/`：MuJoCo 回放与图像生成。原 scripts 命令与 utils 历史导入保留。
-- `utils/`、`vendor/`：共享几何、演示、统计、JSON / SHA256 / 来源归档工具和厂家离线适配器。
-- `scripts/{train,evaluate,demos,models,diagnostics,plots}/`：按用途分类的正式入口。
-- `tests/`：独立回归测试；`docs/`：架构、文件索引、实验及验证记录。
-- `outputs/{simulation,reach,grasp,imitation,validation,vision}/`：按用途分类的模型、数据、图像与验证记录，入口见 [输出导航](outputs/README.md)。
-
-包内目录的完整关系见 [架构](docs/architecture.md)，逐文件职责和调用者见 [FILE_MAP](docs/FILE_MAP.md)。旧平铺脚本和 `experiments.*` 不再作为 Python 接口保留。
+完整目录和迁移对照见 [src 重构报告](docs/validation/SRC_LAYOUT_REFACTOR_VALIDATION.md)。依赖方向和逐文件职责见 [架构](docs/architecture.md) 与 [FILE_MAP](docs/FILE_MAP.md)。
 
 ## 文档索引
 
+- [src 分层迁移及回归验证](docs/validation/SRC_LAYOUT_REFACTOR_VALIDATION.md)
 - [渐进式结构审计](docs/validation/STRUCTURE_AUDIT.md)
 - [六阶段重构及回归验证](docs/validation/STRUCTURE_REFACTOR_VALIDATION.md)
 - [工程架构与依赖边界](docs/architecture.md)

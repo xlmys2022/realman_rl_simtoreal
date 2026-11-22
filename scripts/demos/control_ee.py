@@ -10,11 +10,11 @@ from pathlib import Path
 import sys
 import time
 
-from realman_rl_simtoreal.viewer import configure_backend, passive_viewer
+from realman_rl_simtoreal.apps.visualization.viewer import configure_backend, passive_viewer
 configure_backend()
-from realman_rl_simtoreal.simulation import model as model_api, control
-from realman_rl_simtoreal.simulation.kinematics import Kinematics, rotation_vector
-from realman_rl_simtoreal.simulation.ee_control import check_motion, execute_motion
+from realman_rl_simtoreal.simulation.physics import model as model_api, joint_control as control
+from realman_rl_simtoreal.simulation.motion.kinematics import Kinematics, rotation_vector
+from realman_rl_simtoreal.simulation.motion.traditional_ee_control import check_motion, execute_motion
 from realman_rl_simtoreal.utils.demo_helpers import joint_result_lines
 import mujoco
 import numpy as np

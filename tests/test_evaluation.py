@@ -7,11 +7,11 @@ import unittest
 
 import numpy as np
 
-from realman_rl_simtoreal.envs.reach_env import ReachEnv
+from realman_rl_simtoreal.envs.reach.reach_env import ReachEnv
 from realman_rl_simtoreal.evaluation import baselines, grasp_lift, metrics, reach
 from realman_rl_simtoreal.paths import PROJECT_ROOT
 from realman_rl_simtoreal.rl.common.observation import ReachTransform
-from realman_rl_simtoreal.tasks.grasp_lift import GRASP_LIFT_CONFIG
+from realman_rl_simtoreal.tasks.grasp.lift import GRASP_LIFT_CONFIG
 from realman_rl_simtoreal.utils.metrics import MotionStats
 
 
@@ -204,7 +204,7 @@ class Block(importlib.abc.MetaPathFinder):
    raise AssertionError('Learning dependency: '+name)
 sys.meta_path.insert(0,Block())
 from realman_rl_simtoreal.evaluation import reach,baselines,grasp_lift
-from realman_rl_simtoreal.tasks.grasp_lift import GRASP_LIFT_CONFIG
+from realman_rl_simtoreal.tasks.grasp.lift import GRASP_LIFT_CONFIG
 assert reach.evaluate('rule',[21],config=dict(target_mode='fixed',max_episode_steps=2))['summary']['episodes']==1
 assert baselines.evaluate_policy('rule',[21],max_episode_steps=2)['summary']['episodes']==1
 assert grasp_lift.evaluate(dict(GRASP_LIFT_CONFIG,max_episode_steps=2),[21])['summary']['episodes']==1

@@ -13,7 +13,7 @@ import numpy as np
 import torch
 
 from realman_rl_simtoreal.paths import PROJECT_ROOT
-from realman_rl_simtoreal.envs.tabletop_pick_env import TabletopPickEnv
+from realman_rl_simtoreal.envs.grasp.tabletop_pick_env import TabletopPickEnv
 from realman_rl_simtoreal.rl.ppo_tabletop import (
     PPOTabletopEnv,ENCODING,REWARD,encode,environment_config,potential,
     load_checkpoint,evaluate_model,make_training_env)

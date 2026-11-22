@@ -14,11 +14,11 @@ from unittest.mock import patch
 import mujoco
 import numpy as np
 
-from realman_rl_simtoreal.envs.reach_env import ReachEnv
+from realman_rl_simtoreal.envs.reach.reach_env import ReachEnv
 from realman_rl_simtoreal.paths import PROJECT_ROOT
-from realman_rl_simtoreal.tasks.reach import ENV_CONFIG,task_environment
-from realman_rl_simtoreal.simulation.control import validate_target
-from realman_rl_simtoreal.simulation.ee_control import check_motion
+from realman_rl_simtoreal.tasks.reach.config import ENV_CONFIG,task_environment
+from realman_rl_simtoreal.simulation.physics.joint_control import validate_target
+from realman_rl_simtoreal.simulation.motion.traditional_ee_control import check_motion
 
 
 def module(path):
@@ -225,7 +225,7 @@ from realman_rl_simtoreal.paths import PROJECT_ROOT
 from realman_rl_simtoreal.evaluation import reach as evaluation, baselines
 def forbidden(*a,**k):raise AssertionError('No expert actions')
 evaluation.rule_action=baselines.rule_action=forbidden
-from realman_rl_simtoreal.envs.reach_env import ReachEnv
+from realman_rl_simtoreal.envs.reach.reach_env import ReachEnv
 physical=mujoco.mj_step;original=ReachEnv.step;active={};steps=0
 def mj_step(m,d):
  if id(d) in active:np.testing.assert_array_equal(d.qpos,active[id(d)])

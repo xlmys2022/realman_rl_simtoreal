@@ -1,4 +1,4 @@
-"""Goal-conditioned PPO arm and jaw branches; kinematics stays in the executor."""
+"""为笛卡尔桌面 PPO 提供目标特征、可迁移的 Reach 臂分支和独立夹爪、价值网络。"""
 import hashlib
 import numpy as np
 import torch
@@ -8,11 +8,10 @@ from .cartesian_policy import CartesianPPOPolicy
 
 
 class CartesianGoalFeatures(BaseFeaturesExtractor):
-    """Expose Cartesian grasp/lift goals to an existing neural Reach controller.
+    """把当前观测映射为 Reach 臂分支和抓取网络使用的特征。
 
-    The two force-gate parameters are learned. Frame anchors are fixed at the
-    selected observation preset and the original Reach model's nominal home.
-    No joint angles, solved joint targets or action labels enter these features.
+    source_home 为源 Reach 原点（m），observation_anchor 为接管时的基座系位置（m）。
+    grasp_offset_z 和 approach_clearance 以 m 计。forward 保留原始观测并附加目标特征。
     """
 
     def __init__(self,observation_space,*,source_home,observation_anchor,
@@ -57,7 +56,7 @@ class CartesianGoalFeatures(BaseFeaturesExtractor):
 
 
 class ReachGraspNetworks(nn.Module):
-    """Separate neural arm/jaw means and an independent task-value branch."""
+    """从 feature_dim 维编码提取臂与夹爪特征，Critic 使用独立的原始观测分支。"""
 
     def __init__(self,feature_dim,raw_dim):
         super().__init__();self.latent_dim_pi=4;self.latent_dim_vf=128
@@ -75,7 +74,11 @@ class ReachGraspNetworks(nn.Module):
 
 
 class ReachGraspPPOPolicy(CartesianPPOPolicy):
-    """Four learned Cartesian means with an optional pretrained Reach branch."""
+    """使用四维可学习动作的笛卡尔 PPO 策略。
+
+    构造参数与 CartesianPPOPolicy 一致，臂分支可从 Reach 迁移。
+    set_arm_trainable 控制热启动阶段的臂参数冻结，夹爪与价值分支独立训练。
+    """
 
     def __init__(self,*args,**kwargs):
         kwargs.pop('net_arch',None)
@@ -113,7 +116,7 @@ def validate_reach_policy(source_policy):
 
 
 def initialize_reach_arm(policy,source_policy,action_gain):
-    """Copy only the original PPO Reach mean network, with an explicit SI gain."""
+    """将已完成更新的 Reach Actor 权重复制到臂分支，按显式动作倍率换算输出。"""
     if not isinstance(policy,ReachGraspPPOPolicy):raise ValueError('Expected a ReachGraspPPOPolicy')
     if not np.isfinite(action_gain) or not 0<action_gain<=5:raise ValueError('Invalid arm action gain')
     source=validate_reach_policy(source_policy);target=policy.mlp_extractor.policy_net['arm']

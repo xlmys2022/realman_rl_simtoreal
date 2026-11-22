@@ -1,4 +1,4 @@
-"""PPO Gaussian exploration with enough precision for contact and stable hold."""
+"""定义笛卡尔 PPO 的连续高斯动作分布，按抓取观测调整各通道探索幅度。"""
 import numpy as np
 import torch
 from torch import nn
@@ -8,11 +8,11 @@ from stable_baselines3.common.distributions import DiagGaussianDistribution
 
 
 class CartesianPPOPolicy(ActorCriticPolicy):
-    """Change exploration scale from task observations, never the network mean.
+    """Actor 输出笛卡尔与夹爪动作均值，Critic 估计状态价值。
 
-    All motion and jaw means remain learned PPO outputs. The distance is
-    decoded from the existing Cartesian observation, not from an IK solution.
-    Sampling and PPO likelihood evaluation use the same state-conditioned std.
+    构造参数沿用 SB3。adaptive_exploration 启用按距离或夹持状态缩放的标准差，
+    exploration_distance 单位为 m，动作尺度参数与环境归一化动作一致。
+    Actor 的均值由网络输出，探索调整进入取样与概率计算。
     """
 
     def __init__(self,*args,adaptive_exploration=True,exploration_distance=.04,
@@ -99,7 +99,7 @@ class CartesianPPOPolicy(ActorCriticPolicy):
 
 
 def reset_critic(policy):
-    """Reset only the independent value branch when changing task rewards."""
+    """任务奖励变化时只重新初始化价值分支及价值输出头。"""
     with torch.no_grad():
         for module in policy.mlp_extractor.value_net.modules():
             if isinstance(module,nn.Linear):policy.init_weights(module,gain=np.sqrt(2))
@@ -107,7 +107,7 @@ def reset_critic(policy):
 
 
 def reset_jaw_head(policy,normalized_opening):
-    """Initialize the jaw at the fixed startup opening without changing arm means."""
+    """将夹爪动作头设置为给定的归一化初始开口。"""
     if not np.isfinite(normalized_opening) or not -1<=normalized_opening<=1:
         raise ValueError('A normalized jaw opening is required')
     with torch.no_grad():

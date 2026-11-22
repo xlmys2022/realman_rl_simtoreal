@@ -1,4 +1,4 @@
-"""Reach provenance and shared model-state helpers; filesystem I/O lives in utils."""
+"""提供模型参数和优化器指纹、Reach 来源摘要，并转发历史文件操作入口。"""
 import hashlib
 from ...paths import PROJECT_ROOT
 from ...utils.artifacts import append_json, empty_directory, file_hashes, runtime_versions, write_json
@@ -13,8 +13,8 @@ def versions():
 def asset_hashes():
     files = [p for p in (PROJECT_ROOT/'assets/robots/rml63').rglob('*') if p.is_file()]
     files += [PROJECT_ROOT/'src/realman_rl_simtoreal'/name for name in
-              ('envs/reach_env.py', 'envs/sequence_reach_env.py', 'envs/factory.py',
-               'simulation/kinematics.py', 'simulation/control.py', 'simulation/model.py')]
+              ('envs/reach/reach_env.py', 'envs/reach/sequence_reach_env.py', 'envs/factory.py',
+               'simulation/motion/kinematics.py', 'simulation/physics/joint_control.py', 'simulation/physics/model.py')]
     return file_hashes(files, root=PROJECT_ROOT)
 
 

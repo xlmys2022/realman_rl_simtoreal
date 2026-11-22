@@ -13,8 +13,8 @@ import mujoco
 import numpy as np
 from gymnasium.utils.env_checker import check_env
 
-from realman_rl_simtoreal.envs.reach_env import ReachEnv
-from realman_rl_simtoreal.tasks.reach import task_environment,ENV_CONFIG
+from realman_rl_simtoreal.envs.reach.reach_env import ReachEnv
+from realman_rl_simtoreal.tasks.reach.config import task_environment,ENV_CONFIG
 from realman_rl_simtoreal.paths import PROJECT_ROOT
 
 
@@ -128,7 +128,7 @@ from realman_rl_simtoreal.paths import PROJECT_ROOT
 from realman_rl_simtoreal.evaluation import reach as evaluation, baselines
 def forbidden(*a,**k):raise AssertionError('No expert actions')
 evaluation.rule_action=baselines.rule_action=forbidden
-from realman_rl_simtoreal.envs.reach_env import ReachEnv
+from realman_rl_simtoreal.envs.reach.reach_env import ReachEnv
 original=ReachEnv.step;physical=mujoco.mj_step;active={};count=0
 def mj_step(m,d):
  if id(d) in active:np.testing.assert_array_equal(d.qpos,active[id(d)])

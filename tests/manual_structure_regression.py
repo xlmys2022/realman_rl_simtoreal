@@ -17,7 +17,7 @@ from realman_rl_simtoreal.paths import PROJECT_ROOT as ROOT
 from realman_rl_simtoreal.rl import ppo_tabletop_cartesian as rl
 from realman_rl_simtoreal.rl.common.artifacts import optimizer_state_hash
 from realman_rl_simtoreal.envs.factory import make_tabletop_cartesian_env
-from realman_rl_simtoreal.tasks.tabletop_cartesian import CartesianTabletopConfig as Config
+from realman_rl_simtoreal.tasks.grasp.tabletop_cartesian import CartesianTabletopConfig as Config
 
 
 def array_digest(value):

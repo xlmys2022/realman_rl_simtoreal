@@ -8,13 +8,13 @@ from unittest.mock import patch
 import mujoco
 import numpy as np
 
-from realman_rl_simtoreal.envs.reach_env import ReachEnv
+from realman_rl_simtoreal.envs.reach.reach_env import ReachEnv
 from realman_rl_simtoreal.paths import PROJECT_ROOT
 from realman_rl_simtoreal.rl.ppo import environment_config, make_ppo, parameter_hashes, optimizer_steps, save_ppo_checkpoint
 from realman_rl_simtoreal.rl.common.env_factory import training_env
 from realman_rl_simtoreal.rl.common.observation import ReachTransform, observation_metadata
-from realman_rl_simtoreal.simulation.control import advance_control_cycle
-from realman_rl_simtoreal.simulation.kinematics import rotation_vector
+from realman_rl_simtoreal.simulation.physics.joint_control import advance_control_cycle
+from realman_rl_simtoreal.simulation.motion.kinematics import rotation_vector
 
 
 class WideReachTests(unittest.TestCase):

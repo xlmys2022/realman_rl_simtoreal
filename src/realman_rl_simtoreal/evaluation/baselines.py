@@ -5,7 +5,7 @@ import pstats
 from time import perf_counter
 import numpy as np
 
-from ..envs.reach_env import ReachEnv
+from ..envs.reach.reach_env import ReachEnv
 from ..rl.common.observation import require_legacy
 from .metrics import latency_summary, goal_distribution, summarize_baseline_episodes
 

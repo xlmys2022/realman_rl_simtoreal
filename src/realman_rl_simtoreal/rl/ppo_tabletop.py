@@ -1,37 +1,35 @@
-"""PPO-only joint-space tabletop pickup, goal features and immutable evaluation."""
+"""关节桌面 PPO 的策略、持续相关噪声、checkpoint 操作及评估适配。"""
 import copy
 from pathlib import Path
 import json
 
-import gymnasium as gym
 import numpy as np
 import torch
 from stable_baselines3 import PPO
 from stable_baselines3.common.callbacks import BaseCallback
 from stable_baselines3.common.policies import ActorCriticPolicy
 from stable_baselines3.common.distributions import StateDependentNoiseDistribution
-from stable_baselines3.common.monitor import Monitor
-from stable_baselines3.common.vec_env import DummyVecEnv,SubprocVecEnv,VecCheckNan
 
-from ..envs.tabletop_pick_env import TabletopPickEnv
+from ..envs.grasp.tabletop_pick_env import TabletopPickEnv, PPOTabletopEnv, ENCODING, encode, ACTION_CONTRACT
 from ..paths import PROJECT_ROOT,TABLETOP_PICK_SCENE
 from ..utils.artifacts import file_hashes
-from ..tasks.tabletop_pick import TABLETOP_PICK_CONFIG, CURRICULUM, REWARD, features, potential, shaped_reward
+from ..tasks.grasp.tabletop_joint import TABLETOP_PICK_CONFIG, CURRICULUM, REWARD, environment_config, features, potential, shaped_reward
 from ..evaluation.grasp_lift import rollout
 from ..evaluation.metrics import summarize_grasp_episodes
+from .common.env_factory import grasp_training_vector
 from .common.artifacts import append_json, write_json, parameter_hashes, optimizer_steps
 
-ENCODING=dict(name='joint_goal_tabletop_v1',input_dim=56,output_dim=56,
-    position_scale_m=.01,command_lag_scale_m=.001,joint_goal_scale_rad=.05,running_normalization=False)
-ACTION_CONTRACT=dict(name='absolute_joint_positions_deg_v1',dimension=7,
-    joint_units='degree',jaw_units='normalized_absolute_opening',rate_limited=True)
 PPO_PARAMETERS=dict(learning_rate=3e-4,n_steps=256,batch_size=256,n_epochs=10,
     gamma=.995,gae_lambda=.95,clip_range=.2,ent_coef=.001,vf_coef=.5,max_grad_norm=.5,
     target_kl=.05,policy_kwargs=dict(net_arch=dict(pi=[128,128],vf=[128,128])),device='cpu')
 
 
 class CorrelatedPositionNoise(StateDependentNoiseDistribution):
-    """Full-rank correlated Gaussian with the stock persistent-noise sampler."""
+    """在 SB3 持续探索噪声上施加可逆的七维线性变换。
+
+    base 提供 gSDE 的原取样机制，transform 为满秩 7×7 矩阵，log_std 为原对数标准差。
+    proba_distribution、log_prob 和 entropy 使用变换后的完整协方差。
+    """
     def __init__(self,base,transform,log_std):
         super().__init__(base.action_dim,full_std=base.full_std,use_expln=base.use_expln,
                          squash_output=False,learn_features=False,epsilon=0.)
@@ -45,6 +43,7 @@ class CorrelatedPositionNoise(StateDependentNoiseDistribution):
     def proba_distribution(self,mean_actions,log_std,latent_sde):
         super().proba_distribution(mean_actions,log_std,latent_sde)
         matrix=self.transform.to(mean_actions.device)
+        # 线性变换同时作用于采样与打分，协方差按 AΣAᵀ 变换。
         covariance=(matrix*self.distribution.variance.unsqueeze(-2))@matrix.T
         self.distribution=torch.distributions.MultivariateNormal(mean_actions,covariance_matrix=covariance)
         return self
@@ -59,11 +58,11 @@ class CorrelatedPositionNoise(StateDependentNoiseDistribution):
 
 
 class SmoothJointPolicy(ActorCriticPolicy):
-    """MLP action means with persistent Gaussian position exploration.
+    """预测六轴绝对位置（度）与夹爪归一化开口。
 
-    Stock PPO/gSDE still samples and scores every action. A constant unit-norm
-    exploration feature prevents contact-force jitter from feeding back into
-    the sampled position offset between scheduled noise refreshes.
+    exploration_transform 定义相关噪声的坐标变换，action_anchor 为可选动作均值锚点。
+    Actor 使用 MLP 预测动作，Critic 保留独立价值网络。持续噪声的固定单位范数输入
+    让接触抖动不再调制同一噪声刷新区间的采样偏移。
     """
     def __init__(self,*args,exploration_transform=None,action_anchor=None,**kwargs):
         super().__init__(*args,**kwargs)
@@ -95,49 +94,40 @@ class SmoothJointPolicy(ActorCriticPolicy):
         return super()._get_action_dist_from_latent(latent_pi)
 
 
-def environment_config(stage='full',**overrides):
-    if stage not in CURRICULUM:raise ValueError('Unknown tabletop curriculum')
-    result=copy.deepcopy(TABLETOP_PICK_CONFIG);result.update(CURRICULUM[stage]);result.update(overrides)
-    return result
-
-
-def encode(observation):
-    value=np.asarray(observation,dtype=np.float32).copy()
-    if value.shape[-1:]!=(56,) or not np.isfinite(value).all():raise ValueError('Finite 56-vector required')
-    value[...,12:21]=np.arcsinh(value[...,12:21]*5)
-    value[...,38:41]=np.arcsinh(value[...,38:41]*10)
-    value[...,44:56]=np.arcsinh(value[...,44:56]*2)
-    return value
-
-
-class PPOTabletopEnv(gym.Wrapper):
-    def __init__(self,config,reward=None):
-        super().__init__(TabletopPickEnv(**config))
-        self.reward_config=copy.deepcopy(REWARD if reward is None else reward)
-        self.observation_space=gym.spaces.Box(-np.inf,np.inf,(56,),dtype=np.float32)
-
-    def reset(self,**kwargs):
-        obs,info=self.env.reset(**kwargs);self.previous=potential(info,self.env.config,self.reward_config)
-        self.action_info=copy.deepcopy(info)
-        return encode(obs),info
-
-    def step(self,action):
-        self.env.recorder.phase='ppo'
-        obs,base,terminated,truncated,info=self.env.step(action)
-        reward,terms=shaped_reward(self.previous,info,terminated,self.env.config,self.reward_config,
-                                  action=action,action_info=self.action_info)
-        self.previous=potential(info,self.env.config,self.reward_config)
-        self.action_info=copy.deepcopy(info)
-        info.update(environment_reward=base,ppo_reward=reward,reward_components=terms)
-        return encode(obs),reward,terminated,truncated,info
-
-
 def make_training_env(config,n_envs,seed,reward=None):
     if not 1<=n_envs<=16:raise ValueError('1..16 environments required')
-    def factory():return Monitor(PPOTabletopEnv(config,reward))
-    vector=DummyVecEnv([factory]) if n_envs==1 else SubprocVecEnv([factory for _ in range(n_envs)],start_method='fork')
-    vector.seed(seed)
-    return VecCheckNan(vector,raise_exception=True)
+    return grasp_training_vector(lambda: PPOTabletopEnv(config,reward), n_envs, seed)
+
+
+def reset_exploration_std(model, observation, *, joint_std, gripper_std, smooth):
+    """按对角高斯或 gSDE 的尺度重置各动作通道的探索标准差。"""
+    with torch.no_grad():
+        if model.policy.log_std.ndim == 1:
+            model.policy.log_std[:6].fill_(float(np.log(joint_std)))
+            model.policy.log_std[6].fill_(float(np.log(gripper_std)))
+        else:
+            tensor, _ = model.policy.obs_to_tensor(observation)
+            features = model.policy.extract_features(tensor)
+            latent, _ = model.policy.mlp_extractor(features)
+            norm = 1. if smooth else max(float(latent.square().sum().sqrt()), 1e-6)
+            model.policy.log_std[:, :6].fill_(float(np.log(joint_std / norm)))
+            model.policy.log_std[:, 6].fill_(float(np.log(gripper_std / norm)))
+
+
+def make_model(env, seed, parameters, *, smooth, initial_observation, reference_rad,
+               joint_std, gripper_std, gripper_mean):
+    """创建关节位置 PPO，把初始动作均值锚定到 reset 的关节参考。"""
+    model = PPO(SmoothJointPolicy if smooth else 'MlpPolicy', env, seed=seed, verbose=0, **parameters)
+    reset_exploration_std(model, initial_observation, joint_std=joint_std,
+                         gripper_std=gripper_std, smooth=smooth)
+    with torch.no_grad():
+        model.policy.action_net.weight[:6].zero_()
+        if smooth and model.policy.has_affine_action_mean:
+            model.policy.action_net.bias[:6].zero_()
+        else:
+            model.policy.action_net.bias[:6] = torch.as_tensor(np.rad2deg(reference_rad), dtype=torch.float32)
+        model.policy.action_net.bias[6] = gripper_mean
+    return model
 
 
 def metadata():
@@ -145,9 +135,9 @@ def metadata():
     for folder in ('assets/robots/rml63','assets/grippers/eg2_4c2'):
         assets.update(p for p in (PROJECT_ROOT/folder).rglob('*') if p.is_file())
     sources=[PROJECT_ROOT/'src/realman_rl_simtoreal'/p for p in (
-        'envs/tabletop_pick_env.py','tasks/tabletop_pick.py','envs/grasp_lift_env.py','rl/ppo_tabletop.py',
-        'simulation/model.py','simulation/control.py','simulation/kinematics.py',
-        'simulation/grasp_contact.py','simulation/gripper.py','evaluation/grasp_lift.py')]
+        'envs/grasp/tabletop_pick_env.py','tasks/grasp/tabletop_joint.py','envs/grasp/grasp_lift_env.py','rl/ppo_tabletop.py',
+        'simulation/physics/model.py','simulation/physics/joint_control.py','simulation/motion/kinematics.py',
+        'simulation/physics/grasp_contact.py','simulation/devices/mujoco_gripper.py','evaluation/grasp_lift.py')]
     return dict(assets=file_hashes(sorted(assets),root=PROJECT_ROOT),
         sources=file_hashes(sorted(sources),root=PROJECT_ROOT),observation_dim=56,action_dim=7,
         action_semantics=[f'joint_{j}_position_deg' for j in range(1,7)]+['absolute_gripper_opening'])

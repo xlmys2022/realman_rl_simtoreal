@@ -1,6 +1,6 @@
-"""Shared comparison poses, joint demo sequence and text formatting."""
+"""供演示与对照脚本共用的关节样本、执行序列与结果格式。"""
 import numpy as np
-from ..simulation import control
+from ..simulation.physics import joint_control as control
 
 
 def sample_poses(home):

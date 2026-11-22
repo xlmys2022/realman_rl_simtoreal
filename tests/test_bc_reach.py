@@ -17,9 +17,9 @@ try:
     from stable_baselines3.sac.policies import Actor
     from realman_rl_simtoreal.imitation import bc as bc
     from realman_rl_simtoreal.evaluation.baselines import rule_action
-    from realman_rl_simtoreal.tasks.reach import ENV_CONFIG
+    from realman_rl_simtoreal.tasks.reach.config import ENV_CONFIG
     from realman_rl_simtoreal.rl.common.env_factory import training_env
-    from realman_rl_simtoreal.envs.reach_env import ReachEnv
+    from realman_rl_simtoreal.envs.reach.reach_env import ReachEnv
     AVAILABLE=True
 except ImportError:
     AVAILABLE=False

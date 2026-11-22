@@ -6,8 +6,8 @@ from pathlib import Path
 
 import numpy as np
 
-from realman_rl_simtoreal.envs.reach_env import ReachEnv
-from realman_rl_simtoreal.tasks.reach import task_environment
+from realman_rl_simtoreal.envs.reach.reach_env import ReachEnv
+from realman_rl_simtoreal.tasks.reach.config import task_environment
 from realman_rl_simtoreal.rl.ppo import load_ppo,parameter_hashes,optimizer_steps
 from realman_rl_simtoreal.rl.common.observation import ReachTransform,features
 from realman_rl_simtoreal.rl.common.artifacts import write_json

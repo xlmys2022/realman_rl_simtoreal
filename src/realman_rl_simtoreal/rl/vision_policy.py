@@ -1,9 +1,13 @@
-"""PPO Cartesian control from RGB-D object estimates and robot proprioception."""
+"""用视觉状态替换目标对象特征，保留 Reach 臂和夹爪 PPO 的网络与迁移接口。"""
 import torch
 from .cartesian_reach_policy import CartesianGoalFeatures,ReachGraspPPOPolicy,ReachGraspNetworks
 
 
 class VisualCartesianGoalFeatures(CartesianGoalFeatures):
+    """在目标特征中使用基座系 RGB-D 位移估计及视觉夹持状态。
+
+    visual_xy_deadband 和 visual_z_deadband 单位为 m，用于减小相机估计的小幅抖动。
+    """
     def __init__(self,*args,visual_xy_deadband=.001,visual_z_deadband=.0005,**kwargs):
         if not (0<=visual_xy_deadband<=.002 and 0<=visual_z_deadband<=.001):raise ValueError('Invalid visual precision deadband')
         self.visual_xy_deadband=visual_xy_deadband;self.visual_z_deadband=visual_z_deadband
@@ -32,6 +36,7 @@ class VisualCartesianGoalFeatures(CartesianGoalFeatures):
 
 
 class VisualReachGraspNetworks(ReachGraspNetworks):
+    """从视觉编码构造臂、夹爪和价值分支，保留各分支的原输入通道。"""
     def forward_actor(self,features):
         tracking=torch.sinh(features[...,9:12])*.001
         hold=torch.cat([features[...,:3],features[...,:3]+tracking,
@@ -44,6 +49,10 @@ class VisualReachGraspNetworks(ReachGraspNetworks):
 
 
 class VisualReachGraspPPOPolicy(ReachGraspPPOPolicy):
+    """从视觉编码和机器人本体量预测笛卡尔与夹爪动作。
+
+    构造参数继承 ReachGraspPPOPolicy，沿用原 Actor/Critic 共享接口和独立网络结构。
+    """
     def __init__(self,*args,**kwargs):
         kwargs['features_extractor_class']=VisualCartesianGoalFeatures
         # The inherited distance profile reads camera-derived position only;
@@ -58,7 +67,7 @@ class VisualReachGraspPPOPolicy(ReachGraspPPOPolicy):
 
 
 def transfer_visual_observation_inputs(policy):
-    """Discard old force/hold/angular-velocity jaw weights after contract change."""
+    """清除旧接触力、保持和角速度观测对应的夹爪输入权重。"""
     with torch.no_grad():
         first=policy.mlp_extractor.policy_net['jaw'][0]
         first.weight[:,15:18]=0

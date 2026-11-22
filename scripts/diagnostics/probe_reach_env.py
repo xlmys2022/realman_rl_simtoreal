@@ -6,8 +6,8 @@ from pathlib import Path
 
 import numpy as np
 
-from realman_rl_simtoreal.envs.reach_env import ReachEnv
-from realman_rl_simtoreal.tasks.reach import TASKS, task_environment, ENV_CONFIG
+from realman_rl_simtoreal.envs.reach.reach_env import ReachEnv
+from realman_rl_simtoreal.tasks.reach.config import TASKS, task_environment, ENV_CONFIG
 from realman_rl_simtoreal.utils.metrics import MotionStats
 from realman_rl_simtoreal.rl.common.artifacts import write_json
 

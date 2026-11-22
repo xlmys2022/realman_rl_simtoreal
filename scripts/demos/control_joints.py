@@ -12,10 +12,10 @@ import time
 # MuJoCo's renderer import can load pyGLFW, so select the process-local backend
 # before importing MuJoCo (the headless path still creates no graphics context).
 
-from realman_rl_simtoreal.viewer import configure_backend, passive_viewer
+from realman_rl_simtoreal.apps.visualization.viewer import configure_backend, passive_viewer
 configure_backend()
-from realman_rl_simtoreal.simulation.model import SCENE, load_model, initialize
-from realman_rl_simtoreal.simulation.control import require, validate_target
+from realman_rl_simtoreal.simulation.physics.model import SCENE, load_model, initialize
+from realman_rl_simtoreal.simulation.physics.joint_control import require, validate_target
 from realman_rl_simtoreal.utils.demo_helpers import joint_result_lines, run_joint_demo
 
 import mujoco

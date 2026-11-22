@@ -11,7 +11,7 @@ import cv2
 import numpy as np
 
 from realman_rl_simtoreal.perception.rgbd import orange_mask
-from realman_rl_simtoreal.tasks.tabletop_cartesian import CartesianTabletopConfig
+from realman_rl_simtoreal.tasks.grasp.tabletop_cartesian import CartesianTabletopConfig
 from realman_rl_simtoreal.utils.artifacts import write_json
 
 

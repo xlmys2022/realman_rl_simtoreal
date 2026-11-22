@@ -16,8 +16,8 @@ ROOT = Path(__file__).resolve().parents[1]
 _spec = importlib.util.spec_from_file_location("_test_compare_fk", ROOT / "scripts/diagnostics/compare_fk.py")
 comparison = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(comparison)
-from realman_rl_simtoreal.simulation import control, model as model_api
-from realman_rl_simtoreal.simulation.kinematics import Kinematics
+from realman_rl_simtoreal.simulation.physics import joint_control as control, model as model_api
+from realman_rl_simtoreal.simulation.motion.kinematics import Kinematics
 from realman_rl_simtoreal.vendor import realman_fk as adapter
 
 

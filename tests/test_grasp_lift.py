@@ -10,11 +10,11 @@ from gymnasium.utils.env_checker import check_env
 import mujoco
 import numpy as np
 
-from realman_rl_simtoreal.envs.grasp_lift_env import GraspLiftEnv
+from realman_rl_simtoreal.envs.grasp.grasp_lift_env import GraspLiftEnv
 from realman_rl_simtoreal.evaluation.grasp_lift import rollout, summarize
-from realman_rl_simtoreal.utils.artifacts import experiment_metadata
-from realman_rl_simtoreal.simulation.kinematics import IKResult
-from realman_rl_simtoreal.tasks.grasp_lift import GRASP_LIFT_CONFIG
+from realman_rl_simtoreal.evaluation.grasp_lift import experiment_metadata
+from realman_rl_simtoreal.simulation.motion.kinematics import IKResult
+from realman_rl_simtoreal.tasks.grasp.lift import GRASP_LIFT_CONFIG
 
 
 class GraspInterfaceTests(unittest.TestCase):

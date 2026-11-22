@@ -14,6 +14,50 @@ from realman_rl_simtoreal.utils import artifacts
 
 FIXTURE = json.loads((ROOT/'tests/fixtures/refactor_contracts.json').read_text())
 
+# Fixture paths name the source layout used when the hashes were recorded.
+PHYSICS_SOURCE_PATHS = {
+    'simulation/tabletop_runtime.py': 'simulation/runtime/tabletop.py',
+    'envs/tabletop_cartesian_env.py': 'envs/grasp/tabletop_cartesian_env.py',
+    'envs/tabletop_cartesian_vision_env.py': 'envs/grasp/tabletop_cartesian_vision_env.py',
+}
+
+
+# The recorded class digests include these original docstring nodes.
+LEGACY_POLICY_DOCSTRINGS = {'SmoothJointPolicy': 'MLP action means with persistent Gaussian position exploration.\n'
+                      '\n'
+                      '    Stock PPO/gSDE still samples and scores every action. A constant '
+                      'unit-norm\n'
+                      '    exploration feature prevents contact-force jitter from feeding '
+                      'back into\n'
+                      '    the sampled position offset between scheduled noise refreshes.\n'
+                      '    ',
+ 'CartesianPPOPolicy': 'Change exploration scale from task observations, never the network '
+                       'mean.\n'
+                       '\n'
+                       '    All motion and jaw means remain learned PPO outputs. The distance '
+                       'is\n'
+                       '    decoded from the existing Cartesian observation, not from an IK '
+                       'solution.\n'
+                       '    Sampling and PPO likelihood evaluation use the same '
+                       'state-conditioned std.\n'
+                       '    ',
+ 'CartesianGoalFeatures': 'Expose Cartesian grasp/lift goals to an existing neural Reach '
+                          'controller.\n'
+                          '\n'
+                          '    The two force-gate parameters are learned. Frame anchors are '
+                          'fixed at the\n'
+                          "    selected observation preset and the original Reach model's "
+                          'nominal home.\n'
+                          '    No joint angles, solved joint targets or action labels enter '
+                          'these features.\n'
+                          '    ',
+ 'ReachGraspNetworks': 'Separate neural arm/jaw means and an independent task-value branch.',
+ 'ReachGraspPPOPolicy': 'Four learned Cartesian means with an optional pretrained Reach '
+                        'branch.',
+ 'VisualCartesianGoalFeatures': None,
+ 'VisualReachGraspNetworks': None,
+ 'VisualReachGraspPPOPolicy': None}
+
 
 class ArtifactContracts(unittest.TestCase):
     def test_legacy_json_bytes_and_nan_policies(self):
@@ -51,7 +95,7 @@ class ArtifactContracts(unittest.TestCase):
                 self.assertEqual(stored.read('a.py'),a.read_bytes())
 
     def test_cartesian_snapshot_retains_original_source_selection(self):
-        from realman_rl_simtoreal.rl import ppo_tabletop_cartesian as rl
+        from realman_rl_simtoreal.rl import ppo_cartesian as rl
         with tempfile.TemporaryDirectory() as folder:
             root=Path(folder);names=['src/realman_rl_simtoreal/__init__.py','assets/scene.xml','assets/mesh.bin',
                 'scripts/demo.py','pyproject.toml','requirements.txt','requirements-rl.txt','requirements-vision.txt']
@@ -82,15 +126,29 @@ class FrozenPolicyAndTaskContracts(unittest.TestCase):
             with self.subTest(policy=key):
                 tree=ast.parse((ROOT/relative).read_text())
                 node=next(n for n in tree.body if isinstance(n,ast.ClassDef) and n.name==name)
+                # Restore only the historical documentation node before hashing executable code.
+                self.assertIsNotNone(ast.get_docstring(node))
+                node.body.pop(0)
+                original_docstring = LEGACY_POLICY_DOCSTRINGS[name]
+                if original_docstring is not None:
+                    node.body.insert(0, ast.Expr(value=ast.Constant(value=original_docstring)))
                 self.assertEqual(hashlib.sha256(ast.dump(node,include_attributes=False).encode()).hexdigest(),expected)
 
     def test_physics_and_completion_methods_keep_original_timing_and_rules(self):
         for key,expected in FIXTURE['physics_method_ast_sha256'].items():
             relative,klass,name=key.split(':')
             with self.subTest(method=key):
-                tree=ast.parse((ROOT/relative).read_text())
+                package = ROOT/'src/realman_rl_simtoreal'
+                source = PHYSICS_SOURCE_PATHS[str((ROOT/relative).relative_to(package))]
+                tree = ast.parse((package/source).read_text())
                 cls=next(n for n in tree.body if isinstance(n,ast.ClassDef) and n.name==klass)
                 node=next(n for n in cls.body if isinstance(n,ast.FunctionDef) and n.name==name)
+                if (klass,name)==('TabletopRuntime','prepare'):
+                    # Compare against the old import spelling, keeping the call and all control flow.
+                    startup_import = node.body[1]
+                    self.assertIsInstance(startup_import, ast.ImportFrom)
+                    self.assertEqual((startup_import.level,startup_import.module),(1,'observation_startup'))
+                    startup_import.module = 'observation_pose'
                 self.assertEqual(hashlib.sha256(ast.dump(node,include_attributes=False).encode()).hexdigest(),expected)
 
     def test_reward_values_and_components_equal_pre_refactor_cases(self):
@@ -109,28 +167,35 @@ class FrozenPolicyAndTaskContracts(unittest.TestCase):
 
 class CartesianCLIContracts(unittest.TestCase):
     def test_legacy_imports_are_thin_forwarders(self):
-        from realman_rl_simtoreal.cli.tabletop_cartesian import main
+        from realman_rl_simtoreal.apps.cli.tabletop_cartesian import main
+        from realman_rl_simtoreal.cli.tabletop_cartesian import main as cli_main
         from realman_rl_simtoreal.utils.tabletop_cartesian_cli import main as old_main
-        from realman_rl_simtoreal.visualization.tabletop_cartesian import Recorder,run
-        from realman_rl_simtoreal.utils.tabletop_cartesian_render import Recorder as old_recorder,run as old_run
-        self.assertIs(main,old_main);self.assertIs(Recorder,old_recorder);self.assertIs(run,old_run)
+        from realman_rl_simtoreal.apps.visualization.tabletop_cartesian import Recorder, run
+        from realman_rl_simtoreal.visualization.tabletop_cartesian import Recorder as replay_recorder, run as replay_run
+        from realman_rl_simtoreal.utils.tabletop_cartesian_render import Recorder as old_recorder, run as old_run
+        self.assertIs(main, cli_main)
+        self.assertIs(main, old_main)
+        self.assertIs(Recorder, replay_recorder)
+        self.assertIs(Recorder, old_recorder)
+        self.assertIs(run, replay_run)
+        self.assertIs(run, old_run)
 
     def test_all_original_parser_options_and_defaults_remain(self):
-        path=ROOT/'src/realman_rl_simtoreal/cli/tabletop_cartesian.py'
+        path=ROOT/'src/realman_rl_simtoreal/apps/cli/tabletop_cartesian.py'
         calls=[ast.dump(n,include_attributes=False) for n in ast.walk(ast.parse(path.read_text()))
             if isinstance(n,ast.Call) and isinstance(n.func,ast.Attribute) and n.func.attr=='add_argument']
         self.assertEqual(calls,FIXTURE['cartesian_cli_arguments'])
 
     def test_train_and_render_dispatch_keep_argument_values(self):
-        from realman_rl_simtoreal.cli.tabletop_cartesian import main
-        with patch('realman_rl_simtoreal.rl.ppo_tabletop_cartesian.train',return_value={'status':'completed'}) as train:
+        from realman_rl_simtoreal.apps.cli.tabletop_cartesian import main
+        with patch('realman_rl_simtoreal.apps.training.tabletop_cartesian.train',return_value={'status':'completed'}) as train:
             self.assertEqual(main(['train','--run-dir','/tmp/unused-realman-cli','--init-reach-model','reach.zip',
                 '--observation-source','rgbd_hsv','--jaw-control','delta','--no-adaptive-exploration']),0)
             args=train.call_args.args[0]
             self.assertEqual(args.init_reach_model,Path('reach.zip'));self.assertEqual(args.observation_source,'rgbd_hsv')
             self.assertEqual(args.jaw_control,'delta');self.assertFalse(args.adaptive_exploration)
             self.assertEqual(args.seed,2027);self.assertEqual(args.n_steps,256)
-        with patch('realman_rl_simtoreal.visualization.tabletop_cartesian.run',return_value=0) as render:
+        with patch('realman_rl_simtoreal.apps.visualization.tabletop_cartesian.run',return_value=0) as render:
             self.assertEqual(main(['render','--model','m.zip','--output','r.gif','--object-radius','.02','--saved-task']),0)
             args=render.call_args.args[0];self.assertEqual(args.object_radius,.02);self.assertTrue(args.saved_task)
 
@@ -200,7 +265,7 @@ class ExistingCheckpointContracts(unittest.TestCase):
 
 class VisualCompositionContracts(unittest.TestCase):
     def test_progress_and_encoding_use_only_explicit_sensor_inputs(self):
-        from realman_rl_simtoreal.envs.tabletop_cartesian_vision_env import visual_grip_and_hold,encode_visual_observation
+        from realman_rl_simtoreal.envs.grasp.tabletop_cartesian_vision_env import visual_grip_and_hold,encode_visual_observation
         visual=dict(position_m=np.zeros(3),velocity_m_s=np.zeros(3),normal=np.array([0.,0.,1.]),
                     confidence=1.,visible=True,age=0.)
         offset=np.array([0.,0.,-.003]);goal_error=np.zeros(3)
@@ -222,7 +287,7 @@ class VisualCompositionContracts(unittest.TestCase):
 
     def test_composed_helpers_do_not_accept_privileged_environment_info(self):
         import inspect
-        from realman_rl_simtoreal.envs.tabletop_cartesian_vision_env import visual_grip_and_hold,encode_visual_observation
+        from realman_rl_simtoreal.envs.grasp.tabletop_cartesian_vision_env import visual_grip_and_hold,encode_visual_observation
         for function in (visual_grip_and_hold,encode_visual_observation):
             parameters=inspect.signature(function).parameters
             self.assertNotIn('info',parameters);self.assertNotIn('robot',parameters)
@@ -232,7 +297,7 @@ class VisualCompositionContracts(unittest.TestCase):
 class TaskOwnershipContracts(unittest.TestCase):
     def test_historical_rl_reward_imports_forward_to_task_definitions(self):
         from realman_rl_simtoreal.rl import ppo_grasp,ppo_tabletop
-        from realman_rl_simtoreal.tasks import grasp_lift,tabletop_pick
+        from realman_rl_simtoreal.tasks.grasp import lift as grasp_lift, tabletop_joint as tabletop_pick
         for rl,task,names in [(ppo_grasp,grasp_lift,('REWARD','CURRICULUM','goal_alignment','aperture_score','potential','shaped_reward')),
                               (ppo_tabletop,tabletop_pick,('REWARD','CURRICULUM','features','potential','shaped_reward'))]:
             for name in names:self.assertIs(getattr(rl,name),getattr(task,name))
@@ -240,7 +305,7 @@ class TaskOwnershipContracts(unittest.TestCase):
 
     def test_cartesian_curriculum_aliases_keep_original_completion_only_overrides(self):
         from realman_rl_simtoreal.rl import ppo_tabletop_cartesian as rl
-        from realman_rl_simtoreal.tasks import tabletop_cartesian as task
+        from realman_rl_simtoreal.tasks.grasp import tabletop_cartesian as task
         self.assertIs(rl.STAGES,task.STAGES);self.assertIs(rl.EASY,task.EASY)
         self.assertEqual(rl.EASY,dict(success_height=.005,height_tolerance=.0005,hold_seconds=.2))
         self.assertEqual(set(rl.STAGES),{'easy','pinch','approach','lift','full'})

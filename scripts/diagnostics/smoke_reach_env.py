@@ -8,7 +8,7 @@ from pathlib import Path
 import numpy as np
 from gymnasium.utils.env_checker import check_env
 
-from realman_rl_simtoreal.envs.reach_env import ReachEnv
+from realman_rl_simtoreal.envs.reach.reach_env import ReachEnv
 
 
 def main():

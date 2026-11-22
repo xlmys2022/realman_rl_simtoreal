@@ -1,19 +1,15 @@
-"""Algorithm-independent Cartesian tabletop episodes and independent evaluation.
-
-``predict(observation)`` returns deterministic, unclipped actions. Callers own
-checkpoint loading and can supply a fingerprint of weights, optimizer and counters.
-An external environment remains caller-owned; standalone evaluation simulates startup.
-"""
+"""真值与视觉桌面抓取共用的评估循环，接收调用者提供的动作预测与状态指纹。"""
 import numpy as np
 from ..envs.factory import make_tabletop_cartesian_env as TabletopEnv
-from ..envs.tabletop_cartesian_env import action_contract
-from ..envs.tabletop_cartesian_vision_env import VISION_CONTRACT
-from ..tasks.tabletop_cartesian import CartesianTabletopConfig as Config
-from ..simulation.observation_profiles import startup_contract
-from ..simulation.grasp_metrics import CONTACT_MEASUREMENT
+from ..envs.grasp.tabletop_cartesian_env import action_contract
+from ..envs.grasp.tabletop_cartesian_vision_env import VISION_CONTRACT
+from ..tasks.grasp.tabletop_cartesian import CartesianTabletopConfig as Config
+from ..simulation.runtime.observation_presets import startup_contract
+from ..simulation.physics.grasp_metrics import CONTACT_MEASUREMENT
 
 
 def rollout(env,predict,seed,tick=None):
+    """以 seed 重置环境并执行策略，记录原始动作、实际动作与完成结果。"""
     obs,initial=env.reset(seed=seed);records=[];total=0.
     if tick:tick(env.robot,'ppo')
     for _ in range(env.config.max_steps):

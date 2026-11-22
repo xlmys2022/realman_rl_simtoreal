@@ -6,9 +6,9 @@ from unittest.mock import patch
 
 import numpy as np
 from realman_rl_simtoreal.evaluation import tabletop_cartesian as evaluation
-from realman_rl_simtoreal.tasks.tabletop_cartesian import CartesianTabletopConfig as Config
-from realman_rl_simtoreal.simulation.observation_profiles import startup_contract
-from realman_rl_simtoreal.simulation.grasp_metrics import CONTACT_MEASUREMENT
+from realman_rl_simtoreal.tasks.grasp.tabletop_cartesian import CartesianTabletopConfig as Config
+from realman_rl_simtoreal.simulation.runtime.observation_presets import startup_contract
+from realman_rl_simtoreal.simulation.physics.grasp_metrics import CONTACT_MEASUREMENT
 
 
 class FakeEnv:

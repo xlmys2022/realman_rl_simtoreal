@@ -11,7 +11,7 @@ import xml.etree.ElementTree as ET
 import mujoco
 
 from realman_rl_simtoreal.paths import GRASP_CONTACT_SCENE, TABLETOP_PICK_SCENE
-from realman_rl_simtoreal.simulation.gripper import SIGNS,width_to_angle
+from realman_rl_simtoreal.simulation.devices.mujoco_gripper import SIGNS,width_to_angle
 
 
 def build():

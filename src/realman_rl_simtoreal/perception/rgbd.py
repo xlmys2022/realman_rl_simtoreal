@@ -1,8 +1,6 @@
-"""Orange cube localization from aligned RGB-D and calibrated camera geometry.
+"""根据对齐的 RGB-D 图像、相机内参和外参估计橙色立方体的位置。
 
-Inputs are sensor arrays and calibration only. No simulator object IDs, poses,
-contacts, velocities, reset coordinates or segmentation labels are accepted.
-The current object model is a known, upright 20-mm cube on a horizontal table.
+仿真与相机测量共用 RgbdFrame，检测和跟踪仅消费传感器数据与物体尺寸先验。
 """
 from dataclasses import dataclass
 import numpy as np
@@ -10,6 +8,11 @@ import numpy as np
 
 @dataclass(frozen=True)
 class RgbdFrame:
+    """对齐的 RGB uint8 和相机光轴 Z 深度（m）。
+
+    intrinsics 为像素内参，camera_to_base 为 4×4 刚体变换，timestamp 单位为秒。
+    distortion 可携带镜头畸变系数。
+    """
     rgb: np.ndarray
     depth_m: np.ndarray
     intrinsics: np.ndarray
@@ -35,6 +38,7 @@ class RgbdFrame:
 
 @dataclass(frozen=True)
 class CubeMeasurement:
+    """基座系物体中心（m）、表面法向、检测置信度、像素统计和采样时间。"""
     position_m: np.ndarray
     normal: np.ndarray
     confidence: float
@@ -44,6 +48,7 @@ class CubeMeasurement:
 
 
 def orange_mask(rgb,low=(3,175,50),high=(25,255,255)):
+    """按 OpenCV HSV 通道范围分割 RGB 图像，返回 uint8 二值掩膜。"""
     import cv2
     if rgb.ndim!=3 or rgb.shape[2]!=3 or rgb.dtype!=np.uint8:raise ValueError('Expected RGB uint8 image')
     lower=np.asarray(low);upper=np.asarray(high)
@@ -55,24 +60,31 @@ def orange_mask(rgb,low=(3,175,50),high=(25,255,255)):
 
 
 def backproject(frame,pixels_xy):
-    """Pixel (u,v) and aligned optical-Z depth -> metric robot-base points."""
+    """将像素 (u, v) 和沿光轴的米制深度反投影为机械臂基座系三维点。"""
     import cv2
     pixels=np.asarray(pixels_xy,dtype=float).reshape(-1,2)
     uv=np.rint(pixels).astype(int);h,w=frame.depth_m.shape
     if np.any(uv<0) or np.any(uv[:,0]>=w) or np.any(uv[:,1]>=h):raise ValueError('Pixels outside aligned images')
     depth=frame.depth_m[uv[:,1],uv[:,0]].astype(float)
     rays=cv2.undistortPoints(pixels.reshape(-1,1,2),frame.intrinsics,np.asarray(frame.distortion) if frame.distortion else None).reshape(-1,2)
+    # 去畸变后得到 Z=1 的归一化射线，乘光轴深度得到米制相机坐标，再应用外参。
     camera=np.c_[rays*depth[:,None],depth]
     return camera@frame.camera_to_base[:3,:3].T+frame.camera_to_base[:3,3]
 
 
 class OrangeCubeDetector:
+    """使用 edge_m 指定的边长、HSV 阈值和最小连通域像素数检测直立立方体。
+
+    detect 选择橙色连通域并结合米制点云估计表面和中心，返回 CubeMeasurement，
+    信息不足时返回 None。mask 保存最新候选连通域供调试显示。
+    """
     def __init__(self,*,edge_m=.02,hsv_low=(3,175,50),hsv_high=(25,255,255),minimum_pixels=8):
         if not .005<=edge_m<=.1 or minimum_pixels<4:raise ValueError('Invalid cube or component size')
         self.edge_m=edge_m;self.low=tuple(hsv_low);self.high=tuple(hsv_high);self.minimum_pixels=minimum_pixels
         self.mask=None
 
     def detect(self,frame):
+        """从一帧对齐 RGB-D 估计立方体中心、法向和置信度。"""
         import cv2
         mask=orange_mask(frame.rgb,self.low,self.high)
         n,labels,stats,centroids=cv2.connectedComponentsWithStats(mask)
@@ -86,8 +98,7 @@ class OrangeCubeDetector:
         valid=np.isfinite(points).all(axis=1)&np.isfinite(depth)&(depth>.02)&(depth<3.)
         points=points[valid]
         if len(points)<self.minimum_pixels:return None
-        # Reject mixed edge pixels/background. Both the surface and this cutoff
-        # come from the measured point cloud, never the table/object true pose.
+        # 利用测量深度中位数剔除轮廓混合像素及背景，再从剩余点估计顶面。
         median_depth=float(np.median(depth[valid]))
         points=points[np.abs(depth[valid]-median_depth)<self.edge_m*2]
         if len(points)<self.minimum_pixels:return None
@@ -96,8 +107,7 @@ class OrangeCubeDetector:
         if len(points)<self.minimum_pixels:return None
         low,high=np.percentile(points[:,:2],[1,99],axis=0)
         if np.any(high-low>self.edge_m*1.5):return None
-        # RGB centroid is biased by the fingers. Recover the center from the
-        # near visible cube faces and the explicitly configured physical size.
+        # 夹指会遮挡连通域。用靠近镜头的可见面与已知边长恢复中心。
         camera=frame.camera_to_base[:3,3]
         side=np.sign(camera[:2]-np.median(points[:,:2],axis=0))
         xy=np.where(side>=0,high-self.edge_m/2,low+self.edge_m/2)
@@ -115,7 +125,10 @@ class OrangeCubeDetector:
 
 
 class VisualTracker:
-    """Finite-difference velocity and bounded stale camera estimates."""
+    """用 detector 更新基座系位置和差分速度，timeout（秒）限制估计的新鲜度。
+
+    update 接收单帧，state 按当前时间输出估计、可见性和失效标记。reset 清空回合历史。
+    """
     def __init__(self,detector,*,timeout=.25):
         self.detector=detector;self.timeout=timeout;self.reset()
 
@@ -123,6 +136,7 @@ class VisualTracker:
         self.measurement=None;self.velocity=np.zeros(3);self.last_capture=None;self.visible=False
 
     def update(self,frame):
+        """检测新帧，以连续有效观测的时间差计算速度并平滑。"""
         found=self.detector.detect(frame);self.last_capture=frame.timestamp;self.visible=found is not None
         if found is not None:
             if self.measurement is not None:
@@ -134,6 +148,7 @@ class VisualTracker:
         return found
 
     def state(self,now):
+        """返回当前基座系目标估计，尚未捕获目标时抛出 ValueError。"""
         if self.measurement is None:raise ValueError('Vision target not detected at observation pose')
         m=self.measurement;age=max(0.,float(now-m.timestamp))
         # Stale state is flagged. It is not attached to the TCP or replaced by

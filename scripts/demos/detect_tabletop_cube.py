@@ -16,7 +16,7 @@ def main():
     if args.output_dir.exists():parser.error('Choose a new output directory')
     import cv2
     import numpy as np
-    from realman_rl_simtoreal.tasks.tabletop_cartesian import CartesianTabletopConfig
+    from realman_rl_simtoreal.tasks.grasp.tabletop_cartesian import CartesianTabletopConfig
     from realman_rl_simtoreal.envs.factory import make_tabletop_cartesian_env
     env=make_tabletop_cartesian_env(CartesianTabletopConfig(observation_source='rgbd_hsv',object_radius=args.object_radius))
     try:

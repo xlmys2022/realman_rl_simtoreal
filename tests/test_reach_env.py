@@ -14,10 +14,10 @@ from gymnasium.utils.env_checker import check_env
 import mujoco
 import numpy as np
 
-from realman_rl_simtoreal.envs.reach_env import ReachEnv
+from realman_rl_simtoreal.envs.reach.reach_env import ReachEnv
 from realman_rl_simtoreal.paths import PROJECT_ROOT
-from realman_rl_simtoreal.simulation import control
-from realman_rl_simtoreal.simulation.kinematics import IKResult
+from realman_rl_simtoreal.simulation.physics import joint_control as control
+from realman_rl_simtoreal.simulation.motion.kinematics import IKResult
 
 
 class ReachEnvTests(unittest.TestCase):
@@ -368,7 +368,7 @@ class BlockSDK(importlib.abc.MetaPathFinder):
         if fullname=='Robotic_Arm' or fullname.startswith('Robotic_Arm.'):
             raise ModuleNotFoundError('SDK intentionally unavailable')
 sys.meta_path.insert(0,BlockSDK())
-from realman_rl_simtoreal.envs.reach_env import ReachEnv
+from realman_rl_simtoreal.envs.reach.reach_env import ReachEnv
 with ReachEnv() as env:
     env.reset(seed=0)
     obs,r,t,tr,info=env.step([1,0,0])

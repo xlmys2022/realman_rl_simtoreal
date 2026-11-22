@@ -48,7 +48,7 @@ from realman_rl_simtoreal.paths import PROJECT_ROOT
 from realman_rl_simtoreal.evaluation import reach as evaluation, baselines
 def forbidden(*a,**kw):raise AssertionError('SAC weights/expert actions forbidden')
 evaluation.rule_action=baselines.rule_action=forbidden
-from realman_rl_simtoreal.envs.reach_env import ReachEnv
+from realman_rl_simtoreal.envs.reach.reach_env import ReachEnv
 old_env_step,old_physics=ReachEnv.step,mujoco.mj_step
 active={};counts=dict(env_steps=0,physics_steps=0)
 def physical(model,data):
@@ -94,7 +94,7 @@ print(json.dumps(result['timing']))
     def test_dict_features_and_native_policy_architecture(self):
         import torch
         from stable_baselines3.common.policies import MultiInputActorCriticPolicy
-        from realman_rl_simtoreal.envs.reach_env import ReachEnv
+        from realman_rl_simtoreal.envs.reach.reach_env import ReachEnv
         from realman_rl_simtoreal.rl.common.observation import ReachTransform
         self.assertIsInstance(self.model.policy,MultiInputActorCriticPolicy)
         self.assertEqual(self.model.policy.features_extractor.features_dim,33)
@@ -194,7 +194,7 @@ print(json.dumps(result['timing']))
         self.assertEqual(self.model.num_timesteps,512);self.assertTrue(a['parameters_unchanged'])
 
     def test_fixed_target_scope_is_not_random_generalization(self):
-        from realman_rl_simtoreal.envs.reach_env import ReachEnv
+        from realman_rl_simtoreal.envs.reach.reach_env import ReachEnv
         from realman_rl_simtoreal.rl.ppo import environment_config
         with ReachEnv(**environment_config()) as env:
             a,_=env.reset(seed=87000);b,_=env.reset(seed=88000)
@@ -224,7 +224,7 @@ print(json.dumps(result['timing']))
             gravity_compensation=True).items():self.assertEqual(env[key],value)
         # Wider workspace parameters change sampling/control dispatch. Legacy
         # rollout fixtures exercise those behaviors; these formulas stay frozen.
-        env_path='src/realman_rl_simtoreal/envs/reach_env.py'
+        env_path='src/realman_rl_simtoreal/envs/reach/reach_env.py'
         self.assertEqual({k:v for k,v in asset_hashes().items() if k!=env_path},
                          {k:v for k,v in self.config['assets'].items() if k!=env_path})
         contract=read(PROJECT_ROOT/'tests/fixtures/reach_env_legacy_contract.json')
@@ -248,9 +248,10 @@ print(json.dumps(result['timing']))
         self.assertEqual(methods,frozen)
         baseline=PROJECT_ROOT/'outputs/validation/ppo_reach/baseline_manifest.json'
         if baseline.exists():
-            # Optional developer integrity evidence; CI does not need old outputs.
+            # Historical source hashes describe the old paths and docstrings.
+            # Keep the byte check for simulation assets and the method AST check above.
             for name,digest in read(baseline).items():
-                if name.startswith('assets/') or name.endswith(('simulation/model.py','simulation/kinematics.py')):
+                if name.startswith('assets/'):
                     self.assertEqual(hashlib.sha256((PROJECT_ROOT/name).read_bytes()).hexdigest(),digest,name)
 
     def test_tensorboard_contains_measured_update_and_evaluation_metrics(self):

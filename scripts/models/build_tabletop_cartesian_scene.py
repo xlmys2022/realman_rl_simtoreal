@@ -4,7 +4,7 @@ import xml.etree.ElementTree as ET
 import mujoco
 import numpy as np
 from realman_rl_simtoreal.paths import TABLETOP_PICK_SCENE, TABLETOP_CARTESIAN_SCENE as DEFAULT_SCENE
-from realman_rl_simtoreal.simulation.camera import camera_rotation
+from realman_rl_simtoreal.simulation.devices.camera_geometry import camera_rotation
 
 
 def build():

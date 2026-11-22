@@ -1,11 +1,28 @@
-"""Independent four-action grasp episodes for caller-supplied policies or a controller."""
+"""运行局部夹取和抬升回合，生成独立的物理验收与实验来源记录。"""
 from time import perf_counter
 import numpy as np
 
-from ..envs.grasp_lift_env import GraspLiftEnv
-from ..simulation.grasp_controller import GraspLiftController
-from ..utils.artifacts import experiment_metadata
+from ..envs.grasp.grasp_lift_env import GraspLiftEnv
+from ..simulation.motion.staged_grasp_controller import GraspLiftController
+from ..paths import GRASP_CONTACT_SCENE, PROJECT_ROOT
+from ..utils.artifacts import dependency_versions, file_hashes
 from .metrics import summarize_grasp_episodes as summarize
+
+
+def experiment_metadata():
+    """记录局部抓取场景、资源、核心源码摘要及 SI 动作约定。"""
+    assets={GRASP_CONTACT_SCENE}
+    for folder in ('assets/robots/rml63','assets/grippers/eg2_4c2'):
+        assets.update(p for p in (PROJECT_ROOT/folder).rglob('*') if p.is_file())
+    sources=[PROJECT_ROOT/'src/realman_rl_simtoreal'/p for p in (
+        'envs/grasp/grasp_lift_env.py','tasks/grasp/lift.py','evaluation/grasp_lift.py','utils/artifacts.py','evaluation/metrics.py',
+        'simulation/motion/staged_grasp_controller.py','simulation/devices/mujoco_gripper.py','simulation/physics/grasp_contact.py',
+        'simulation/physics/joint_control.py','simulation/motion/kinematics.py','simulation/physics/model.py')]
+    return dict(assets=file_hashes(sorted(assets),root=PROJECT_ROOT),
+                sources=file_hashes(sorted(sources),root=PROJECT_ROOT),
+                runtime=dependency_versions(('mujoco','numpy','gymnasium')),
+                action_semantics=['world_dx','world_dy','world_dz','absolute_gripper_opening'],
+                observation_dim=41,action_dim=4)
 
 
 def rollout(env,seed,*,model=None,close=True,lift=True,tick=None):
@@ -45,6 +62,7 @@ def rollout(env,seed,*,model=None,close=True,lift=True,tick=None):
 
 
 def evaluate(config,seeds,*,model=None,close=True,lift=True,tick=None):
+    """按种子执行局部抓取回合并汇总结果，支持调用者提供确定性策略。"""
     with GraspLiftEnv(**config) as env:
         episodes=[rollout(env,seed,model=model,close=close,lift=lift,tick=tick) for seed in seeds]
         return dict(schema=1,task='grasp_lift',policy='staged_controller' if model is None else 'ppo',

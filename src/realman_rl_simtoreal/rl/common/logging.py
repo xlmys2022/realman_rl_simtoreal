@@ -1,4 +1,4 @@
-"""Write measured evaluation scalars to a training logger; never execute episodes."""
+"""将独立评估已产生的指标写入训练日志，沿用原 TensorBoard 标签和分母。"""
 from ...evaluation.metrics import REASONS
 
 
