@@ -2,6 +2,19 @@
 
 这是现有 `tabletop_cartesian` 的 `rgbd_hsv` 观测模式，使用同一工程和 `realman_rl` 环境。保留原 `state` 模式、旧 Reach/夹取任务及旧模型。运动流程仍为六轴零位 → 传统控制到固定观测姿态 → PPO 输出末端 XYZ 和夹爪增量 → 独立 FK/IK 执行。
 
+## 交互演示
+
+在图形桌面终端中，从仓库根目录启动：
+
+```bash
+conda activate realman_rl
+python -I scripts/demos/demo_vision_grasp.py
+```
+
+窗口从六轴零位开始运行 MuJoCo 仿真。到达固定观测姿态后，右侧显示 PPO 使用的腕部 RGB 和 HSV Mask，左上角显示视觉估计的基座坐标与稳定保持进度。用鼠标左键拖动旋转、右键拖动平移、滚轮缩放。按空格暂停或继续，按 `R` 用同一 seed 从零位重跑。任务结束后画面保留，可继续调整视角。
+
+默认请求 2 倍仿真速度，`--speed 1` 可按实时速度观看。用 `--seed 997100 --object-radius .02` 可复现已验证的随机位置，用 `--model` 可指定其他视觉 PPO 检查点。
+
 ## 图像与三维定位
 
 读取现有 `camera_link` 上的 `wrist_rgb` 相机，局部位置保持 `(0,0,0)`，没有把相机移动到更容易看到方块的位置。RGB 与深度使用同一分辨率、相同相机和同一个物理时刻；深度是光轴 Z 方向的米制测量，不使用物体 ID、MuJoCo 分割标签或物体位姿。

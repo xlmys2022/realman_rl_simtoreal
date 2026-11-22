@@ -28,6 +28,8 @@
 
 实物方块可用 `scripts/demos/calibrate_cube_hsv.py` 选择部署相机、对照实时掩膜调整 HSV 滑块并保存阈值。[HSV 标定操作步骤](docs/tabletop_vision.md#标定实物方块的-hsv)
 
+运行 `python -I scripts/demos/demo_vision_grasp.py` 可打开交互式 MuJoCo 窗口，观看完整抓取、实时腕部 RGB 和 HSV Mask。[窗口操作](docs/tabletop_vision.md#交互演示)
+
 ## 桌面末端控制任务（真值观测模式）
 
 `tabletop_cartesian` 与现有 reach、lift、tabletop_pick 并列，使用同一工程和 `realman_rl` 环境。流程固定为零位 → 传统控制到固定观测姿态 → PPO 执行任务，课程和物体位置都不会把启动点移到方块附近。预设包含面向桌面的 `table_down` 和夹爪与桌面平行、平视正前方的 `forward`。

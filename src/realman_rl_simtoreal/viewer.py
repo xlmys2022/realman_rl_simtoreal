@@ -13,14 +13,14 @@ def configure_backend():
 
 
 @contextmanager
-def passive_viewer(model, data):
+def passive_viewer(model, data, **options):
     """Wait for this standalone viewer's threads before GLFW shuts down."""
     import mujoco.viewer
 
     existing_threads = set(threading.enumerate())
     viewer_threads = []
     try:
-        with mujoco.viewer.launch_passive(model, data) as viewer:
+        with mujoco.viewer.launch_passive(model, data, **options) as viewer:
             # MuJoCo 3.17.0 close() requests shutdown but does not join its
             # daemon render thread. This CLI starts no other Python workers.
             viewer_threads = [thread for thread in threading.enumerate()

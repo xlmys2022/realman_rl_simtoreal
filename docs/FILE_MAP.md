@@ -1,6 +1,6 @@
 # Python 文件地图
 
-当前共 151 个 Python 文件：核心包 75、入口 43、测试 33。下列清单来自实际文件与静态导入；函数内导入纳入统计，动态加载和 checkpoint 的类引用另外由测试验证。
+当前共 152 个 Python 文件：核心包 75、入口 44、测试 33。下列清单来自实际文件与静态导入；函数内导入纳入统计，动态加载和 checkpoint 的类引用另外由测试验证。
 
 当前边界见 [architecture.md](architecture.md)，本轮的基线、确认重复与阶段验证见 [结构审计](validation/STRUCTURE_AUDIT.md)。[此前 Evaluation 报告](validation/EVALUATION_REFACTOR_VALIDATION.md)和其他历史验证报告描述当时版本，不能代替当前地图。
 
@@ -12,6 +12,7 @@
 - `scripts/demos/control_ee.py`：末端 IK / 控制演示；入口：用户 CLI。
 - `scripts/demos/control_joints.py`：关节控制演示与验收；入口：用户 CLI。
 - `scripts/demos/demo_gripper.py`：夹爪开合、带载保持演示；入口：用户 CLI。
+- `scripts/demos/demo_vision_grasp.py`：MuJoCo 交互窗口运行视觉 PPO，显示腕部 RGB 和 HSV Mask；入口：用户 CLI。
 - `scripts/demos/detect_tabletop_cube.py`：Capture existing wrist RGB-D, HSV mask and a cube position in robot base.；入口：用户 CLI。
 - `scripts/demos/move_to_observation_pose.py`：setup the Cartesian tabletop task in the existing realman_rl project.；入口：用户 CLI。
 - `scripts/demos/render_ppo_tabletop.py`：Offscreen deterministic PPO replay: full desk and a gripper close-up.；入口：用户 CLI。
