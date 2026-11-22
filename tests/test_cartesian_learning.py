@@ -12,7 +12,7 @@ from realman_rl_simtoreal.tasks.grasp.tabletop_cartesian_reward import potential
 from realman_rl_simtoreal.simulation.physics.grasp_metrics import inward_normal,grasp_forces
 from realman_rl_simtoreal.simulation.devices.mujoco_gripper import width_to_angle,angle_to_width
 from realman_rl_simtoreal.rl.cartesian_policy import CartesianPPOPolicy,reset_critic,reset_jaw_head
-from realman_rl_simtoreal.rl.ppo_tabletop_cartesian import hashes
+from realman_rl_simtoreal.rl.ppo_cartesian import hashes
 from realman_rl_simtoreal.rl.cartesian_reach_policy import (ReachGraspPPOPolicy,initialize_reach_arm,branch_hashes)
 
 

@@ -1,19 +1,9 @@
 """构造 Reach 与抓取的 SB3 环境包装栈，复用原 Monitor、向量化与数值检查。"""
-import numpy as np
 from stable_baselines3.common.monitor import Monitor
 from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv, VecCheckNan
 
 from ...envs.factory import make_reach_env
-from .observation import ReachTransform, ScaledReachObservation
-
-
-def make_probe(environment, seeds):
-    """Public reset observations only; no BC, experts, actions or training time."""
-    with make_reach_env(environment) as env:
-        observations=[env.reset(seed=int(s))[0] for s in seeds]
-        transform=ReachTransform.from_env(env)
-    return {key:np.stack([obs[key] for obs in observations])
-            for key in ('achieved_goal','desired_goal','observation')},transform
+from .observation import ScaledReachObservation
 
 
 def training_env(config, monitor_file=None):

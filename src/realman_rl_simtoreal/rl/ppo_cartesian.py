@@ -120,11 +120,6 @@ def deterministic_action(model,observation):
         return model.policy.get_distribution(tensor).get_actions(deterministic=True).cpu().numpy().reshape(model.action_space.shape)
 
 
-def rollout(env,model,seed,tick=None):
-    """Compatibility adapter; the episode implementation belongs to evaluation."""
-    return evaluation.rollout(env,lambda obs:deterministic_action(model,obs),seed,tick=tick)
-
-
 def evaluate(model,config,seeds,*,full=False,tick=None,environment=None,observation_pose=None,object_radius=None):
     """Keep the PPO API and JSON contract while sharing task evaluation."""
     def fingerprint():

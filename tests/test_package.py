@@ -64,8 +64,6 @@ import realman_rl_simtoreal.rl.common
 import realman_rl_simtoreal.imitation
 import realman_rl_simtoreal.utils
 import realman_rl_simtoreal.evaluation
-import realman_rl_simtoreal.cli
-import realman_rl_simtoreal.visualization
 import realman_rl_simtoreal.apps.cli
 import realman_rl_simtoreal.apps.training
 import realman_rl_simtoreal.apps.visualization
@@ -154,7 +152,7 @@ for constructor in (lambda:RealManFK(),lambda:RealManIK(kin.limits)):
         discovered = set(find_packages(where=str(ROOT/'src'), include=['realman_rl_simtoreal*']))
         for suffix in ('tasks.reach', 'tasks.grasp', 'envs.reach', 'envs.grasp',
                        'simulation.physics', 'simulation.motion', 'simulation.devices', 'simulation.runtime',
-                       'rl', 'rl.common', 'imitation', 'utils', 'evaluation', 'cli', 'visualization',
+                       'rl', 'rl.common', 'imitation', 'utils', 'evaluation',
                        'apps.cli', 'apps.training', 'apps.visualization', 'hardware', 'deployment'):
             self.assertIn('realman_rl_simtoreal.'+suffix, discovered)
 

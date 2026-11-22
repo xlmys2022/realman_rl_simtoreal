@@ -6,7 +6,7 @@
 
 ## 1. 实际 src 目录树
 
-以下为工作区实际存在的 95 个 Python 文件。
+以下为清理旧入口后实际存在的 87 个 Python 文件。
 
 ```text
 src/
@@ -29,9 +29,6 @@ src/
     │       ├── tabletop_joint.py
     │       ├── viewer.py
     │       └── vision_grasp.py
-    ├── cli/
-    │   ├── __init__.py
-    │   └── tabletop_cartesian.py
     ├── deployment/
     │   └── __init__.py
     ├── envs/
@@ -77,7 +74,6 @@ src/
     │   ├── ppo_cartesian.py
     │   ├── ppo_grasp.py
     │   ├── ppo_tabletop.py
-    │   ├── ppo_tabletop_cartesian.py
     │   └── vision_policy.py
     ├── simulation/
     │   ├── __init__.py
@@ -121,17 +117,11 @@ src/
     │   ├── artifacts.py
     │   ├── demo_helpers.py
     │   ├── geometry.py
-    │   ├── metrics.py
-    │   ├── tabletop_cartesian_cli.py
-    │   └── tabletop_cartesian_render.py
-    ├── vendor/
-    │   ├── __init__.py
-    │   ├── realman_fk.py
-    │   └── realman_ik.py
-    ├── viewer.py
-    └── visualization/
+    │   └── metrics.py
+    └── vendor/
         ├── __init__.py
-        └── tabletop_cartesian.py
+        ├── realman_fk.py
+        └── realman_ik.py
 ```
 
 ## 2. 文件迁移对照
@@ -167,13 +157,13 @@ src/
 | `tasks/tabletop_pick.py` | `tasks/grasp/tabletop_joint.py` | 关节桌面配置、课程与势差奖励 |
 | `tasks/tabletop_cartesian.py` | `tasks/grasp/tabletop_cartesian.py` | 笛卡尔课程、配置与观测检查 |
 | `tasks/tabletop_cartesian_reward.py` | `tasks/grasp/tabletop_cartesian_reward.py` | 笛卡尔接近、夹持、抬升奖励 |
-| `cli/tabletop_cartesian.py` | `apps/cli/tabletop_cartesian.py` | 应用层统一处理笛卡尔四个命令，旧路径转发 |
-| `viewer.py` | `apps/visualization/viewer.py` | 集中 Viewer 初始化和线程收尾，旧路径转发 |
-| `visualization/tabletop_cartesian.py` | `apps/visualization/tabletop_cartesian.py` | 桌面回放及图像输出，旧路径转发 |
+| `cli/tabletop_cartesian.py` | `apps/cli/tabletop_cartesian.py` | 应用层统一处理笛卡尔四个命令，移除旧转发包 |
+| `viewer.py` | `apps/visualization/viewer.py` | 集中 Viewer 初始化和线程收尾，移除顶层转发 |
+| `visualization/tabletop_cartesian.py` | `apps/visualization/tabletop_cartesian.py` | 桌面回放及图像输出，移除旧转发包 |
 | `scripts/train/train_ppo_reach.py` | `apps/training/reach.py` | 迁移完整 Reach 调度，脚本继续解析原参数 |
 | `scripts/train/train_ppo_grasp_lift.py` | `apps/training/grasp_lift.py` | 迁移局部抓取训练、课程、输出和权重选择 |
 | `scripts/train/train_ppo_tabletop.py` | `apps/training/tabletop_joint.py` | 迁移关节桌面训练与评估调度 |
-| `rl/ppo_tabletop_cartesian.py` | `apps/training/tabletop_cartesian.py`、`rl/ppo_cartesian.py` | 拆开训练调度和模型/评估薄适配，旧模块提供兼容接口 |
+| `rl/ppo_tabletop_cartesian.py` | `apps/training/tabletop_cartesian.py`、`rl/ppo_cartesian.py` | 拆开训练调度和模型/评估薄适配，移除旧转发模块 |
 | `rl/ppo.py` | `tasks/reach/config.py` | 迁移环境默认配置选择，RL 保留模型、回调及同名入口 |
 | `rl/ppo_grasp.py` | `envs/grasp/grasp_lift_env.py`、`tasks/grasp/lift.py` | 拆出编码、环境包装与课程配置，RL 提供原名称及 PPO 模型初始化 |
 | `rl/ppo_tabletop.py` | `envs/grasp/tabletop_pick_env.py`、`tasks/grasp/tabletop_joint.py` | 拆出编码、环境包装与课程配置，原序列化策略类留在 RL |
@@ -193,6 +183,10 @@ src/
 | `scripts/diagnostics/diagnose_sac_reach.py` | 已移除 | 退役 SAC Q/TD 诊断入口 |
 | `scripts/plots/plot_sac_training.py` | 已移除 | 退役 SAC 专用绘图入口 |
 | `tests/test_sac_bc_initialization.py` | 已移除 | 移除针对退役迁移与监控入口的专用用例 |
+| `utils/tabletop_cartesian_cli.py` | `apps/cli/tabletop_cartesian.py` | 移除重复的 CLI 转发 |
+| `utils/tabletop_cartesian_render.py` | `apps/visualization/tabletop_cartesian.py` | 移除重复的回放转发 |
+| `rl/ppo_cartesian.py` 的 `rollout()` | `evaluation/tabletop_cartesian.py` 的 `rollout()` | 移除无人调用的单回合转发 |
+| `rl/common/env_factory.py` 的 `make_probe()` | 已移除 | 清理 SAC 退役后无人调用的探针 |
 | 新建 | `hardware/__init__.py`、`deployment/__init__.py` | 分别定义真实设备和策略部署边界 |
 
 ## 3. 模块职责
@@ -214,11 +208,11 @@ src/
 
 - **移动范围**包括全部 15 个仿真实现、6 个环境及 6 个任务模块。执行 AST 对照覆盖原 27 个模块和 `perception/rgbd.py`，仅排除文档、导入路径和新增迁入的独立定义。历史物理方法和奖励数值的 fixture 继续由单元测试检查。
 - **拆分范围**包括训练编排、课程配置、抓取包装、关节/笛卡尔模型初始化和回放。局部与关节桌面共享同一处 Monitor、SB3 向量环境和 NaN 检查创建逻辑。局部抓取探索标准差及夹爪偏置复用模型初始化函数。各任务保留现有课程、评估节奏和指标字段。
-- **旧接口**包括 `cli.tabletop_cartesian`、`visualization.tabletop_cartesian`、`viewer`、两个 `utils.tabletop_cartesian_*` 转发和原 `rl.ppo_tabletop_cartesian` 加载、评估、训练接口。局部/关节桌面的原 RL 奖励、课程和编码名称继续指向现行实现。其他仓库调用者已改用分层后的路径。
+- **现行入口**由 `apps/cli`、`apps/visualization`、`apps/training` 以及 `rl.ppo_cartesian` 提供，`scripts/` 调用方式沿用原定义。旧 CLI、回放、Viewer 与笛卡尔 PPO 转发共删除 8 个 Python 文件。局部及关节桌面的原 RL 奖励、课程和编码名称继续指向现行实现。
 - **序列化**继续使用现有的 `rl/cartesian_policy.py`、`rl/cartesian_reach_policy.py`、`rl/vision_policy.py` 和 `rl/ppo_tabletop.py` 类定义。对照覆盖共 9 个原策略、特征、网络和分布类的可执行 AST，其中包括 `SmoothJointPolicy` 和 `CorrelatedPositionNoise`。
 - **SAC 退役**包括 3 个专用 RL 模块、BC→SAC 迁移模块和 5 个入口。算法无关的 Reach 评估仍可接收已加载策略，历史 SAC checkpoint 仍由 SB3 只读加载测试覆盖。独立 BC 及共享工具继续使用，原实验报告、训练数据和模型归档逐字节匹配基线。
 - **输出**沿用各脚本的原参数、默认目录与产物协议。新输出的源码键、归档路径及 SHA256 对应现行文件。Reach、局部抓取、关节桌面与笛卡尔任务的空间维度、单位、奖励、完成规则和 PPO/SB3 训练配置由回归覆盖。
-- **保留边界**包括 Reach 既有奖励方法、各环境的专用控制周期和桌面任务的独立统计。四套训练保留各自的调度。旧笛卡尔模块保留经过验证的启动和观测契约检查，历史权重迁移仍使用原兼容参数。
+- **保留边界**包括 Reach 既有奖励方法、各环境的专用控制周期和桌面任务的独立统计。四套训练保留各自的调度。笛卡尔加载器沿用启动和观测契约检查，历史权重迁移仍使用原兼容参数。
 
 ### 归档中的项目内类引用
 
@@ -261,7 +255,7 @@ MUJOCO_GL=egl python -I tests/manual_structure_regression.py \
 
 ### 导入、入口与结果核验
 
-- 在仓库外以隔离 Python 用 `pkgutil.walk_packages` 和 `importlib.import_module` 导入 95 个包和模块。静态图测试检查包内循环、反向依赖和脚本导入。
+- 首次重构在仓库外以隔离 Python 导入全部 95 个包和模块。静态图测试检查包内循环、反向依赖和脚本导入。
 - 34 个正式 CLI 从外部目录通过 `--help` 检查。所有现行脚本及共享笛卡尔命令的 222 条 `add_argument` 声明与迁移前相同。5 个无参数构建器在使用独立资产副本的环境中以 `python -I scripts/models/build_*.py` 逐个运行，38 个资产文件的摘要逐字节相同。
 - 对保存的真值桌面观察位执行 `scripts/demos/move_to_observation_pose.py`，在临时路径生成启动 JSON。用 `scripts/demos/detect_tabletop_cube.py --object-radius .02 --seed 990010` 生成 RGB、Mask、深度和检测 JSON。视觉交互入口在无显示环境返回原错误信息及退出码 1。
 - 训练测试执行各任务原小步数更新，核对配置、初始和最终模型、阶段、评估日志及输出保护。`assets/`、`outputs/` 和 `tests/fixtures/` 共 11,118 个文件与迁移前 SHA256 一致。
@@ -282,6 +276,12 @@ MUJOCO_GL=egl python -I tests/manual_structure_regression.py \
 另以 seed 17721 在单目标 Reach、连续 Reach、局部抓取训练包装、关节桌面训练包装各执行 12 步，前后状态、观测、奖励与诊断的摘要逐位一致。额外对照实际执行了 `/tmp/realman-src-refactor.N4Drhdqf/check_checkpoints.py before|after`、`/tmp/realman-src-refactor.N4Drhdqf/check_source_changes.py` 和 `/tmp/realman-src-refactor.N4Drhdqf/compare_seeded_envs.py before|after`。
 
 图形桌面上的互动操作、实际相机和真机执行尚未实测。本次验证使用历史权重与单元测试短训练预算，长期训练和历史大样本成功率沿用对应实验报告。
+
+### 清理旧入口后的复测
+
+- 在 Conda `realman_rl` 重新执行 `MUJOCO_GL=egl python -I -m unittest discover -s tests -v`，505 项通过，0 失败、0 错误、0 跳过，耗时 676.821 秒。重点契约、包入口和桌面评估专项另有 33 项通过。
+- `python -I -m compileall -q src scripts tests` 通过。隔离进程导入现有 87 个包和模块，39 个现行脚本与清理前逐字节相同。
+- 复测 2,355 个历史 PPO checkpoint 的固定输入推理和四条固定种子长轨迹，结果逐位一致。清理同时移除了 68 个无源文件对应的 Python 字节码缓存。
 
 ### 工作区记录
 

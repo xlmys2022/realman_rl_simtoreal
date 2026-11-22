@@ -1,6 +1,6 @@
 # Python 文件地图
 
-现行 Python 文件共 166 个，包含核心包 95、脚本 39、测试和手动工具 32。
+现行 Python 文件共 158 个，包含核心包 87、脚本 39、测试和手动工具 32。
 
 模块依赖见 [架构](architecture.md)。实际目录树、迁移前后文件和回归结果见 [src 重构报告](validation/SRC_LAYOUT_REFACTOR_VALIDATION.md)。实验原版本的命令与路径见 [历史验证索引](validation/README.md)。
 
@@ -65,7 +65,6 @@
 
 - `__init__.py` — 轻量包初始化。
 - `paths.py` — 源码仓库资源与输出目录定位，不依赖 cwd。
-- `viewer.py` — 旧 Viewer 导入入口，供已有外部演示调用。
 
 ## src / apps
 
@@ -91,11 +90,6 @@
 - `apps/visualization/tabletop_joint.py` — 回放关节桌面 PPO，生成全景与夹爪近景 GIF、PNG 和评估记录。
 - `apps/visualization/viewer.py` — 延迟初始化 MuJoCo Viewer，统一演示程序的渲染后端和线程收尾。
 - `apps/visualization/vision_grasp.py` — 在 MuJoCo Viewer 中运行视觉抓取并叠加腕部 RGB-D 检测结果。
-
-## src / cli
-
-- `cli/__init__.py` — 轻量包初始化。
-- `cli/tabletop_cartesian.py` — 旧笛卡尔命令入口，转发到应用层的参数解析器。
 
 ## src / deployment
 
@@ -152,7 +146,6 @@
 - `rl/ppo_cartesian.py` — 笛卡尔 PPO 模型创建、checkpoint 契约和共享评估薄适配。
 - `rl/ppo_grasp.py` — 局部夹取与抬升 PPO 的模型参数、checkpoint、训练回调和评估适配。
 - `rl/ppo_tabletop.py` — 关节桌面 PPO 的策略、持续相关噪声、checkpoint 操作及评估适配。
-- `rl/ppo_tabletop_cartesian.py` — 兼容历史笛卡尔 PPO 模型操作、评估及训练的导入入口。
 - `rl/vision_policy.py` — 用视觉状态替换目标对象特征，保留 Reach 臂和夹爪 PPO 的网络与迁移接口。
 
 ## src / rl/common
@@ -223,19 +216,12 @@
 - `utils/demo_helpers.py` — 供演示与对照脚本共用的关节样本、执行序列与结果格式。
 - `utils/geometry.py` — 共享 SE(3) 构造与逆变换。
 - `utils/metrics.py` — 训练与评估共享 MotionStats 和原余弦函数；只依赖 NumPy。
-- `utils/tabletop_cartesian_cli.py` — 历史笛卡尔 CLI 导入转发。
-- `utils/tabletop_cartesian_render.py` — 历史笛卡尔回放导入转发。
 
 ## src / vendor
 
 - `vendor/__init__.py` — 轻量包初始化。
 - `vendor/realman_fk.py` — 可选厂家离线 FK SDK 适配与会话保护。
 - `vendor/realman_ik.py` — 厂家离线 IK、解集与自模型复核。
-
-## src / visualization
-
-- `visualization/__init__.py` — 轻量包初始化。
-- `visualization/tabletop_cartesian.py` — 旧笛卡尔回放导入入口，保留历史 Recorder 和 run。
 
 ## tests
 
@@ -263,7 +249,7 @@
 - `tests/test_reach_progress_reward.py` — 25项奖励方向、批量、漏洞/边界、兼容、组件与单次512步PPO Smoke。
 - `tests/test_reach_task.py` — 随机可达目标、奖励一致性、基线及 CLI。
 - `tests/test_reach_transform.py` — Reach 原始与包装观测空间、固定编码和模型输入校验。
-- `tests/test_refactor_contracts.py` — JSON、来源、CLI/转发、策略类、物理方法、奖励及七类历史模型的精确回归。
+- `tests/test_refactor_contracts.py` — JSON、来源、现行 CLI、退役模块、策略类、物理方法、奖励及七类历史模型的精确回归。
 - `tests/test_rgbd_vision.py` — Camera geometry, true-state isolation, lost-target handling and visual PPO。
 - `tests/test_sequence_reach.py` — 随机起点、连续目标、奖励上下文与状态交接。
 - `tests/test_tabletop_cartesian.py` — Exercise the policy/controller boundary and real MuJoCo dynamics。

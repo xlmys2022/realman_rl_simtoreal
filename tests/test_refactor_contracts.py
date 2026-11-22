@@ -1,6 +1,7 @@
 """Behavioral contracts recorded before the progressive structure refactor."""
 import ast
 import hashlib
+from importlib.util import find_spec
 import json
 from pathlib import Path
 import tempfile
@@ -62,7 +63,7 @@ LEGACY_POLICY_DOCSTRINGS = {'SmoothJointPolicy': 'MLP action means with persiste
 class ArtifactContracts(unittest.TestCase):
     def test_legacy_json_bytes_and_nan_policies(self):
         from realman_rl_simtoreal.rl.common.artifacts import write_json as strict, append_json
-        from realman_rl_simtoreal.rl.ppo_tabletop_cartesian import write_json as cartesian
+        from realman_rl_simtoreal.rl.ppo_cartesian import write_json as cartesian
         with tempfile.TemporaryDirectory() as folder:
             path=Path(folder)/'nested/result.json';value={'标签':'夹爪','return_':1.25}
             strict(path,value)
@@ -110,7 +111,7 @@ class ArtifactContracts(unittest.TestCase):
                 self.assertEqual(stored.read('scripts/demo.py').decode(),'scripts/demo.py')
 
     def test_legacy_helper_imports_share_one_implementation(self):
-        from realman_rl_simtoreal.rl import ppo,ppo_grasp,ppo_tabletop_cartesian as cartesian
+        from realman_rl_simtoreal.rl import ppo,ppo_grasp,ppo_cartesian as cartesian
         from realman_rl_simtoreal.rl.common import artifacts as model_artifacts
         self.assertIs(ppo.parameter_hashes,ppo_grasp.parameter_hashes)
         self.assertIs(ppo.optimizer_steps,ppo_grasp.optimizer_steps)
@@ -166,19 +167,11 @@ class FrozenPolicyAndTaskContracts(unittest.TestCase):
 
 
 class CartesianCLIContracts(unittest.TestCase):
-    def test_legacy_imports_are_thin_forwarders(self):
-        from realman_rl_simtoreal.apps.cli.tabletop_cartesian import main
-        from realman_rl_simtoreal.cli.tabletop_cartesian import main as cli_main
-        from realman_rl_simtoreal.utils.tabletop_cartesian_cli import main as old_main
-        from realman_rl_simtoreal.apps.visualization.tabletop_cartesian import Recorder, run
-        from realman_rl_simtoreal.visualization.tabletop_cartesian import Recorder as replay_recorder, run as replay_run
-        from realman_rl_simtoreal.utils.tabletop_cartesian_render import Recorder as old_recorder, run as old_run
-        self.assertIs(main, cli_main)
-        self.assertIs(main, old_main)
-        self.assertIs(Recorder, replay_recorder)
-        self.assertIs(Recorder, old_recorder)
-        self.assertIs(run, replay_run)
-        self.assertIs(run, old_run)
+    def test_obsolete_forwarders_are_not_importable(self):
+        for module in ('cli', 'visualization', 'viewer', 'utils.tabletop_cartesian_cli',
+                       'utils.tabletop_cartesian_render', 'rl.ppo_tabletop_cartesian'):
+            with self.subTest(module=module):
+                self.assertIsNone(find_spec('realman_rl_simtoreal.' + module))
 
     def test_all_original_parser_options_and_defaults_remain(self):
         path=ROOT/'src/realman_rl_simtoreal/apps/cli/tabletop_cartesian.py'
@@ -223,7 +216,7 @@ class ExistingCheckpointContracts(unittest.TestCase):
         from realman_rl_simtoreal.rl.ppo import load_ppo
         from realman_rl_simtoreal.rl.ppo_grasp import load_checkpoint as load_grasp
         from realman_rl_simtoreal.rl.ppo_tabletop import load_checkpoint as load_joint
-        from realman_rl_simtoreal.rl.ppo_tabletop_cartesian import load as load_cartesian
+        from realman_rl_simtoreal.rl.ppo_cartesian import load as load_cartesian
         from realman_rl_simtoreal.imitation.bc import load_policy
         old_threads=torch.get_num_threads();torch.set_num_threads(1)
         try:
@@ -303,12 +296,13 @@ class TaskOwnershipContracts(unittest.TestCase):
             for name in names:self.assertIs(getattr(rl,name),getattr(task,name))
         self.assertIsNot(grasp_lift.REWARD,tabletop_pick.REWARD)
 
-    def test_cartesian_curriculum_aliases_keep_original_completion_only_overrides(self):
-        from realman_rl_simtoreal.rl import ppo_tabletop_cartesian as rl
+    def test_cartesian_training_uses_original_completion_only_overrides(self):
+        from realman_rl_simtoreal.apps.training import tabletop_cartesian as training
         from realman_rl_simtoreal.tasks.grasp import tabletop_cartesian as task
-        self.assertIs(rl.STAGES,task.STAGES);self.assertIs(rl.EASY,task.EASY)
-        self.assertEqual(rl.EASY,dict(success_height=.005,height_tolerance=.0005,hold_seconds=.2))
-        self.assertEqual(set(rl.STAGES),{'easy','pinch','approach','lift','full'})
+        self.assertIs(training.STAGES, task.STAGES)
+        self.assertIs(training.environment_config, task.environment_config)
+        self.assertEqual(task.EASY, dict(success_height=.005, height_tolerance=.0005, hold_seconds=.2))
+        self.assertEqual(set(task.STAGES), {'easy', 'pinch', 'approach', 'lift', 'full'})
 
 
 if __name__=='__main__':unittest.main()

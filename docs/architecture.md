@@ -25,7 +25,7 @@ simulation/devices/mujoco_rgbd_camera ──→ perception/RgbdFrame
 - `hardware` 预留设备适配接口，`deployment` 预留真机策略观测、推理和执行流程。当前两包只有初始化说明。厂家离线 FK/IK 继续位于 `vendor`。
 - `utils/metrics.py` 提供运动统计，`utils/artifacts.py` 提供通用产物 I/O、SHA256 和源码归档。局部抓取的来源集合定义在 `evaluation.grasp_lift.experiment_metadata`。
 
-`apps/cli/tabletop_cartesian.py` 统一四个笛卡尔命令的参数与调度。`apps/visualization` 负责 MuJoCo Viewer、关节/笛卡尔回放和视觉交互。旧 `cli.tabletop_cartesian`、`visualization.tabletop_cartesian`、`viewer` 及两个 `utils.tabletop_cartesian_*` 导入继续转发。
+`apps/cli/tabletop_cartesian.py` 统一四个笛卡尔命令的参数与调度。`apps/visualization` 负责 MuJoCo Viewer、关节/笛卡尔回放和视觉交互。
 
 `TabletopPickEnv` 使用独立的 `tabletop_pick.xml`，复用局部抓取的逐物理步保持判据。完整 reset 在仿真时间零初始化六轴零位和 60 mm 开口。课程起点记录与抓取上方姿态的插值比例。七维动作给出六轴绝对角度（度）和归一化夹爪开口，经同步限速及碰撞预检后由执行器执行。私有 IK 用于目标特征、奖励和探索坐标。评估向 `evaluation.grasp_lift.rollout` 提供非空策略并记录原始网络动作。
 
@@ -84,7 +84,7 @@ PPO 用 `rl.ppo_grasp.load_checkpoint()` 加载，再由 `evaluate_model()` 编�
 
 ### 笛卡尔桌面接口
 
-笛卡尔模型操作位于 `rl.ppo_cartesian`。旧 `rl.ppo_tabletop_cartesian` 继续导出 `load()`、`evaluate()`、`rollout()` 和 `train()`。共用循环只有 `evaluation.tabletop_cartesian` 一份，当前真值与 RGB-D 环境由 `envs.factory` 按保存的观测契约创建。GraspLift 和关节桌面的不同任务协议继续使用原 GraspLift 评估器。
+笛卡尔训练调用 `apps.training.tabletop_cartesian.train()`。`rl.ppo_cartesian` 提供 `load()` 和 `evaluate()`，单回合执行位于 `evaluation.tabletop_cartesian.rollout()`。真值与 RGB-D 环境由 `envs.factory` 按保存的观测契约创建。GraspLift 和关节桌面继续使用原 GraspLift 评估器。
 
 其他算法或规则可传 `predict(observation)`，返回未裁剪动作；Evaluation 沿用 `[-1,1]` 裁剪与 float32、原 seed、终止规则和统计定义。`evaluate(..., action_shape=(4,), state_fingerprint=..., sources=..., algorithm=...)` 接收完整任务 / startup / contact 配置；可选回调保护调用者自己的只读状态。未提供指纹时通用接口的 `parameters_unchanged` 为 null，避免声称完成未执行的参数核验；旧 PPO 薄适配始终提供指纹，JSON 保持 true。
 
@@ -118,7 +118,7 @@ PPO 指纹覆盖全体参数、num_timesteps、_n_updates、Adam 每参数 step�
 
 `tasks/grasp/lift.py` 和 `tabletop_joint.py` 保存各自的 REWARD、CURRICULUM 与原 potential/shaped_reward。`tasks/grasp/tabletop_cartesian.py` 定义 EASY/STAGES 和环境配置，`tabletop_cartesian_reward.py` 保存笛卡尔奖励。
 
-`rl/ppo_grasp.py`、`ppo_tabletop.py` 与 `ppo_tabletop_cartesian.py` 保留历史奖励、课程或编码导入。局部抓取和关节桌面的包装与编码实现位于各自环境，训练调度由应用持有。
+`rl/ppo_grasp.py` 与 `rl/ppo_tabletop.py` 保留历史奖励、课程或编码导入。局部抓取和关节桌面的包装与编码实现位于各自环境，训练调度由应用持有。
 
 ## 观测、动作和奖励契约
 
@@ -192,7 +192,7 @@ PPO更新、目标分布和控制/安全逻辑不变。诊断先于新实现完�
 
 ## 保存兼容性与边界
 
-PPO 使用官方 SB3 保存格式，配置以 JSON 保存。历史 SAC 归档继续可通过 SB3 读取模型数据。部分桌面 PPO 使用自定义 Policy / 分布 / 特征类，必须保留 `rl/ppo_tabletop.py`、`cartesian_policy.py`、`cartesian_reach_policy.py`、`vision_policy.py` 的可导入路径与类实现；本轮全部保持。BC 保存显式网络标识、配置和 state_dict，继续 `torch.load(weights_only=True)`。原 utils CLI / 回放导入有兼容转发，模型类没有移动。仅使用仓库已有、来源明确的本地模型做只读验证，不下载或加载未知文件。
+PPO 使用官方 SB3 保存格式，配置以 JSON 保存。历史 SAC 归档继续可通过 SB3 读取模型数据。部分桌面 PPO 使用自定义 Policy、分布和特征类，序列化依赖 `rl/ppo_tabletop.py`、`rl/cartesian_policy.py`、`rl/cartesian_reach_policy.py` 与 `rl/vision_policy.py` 中的类路径。BC 保存显式网络标识、配置和 state_dict，继续使用 `torch.load(weights_only=True)`。回归验证使用仓库已有的本地模型。
 
 新PPO配置schema=2保存观测元数据；历史PPO配置schema=1、变换schema=2仍按legacy加载。
 加载核对保存模式、固定变换、模型空间与实际features_dim，33/12维模型不得混用或自动迁移权重。
