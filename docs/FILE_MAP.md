@@ -1,6 +1,6 @@
 # Python 文件地图
 
-现行 Python 文件共 158 个，包含核心包 87、脚本 39、测试和手动工具 32。
+现行 Python 文件共 159 个，包含核心包 88、脚本 39、测试和手动工具 32。
 
 模块依赖见 [架构](architecture.md)。实际目录树、迁移前后文件和回归结果见 [src 重构报告](validation/SRC_LAYOUT_REFACTOR_VALIDATION.md)。实验原版本的命令与路径见 [历史验证索引](validation/README.md)。
 
@@ -126,6 +126,7 @@
 ## src / hardware
 
 - `hardware/__init__.py` — 轻量包初始化。
+- `hardware/realman_config.py` — RML63-6FB 实机型号、示教器与控制器版本及 SDK 类型。
 
 ## src / imitation
 

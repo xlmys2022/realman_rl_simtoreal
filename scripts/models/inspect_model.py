@@ -1,15 +1,14 @@
 #!/usr/bin/env python3
-"""Check the pinned RML63II-6F-V URDF and compiled MuJoCo model without a GUI."""
+"""检查官方 6FB 资产和实机参数生成的兼容 URDF。"""
 
 import argparse
 import hashlib
 from pathlib import Path
-from realman_rl_simtoreal.paths import ROBOT_ASSETS as ASSET_DIR
+from realman_rl_simtoreal.paths import DEFAULT_URDF, ROBOT_ASSETS as ASSET_DIR, ROBOT_MODEL, UPSTREAM_URDF
 import struct
 import sys
 import xml.etree.ElementTree as ET
 
-DEFAULT_MODEL = ASSET_DIR / "rml63_mujoco.urdf"
 ARM_JOINTS = tuple(f"joint_{i}" for i in range(1, 7))
 
 
@@ -38,51 +37,49 @@ def check_upstream():
         require(hashlib.sha256(path.read_bytes()).hexdigest() == expected,
                 f"Upstream asset checksum mismatch: {path}")
     print(f"[PASS] Upstream SHA-256 checksums: {len(entries)} files")
-    source = ET.parse(ASSET_DIR / "upstream/urdf/RML63II-6F-V.urdf").getroot()
+    source = ET.parse(UPSTREAM_URDF).getroot()
     for link in source.findall("link"):
         eigenvalues = np.linalg.eigvalsh(inertia_matrix(link))
         margin = eigenvalues[0] + eigenvalues[1] - eigenvalues[2]
         if margin < 0:
             print(f"[WARN] Original {link.attrib['name']} inertia violates A+B>=C: "
                   f"margin={margin:.9e} kg*m^2; see SOURCE.md")
-    print("[WARN] RML63II-6F-V hardware generation and physical parameters are not verified against the real arm.")
+    print(f"[INFO] {ROBOT_MODEL} CAD inertias are nominal. The compatible URDF uses the controller's kinematics.")
 
 
 def check_urdf(path):
     root = ET.parse(path).getroot()
-    require(root.tag == "robot" and root.get("name") == "RML63II-6F-V",
-            "Expected the RML63II-6F-V URDF, not a different robot or MJCF")
+    require(root.tag == "robot" and root.get("name") == ROBOT_MODEL,
+            f"Expected the {ROBOT_MODEL} URDF")
     links = root.findall("link")
     joints = root.findall("joint")
     names = {link.attrib["name"] for link in links}
-    expected_links = {"base_link", "camera_rolink", "camera_link"} | {
-        f"link_{i}" for i in range(1, 7)}
+    # 6FB 本体为七个连杆、六个主关节，腕部光学系由桌面场景单独安装。
+    expected_links = {"base_link"} | {f"link_{i}" for i in range(1, 7)}
     require(len(links) == len(names) and names == expected_links,
             f"Unexpected or duplicate URDF links: {sorted(names)}")
     by_name = {joint.attrib["name"]: joint for joint in joints}
-    expected_joints = set(ARM_JOINTS) | {"camera_rojoint", "camera_joint"}
+    expected_joints = set(ARM_JOINTS)
     require(len(joints) == len(by_name) and set(by_name) == expected_joints,
             f"Unexpected or duplicate URDF joints: {sorted(by_name)}")
     chain = [(name, "base_link" if i == 1 else f"link_{i-1}", f"link_{i}", "revolute")
              for i, name in enumerate(ARM_JOINTS, 1)]
-    chain += [("camera_rojoint", "link_6", "camera_rolink", "revolute"),
-              ("camera_joint", "camera_rolink", "camera_link", "fixed")]
     for name, parent, child, kind in chain:
         joint = by_name[name]
         require((joint.find("parent").get("link"), joint.find("child").get("link"),
                  joint.get("type")) == (parent, child, kind), f"Wrong topology/type: {name}")
-    print(f"[PASS] URDF: {len(links)} links, {len(joints)} joints; six arm revolute joints + camera revolute + camera fixed")
+    print(f"[PASS] URDF: {len(links)} links, {len(joints)} joints; six arm revolute joints")
 
     mesh_paths = set()
     for mesh in root.findall(".//mesh"):
         filename = mesh.attrib["filename"]
-        prefix = "package://RML63II-6F-V/"
+        prefix = f"package://{ROBOT_MODEL}/"
         mesh_path = (path.parent.parent / filename[len(prefix):]
                      if filename.startswith(prefix) else path.parent / filename)
         mesh_path = mesh_path.resolve()
         require(mesh_path.is_file(), f"Missing mesh: {mesh_path}")
         mesh_paths.add(mesh_path)
-    require(len(mesh_paths) == 9, f"Expected 9 unique meshes, found {len(mesh_paths)}")
+    require(len(mesh_paths) == 7, f"Expected 7 unique meshes, found {len(mesh_paths)}")
     for mesh_path in sorted(mesh_paths):
         payload = mesh_path.read_bytes()
         require(len(payload) >= 84, f"Truncated binary STL: {mesh_path}")
@@ -90,7 +87,7 @@ def check_urdf(path):
         require(triangles > 0 and len(payload) == 84 + 50 * triangles,
                 f"Invalid binary STL size: {mesh_path}")
         print(f"  Mesh {mesh_path.name}: {len(payload)} bytes, {triangles} triangles")
-    print("[PASS] All 9 referenced binary STL files are complete")
+    print("[PASS] All 7 referenced binary STL files are complete")
 
     total_mass = 0.0
     for link in links:
@@ -107,11 +104,8 @@ def check_urdf(path):
         print(f"  Link {name}: mass={mass:.9g} kg, COM={com.tolist()} m, "
               f"principal inertia={eigenvalues.tolist()} kg*m^2")
     print(f"[PASS] Selected URDF mass/inertia checks; total mass including fixed base={total_mass:.9f} kg")
-    for name, _, _, kind in chain:
+    for name, *_ in chain:
         joint = by_name[name]
-        if kind == "fixed":
-            print(f"  URDF {name}: fixed (no MuJoCo motion joint)")
-            continue
         axis = vector(joint.find("axis").get("xyz"))
         require(np.linalg.norm(axis) > 0, f"Zero joint axis: {name}")
         limit = {key: float(value) for key, value in joint.find("limit").attrib.items()}
@@ -128,7 +122,7 @@ def check_model(path, root, joints):
     data = mujoco.MjData(model)
     print(f"MuJoCo: nbody={model.nbody} (includes world), njnt={model.njnt}, "
           f"nq={model.nq}, nv={model.nv}, nu={model.nu}, nmesh={model.nmesh}, ngeom={model.ngeom}")
-    require(model.nbody == 10, "Expected world plus all nine URDF bodies (fusestatic=false)")
+    require(model.nbody == 8, "Expected world plus seven arm bodies (fusestatic=false)")
     for body_id in range(model.nbody):
         name = model.body(body_id).name
         parent = "-" if body_id == 0 else model.body(int(model.body_parentid[body_id])).name
@@ -143,9 +137,9 @@ def check_model(path, root, joints):
                 f"Compiled COM differs from URDF: {body.name}")
         require(np.allclose(np.sort(body.inertia), np.linalg.eigvalsh(inertia_matrix(link)),
                             rtol=1e-5, atol=1e-15), f"Compiled inertia differs from URDF: {body.name}")
-    expected = set(ARM_JOINTS) | {"camera_rojoint"}
+    expected = set(ARM_JOINTS)
     require({model.joint(i).name for i in range(model.njnt)} == expected,
-            "Compiled motion joints do not match the six arm joints and camera joint")
+            "Compiled motion joints do not match the six arm joints")
     for joint_id in range(model.njnt):
         joint = model.joint(joint_id)
         source = joints[joint.name]
@@ -161,12 +155,11 @@ def check_model(path, root, joints):
         expected_range = [float(limits.get("lower")), float(limits.get("upper"))]
         require(bool(joint.limited[0]) and np.allclose(joint.range, expected_range),
                 f"Compiled limits differ: {joint.name}")
-        role = "arm" if joint.name in ARM_JOINTS else "camera accessory"
-        print(f"  Joint {joint_id} {joint.name}: {kind}, {role}, "
+        print(f"  Joint {joint_id} {joint.name}: {kind}, "
               f"axis={joint.axis.tolist()} (child body frame), "
               f"range={joint.range.tolist()} rad / {np.rad2deg(joint.range).round(6).tolist()} deg")
-    require((model.nq, model.nv, model.nu) == (7, 7, 0), "Unexpected state/control dimensions")
-    print("[PASS] Six arm hinges verified by name, type, topology, axis and limits; one additional camera hinge")
+    require((model.nq, model.nv, model.nu) == (6, 6, 0), "Unexpected state/control dimensions")
+    print("[PASS] Six arm hinges verified by name, type, topology, axis and limits")
     print("[WARN] nu=0: URDF effort/velocity do not create actuators or enforce runtime velocity limits")
     mujoco.mj_forward(model, data)
     for name in ("qpos", "qvel", "qacc", "xpos", "xquat", "qfrc_bias"):
@@ -188,7 +181,7 @@ def check_model(path, root, joints):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--model", type=Path, default=DEFAULT_MODEL, help="RML63II-6F-V URDF path")
+    parser.add_argument("--model", type=Path, default=DEFAULT_URDF, help=f"{ROBOT_MODEL} URDF path")
     args = parser.parse_args()
     global mujoco, np
     try:

@@ -1,10 +1,10 @@
 <package format="2">
-  <name>RML63II-6F-V</name>
+  <name>RML63II-6FB</name>
   <version>1.0.0</version>
   <description>
-    <p>URDF Description package for RML63II-6F-V</p>
+    <p>URDF Description package for RML63II-6FB</p>
     <p>This package contains configuration data, 3D models and launch files
-for RML63II-6F-V robot</p>
+for RML63II-6FB robot</p>
   </description>
   <author>TODO</author>
   <maintainer email="TODO@email.com" />

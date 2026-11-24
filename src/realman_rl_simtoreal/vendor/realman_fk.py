@@ -10,6 +10,8 @@ import hashlib
 
 import numpy as np
 
+from ..hardware.realman_config import REALMAN_HARDWARE
+
 MODELS = {"II": "RM_MODEL_RM_63_II_E", "III": "RM_MODEL_RM_63_III_E"}
 SENSORS = {name: f"RM_MODEL_RM_{name}_E" for name in ("B", "ZF", "SF", "ISF", "BV", "ISFV")}
 
@@ -48,7 +50,7 @@ def euler_matrix(rpy):
 class RealManFK:
     _active = None
 
-    def __init__(self, model="II", sensor="SF"):
+    def __init__(self, model=REALMAN_HARDWARE.arm_generation, sensor=REALMAN_HARDWARE.sdk_force_type):
         if model not in MODELS or sensor not in SENSORS:
             raise ValueError("Unsupported model or sensor candidate")
         try:
@@ -60,7 +62,7 @@ class RealManFK:
         arm = getattr(sdk.rm_robot_arm_model_e, MODELS[model])
         force = getattr(sdk.rm_force_type_e, SENSORS[sensor])
         self._algo = sdk.Algo(arm, force)
-        # Official standalone Algo creates a zero-valued handle, never connects.
+        # 独立 Algo 只用 SDK 内置的名义 DH。句柄为 0，实际读回的 DH 另外对照。
         if self._algo.handle.id != 0 or self._algo.arm_dof != 6:
             raise RuntimeError("Expected standalone six-axis Algo with handle id=0")
         RealManFK._active = self

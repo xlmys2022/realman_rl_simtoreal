@@ -233,7 +233,8 @@ class ExistingCheckpointContracts(unittest.TestCase):
                         before=model_state_digest(network.state_dict());action=model.predict(obs);raw=action;optimizer=None
                     else:
                         loaded=(load_ppo(path) if name=='reach_ppo' else (SAC.load(path,device='cpu'),{}) if name=='reach_sac'
-                            else load_grasp(path) if name=='grasp_ppo' else load_joint(path) if name=='joint_tabletop_ppo' else load_cartesian(path))
+                            else load_grasp(path) if name=='grasp_ppo' else load_joint(path) if name=='joint_tabletop_ppo'
+                            else load_cartesian(path, allow_legacy_startup=True))
                         model=loaded[0];network=model.policy
                         def sample(space):
                             if hasattr(space,'spaces'):return {k:sample(s) for k,s in space.spaces.items()}

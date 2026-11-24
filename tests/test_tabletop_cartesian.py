@@ -256,7 +256,17 @@ class PackageTests(unittest.TestCase):
     def test_camera_additions_do_not_change_dynamics(self):
         source = mujoco.MjModel.from_xml_path(str(ROOT / 'assets/scenes/tabletop_pick.xml'))
         derived = mujoco.MjModel.from_xml_path(str(ROOT / 'assets/scenes/tabletop_cartesian.xml'))
-        for name in ('body_mass', 'body_inertia', 'body_pos', 'body_quat', 'jnt_range', 'jnt_axis',
+        # 视觉场景另挂一个无质量、无碰撞的相机坐标系。按名称比较原有刚体，避免混淆两边的编号。
+        camera = derived.body('camera_link')
+        self.assertEqual(derived.nbody, source.nbody + 1)
+        self.assertEqual(derived.body_parentid[camera.id], derived.body('link_6').id)
+        self.assertEqual(derived.body_mass[camera.id], 0.)
+        self.assertEqual(derived.body_dofnum[camera.id], 0)
+        self.assertEqual(derived.body_geomnum[camera.id], 0)
+        body_ids = [derived.body(source.body(index).name).id for index in range(source.nbody)]
+        for name in ('body_mass', 'body_inertia', 'body_pos', 'body_quat'):
+            np.testing.assert_array_equal(getattr(derived, name)[body_ids], getattr(source, name), err_msg=name)
+        for name in ('jnt_range', 'jnt_axis',
                      'geom_size', 'geom_friction', 'geom_contype', 'geom_conaffinity',
                      'actuator_gainprm', 'actuator_biasprm', 'actuator_forcerange',
                      'pair_friction', 'pair_solref', 'pair_solimp', 'eq_data'):
@@ -418,7 +428,8 @@ class FixedObservationTests(unittest.TestCase):
                 with patch.object(robot.kinematics,'solve_ik',side_effect=AssertionError('Startup must not target an object')):
                     report,_=robot.prepare(xy,tick=tick)
                 traces.append(np.array(trace))
-                np.testing.assert_array_equal(report['target_q_deg'],profile.joints_deg)
+                # 控制使用弧度，报告转回度时允许浮点舍入。
+                np.testing.assert_allclose(report['target_q_deg'], profile.joints_deg, atol=1e-12, rtol=0)
                 np.testing.assert_allclose(report['actual_tcp_m'],profile.tcp_m,atol=.001)
                 np.testing.assert_allclose(report['tool_forward'],np.array(profile.tool_rotation)[:,2],atol=.001)
                 np.testing.assert_allclose(report['camera']['forward'],np.array(profile.tool_rotation)[:,2],atol=.001)
@@ -460,7 +471,7 @@ class PoseControlTests(unittest.TestCase):
         for _ in range(8):
             _,_,terminated,_,info=self.env.step(action)
             self.assertFalse(terminated,info['detail'])
-        np.testing.assert_array_equal(self.env.controller.reference,reference)
+        np.testing.assert_allclose(self.env.controller.reference,reference,atol=1e-12,rtol=0.)
         np.testing.assert_allclose(self.env.controller.orientation,orientation,atol=1e-12)
         np.testing.assert_allclose(self.env.robot.tcp_pose()[0],position,atol=.001)
         np.testing.assert_allclose(self.env.robot.tcp_pose()[1],rotation,atol=.001)

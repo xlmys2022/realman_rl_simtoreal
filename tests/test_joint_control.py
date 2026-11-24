@@ -11,6 +11,7 @@ import numpy as np
 
 ROOT = Path(__file__).resolve().parents[1]
 from realman_rl_simtoreal.simulation.physics import joint_control as control, model as model_api
+from realman_rl_simtoreal.hardware.realman_config import REALMAN_HARDWARE
 
 
 class JointControlTests(unittest.TestCase):
@@ -26,7 +27,13 @@ class JointControlTests(unittest.TestCase):
         result = subprocess.run([sys.executable, "-I", str(ROOT / "scripts/models/inspect_model.py")],
                                 cwd="/tmp", text=True, capture_output=True, timeout=30)
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("nq=7, nv=7, nu=0", result.stdout)
+        self.assertIn("nq=6, nv=6, nu=0", result.stdout)
+
+    def test_compiled_limits_match_controller_in_degrees(self):
+        # 控制器回包为度，MuJoCo 关节与执行器区间为弧度。
+        degrees = np.column_stack([REALMAN_HARDWARE.joint_min_deg, REALMAN_HARDWARE.joint_max_deg])
+        np.testing.assert_allclose(np.rad2deg(self.model.jnt_range[self.jids]), degrees, atol=1e-12, rtol=0)
+        np.testing.assert_array_equal(self.model.jnt_range[self.jids], self.model.actuator_ctrlrange[self.aids])
 
     def test_conversion_preserves_geometry_inertia_and_limits(self):
         original = mujoco.MjModel.from_xml_path(str(ROOT / "assets/robots/rml63/rml63_mujoco.urdf"))
@@ -63,19 +70,16 @@ class JointControlTests(unittest.TestCase):
             mujoco.mj_forward(self.model, data)
             self.assertTrue(np.all(np.abs(data.qfrc_actuator) <= [60, 60, 30, 30, 10, 10]))
 
-    def test_hold_base_camera_and_uncommanded_joints(self):
+    def test_hold_fixed_base_and_uncommanded_joints(self):
         data = model_api.initialize(self.model)
         base = self.model.body("base_link").id
-        tip = self.model.body("link_6").id
-        camera = self.model.body("camera_rolink").id
         initial_base = data.xpos[base].copy()
-        relative = data.xmat[tip].reshape(3, 3).T @ (data.xpos[camera] - data.xpos[tip])
         home = data.ctrl[self.aids].copy()
         result = control.run_segment(self.model, data, self.jids, self.aids, home, "20s hold", ramp=0, hold=20)
         self.assertEqual(result["max_contacts"], 0)
         np.testing.assert_array_equal(data.xpos[base], initial_base)
-        np.testing.assert_allclose(data.xmat[tip].reshape(3, 3).T @ (data.xpos[camera] - data.xpos[tip]), relative, atol=1e-13)
-        self.assertEqual(self.model.body_jntnum[camera], 0)
+        # 6FB 裸臂模型只有本体，腕部相机在视觉桌面场景中安装。
+        self.assertEqual(self.model.ncam, 0)
 
     def test_each_joint_positive_and_negative_small_motion(self):
         for sign in (1, -1):

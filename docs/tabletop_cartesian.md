@@ -2,9 +2,11 @@
 
 本功能与现有 reach、grasp_lift、tabletop_pick 并列，使用同一个工程和 `realman_rl` 环境。原有任务、控制方式和模型保留。
 
-新增 `rgbd_hsv` 视觉模式已完成完整抓取：固定位置 3/3、半径 2 cm 随机位置 3/3，输入中的全部物体信息来自腕部 RGB-D 相机，详见 [视觉接口、模型和命令](tabletop_vision.md)及[视觉验证报告](validation/TABLETOP_VISION_VALIDATION.md)。下文的 r13、54/60 和接触力观测均属于保留的默认 `state` 模式，不是视觉模型成绩。
+现行场景已切换为已核实的 `RML63II-6FB`。本页的 r13 模型和 54/60 结果属于历史 6F-V 场景。当前 6FB 视觉模型、命令与复测见对应说明。[新版坐标系和观察位](../assets/robots/rml63/SOURCE.md) · [视觉抓取](tabletop_vision.md)
 
-当前完整模型为 `outputs/grasp/ppo/tabletop_cartesian/fixed_observation_v2/full_table_down_seed2029_r13_secure_grip/checkpoints/step_00003072/model.zip`。固定方块 `(0.40,0)` m、`table_down` 起点独立复测 **3/3** 成功，零安全终止；成功时离台 28.962 mm，连续稳定保持 2.009 秒。每次包含实际零位传统启动，推理期间参数不变。模型使用预训练 Reach PPO 及夹持门控先验，再进行 PPO 微调。
+`rgbd_hsv` 模式的全部物体观测来自腕部 RGB-D。当前 6FB 场景的固定位置和半径 2 cm 随机位置分别复测 1/1。历史视觉报告的两组 3/3 对应原 6F-V 场景。[视觉接口、模型和命令](tabletop_vision.md) · [历史视觉报告](validation/TABLETOP_VISION_VALIDATION.md)
+
+历史状态模型为 `outputs/grasp/ppo/tabletop_cartesian/fixed_observation_v2/full_table_down_seed2029_r13_secure_grip/checkpoints/step_00003072/model.zip`。固定方块 `(0.40,0)` m、`table_down` 起点独立复测 **3/3** 成功，零安全终止；成功时离台 28.962 mm，连续稳定保持 2.009 秒。每次包含实际零位传统启动，推理期间参数不变。模型使用预训练 Reach PPO 及夹持门控先验，再进行 PPO 微调。
 
 随机位置已独立验证 **54/60（90%）**：以 `(0.40,0)` m 为中心，半径 1、2、5 cm 的圆盘各采样 20 个未训练位置，三档均为 18/20。六次失败为三次抬升不足超时和三次夹爪速度保护终止；完整标准、固定启动和模型参数不变。当前有一定位置泛化能力，尚未稳定全通过；平视起点、随机物体姿态、视觉定位误差和真机尚未验证。
 
@@ -73,7 +75,7 @@ python -I scripts/train/train_ppo_tabletop_cartesian.py --stage full \
   --run-dir outputs/grasp/ppo/tabletop_cartesian/secure_grip_new
 ```
 
-上面是本次成功微调的实际配置，继承 r12 已学到的夹爪权重。首次初始化可使用 `--init-reach-model outputs/reach/ppo/random_20cm_seed2027_continue/final/model.zip`；此选项用于朝下的位置控制，平视/旋转控制继续使用普通笛卡尔 PPO。`--arm-speed-factor` 在首次初始化时缩放原末端输出层，以适应当前控制周期和稳定保持要求。后续用 `--init-model` 继承完整任务 checkpoint，原 Reach 模型文件保持不变。
+上面记录历史 6F-V 场景的微调参数。可用此命令在 6FB 中以 r12 作为权重起点，生成新的训练结果。首次初始化可使用 `--init-reach-model outputs/reach/ppo/random_20cm_seed2027_continue/final/model.zip`。此选项用于朝下的位置控制，平视/旋转控制使用普通笛卡尔 PPO。`--arm-speed-factor` 在首次初始化时缩放原末端输出层，以适应当前控制周期和稳定保持要求。后续用 `--init-model` 继承完整任务 checkpoint。
 
 所有课程从同一个所选观测预设开始。`easy` 只把成功门槛设为抬升 5 mm、保持 0.2 秒；`full` 为抬升 30 mm（2 mm 容差）、保持 2 秒。初始开口、XYZ 动作范围和观测位置不随课程改变。旧命令的 `pinch/approach/lift` 名称保留为门槛别名，已移除原来的近距离起点和 `near/half` 课程。
 
@@ -98,9 +100,11 @@ python -I scripts/train/train_ppo_tabletop_cartesian.py --observation-pose forwa
 
 从头训练时，夹爪输出初始化为保持固定观测姿态的初始开口。迁移旧权重时可用 `--reset-jaw` 单独重新初始化夹爪输出头；这会改变初始夹爪均值，保留末端其它动作、共享隐层和价值网络。该输出头继续参与 PPO 更新，不在执行中固定开口。
 
-新 checkpoint 使用 schema 2，并记录固定预设、六轴目标及交接方式。以前的近物体课程模型不满足该启动契约，评估/回放会明确拒绝。兼容的旧四维网络可以通过 `--init-model` 作为四维训练的权重初始化；新的运行会从固定观测姿态重训并记录 `startup_changed`。四维网络不能直接用于七维姿态接口。
+新 checkpoint 使用 schema 2，内嵌的启动契约为 v3，记录机型、固定预设、六轴目标和交接方式。评估与回放要求启动契约匹配。兼容的旧四维网络可通过 `--init-model` 初始化 6FB 的四维训练，产物记录 `startup_changed`。平视的七维姿态接口使用七维网络。
 
 接触测量版本也写入 checkpoint。旧的法向力总和观测与当前内向力观测含义不同，因此旧模型只允许作为 `--init-model` 重新训练；历史评估应使用该次运行保存的 `source_snapshot.zip`，避免将新环境结果误记为原运行成绩。每次训练记录 Actor/Critic 哈希、优化器更新次数、每回合最大抬升/有效夹力及最小末端距离。
+
+以下 r13 命令用于在对应历史快照中复现。现行 6FB 的可运行评估命令使用已复测的视觉检查点。[6FB 评估命令](tabletop_vision.md#已保存模型与复现)
 
 ```bash
 python -I scripts/evaluate/evaluate_ppo_tabletop_cartesian.py \

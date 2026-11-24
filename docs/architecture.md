@@ -22,7 +22,7 @@ simulation/devices/mujoco_rgbd_camera ──→ perception/RgbdFrame
 - `rl` 持有 PPO 网络、分布、模型工厂、checkpoint 和完整 rollout 审计。`apps/training` 管理四类训练的任务配置、评估间隔及输出生命周期。局部与关节桌面向量环境共用 `rl.common.env_factory.grasp_training_vector`。
 - `evaluation` 接收策略或动作 callable，由独立环境执行回合。无需加载 PyTorch 或 SB3。Reach 和 BC 共用 `rl.common.observation` 固定编码，后者依赖 Gymnasium/NumPy。
 - `perception/rgbd.py` 通过 `RgbdFrame` 提供对齐图像、米制深度、内外参与时间戳。目标检测和跟踪消费此契约。
-- `hardware` 预留设备适配接口，`deployment` 预留真机策略观测、推理和执行流程。当前两包只有初始化说明。厂家离线 FK/IK 继续位于 `vendor`。
+- `hardware/realman_config.py` 记录已核实的 6FB 型号、版本、控制器 DH 和关节限位。生成器读取同一份配置并写出运动学场景。厂家离线 FK/IK 位于 `vendor`，`deployment` 预留真机观测、推理和执行流程。
 - `utils/metrics.py` 提供运动统计，`utils/artifacts.py` 提供通用产物 I/O、SHA256 和源码归档。局部抓取的来源集合定义在 `evaluation.grasp_lift.experiment_metadata`。
 
 `apps/cli/tabletop_cartesian.py` 统一四个笛卡尔命令的参数与调度。`apps/visualization` 负责 MuJoCo Viewer、关节/笛卡尔回放和视觉交互。

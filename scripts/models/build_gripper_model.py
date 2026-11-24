@@ -12,7 +12,7 @@ import xml.etree.ElementTree as ET
 import mujoco
 import numpy as np
 
-from realman_rl_simtoreal.paths import GRIPPER_ASSETS as ASSETS, ROBOT_ASSETS
+from realman_rl_simtoreal.paths import GRIPPER_ASSETS as ASSETS, ROBOT_ASSETS, ROBOT_MODEL
 
 INTERNAL_PAIRS = [('4C2_baselink', f'4C2_Link{i}') for i in range(1, 5)] + [
     ('4C2_Link1', '4C2_Link2'), ('4C2_Link3', '4C2_Link4'),
@@ -117,8 +117,8 @@ def build():
         raise ValueError('Unexpected standalone structure')
 
     combined = ET.parse(ROBOT_ASSETS/'rml63_dynamics.xml').getroot()
-    combined.set('model', 'RML63II-6F-V + EG2-4C2 experimental aligned 8mm adapter')
-    combined.insert(0, ET.Comment('Experimental assembly, not a verified 6F-V stack; see gripper SOURCE.md.'))
+    combined.set('model', f'{ROBOT_MODEL} + EG2-4C2 experimental aligned 8mm adapter')
+    combined.insert(0, ET.Comment('夹爪采用仿真同轴转接件。实机安装和 TCP 另行标定。'))
     combined.find('compiler').attrib.pop('meshdir', None)
     for mesh in combined.findall('asset/mesh'):
         path = ROBOT_ASSETS/'upstream/meshes'/Path(mesh.get('file')).name
@@ -126,8 +126,8 @@ def build():
     combined.find('asset').extend(deepcopy(list(root.find('asset'))))
     flange = combined.find(".//body[@name='link_6']")
     adapter = ET.SubElement(flange, 'body', name='eg2_experimental_adapter')
-    # Drawing: thickness 8mm, diameter 57mm; weight .011 interpreted as kg.
-    # Coaxial alignment and seating depth are an experimental fixture choice.
+    # 仿真接口沿法兰局部 +Z。板厚 8 mm、直径 57 mm，质量按 0.011 kg。
+    # 同轴和贴合深度为本项目装配假设，见 SOURCE.md。
     radius, height, mass = .0285, .008, .011
     inertia_xy = mass*(3*radius**2+height**2)/12
     ET.SubElement(adapter, 'inertial', pos='0 0 .004', mass=str(mass),

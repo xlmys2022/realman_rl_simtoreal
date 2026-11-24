@@ -10,7 +10,7 @@ from ..utils.artifacts import write_json as _write_json, append_json, file_hashe
 from .common.artifacts import optimizer_steps, optimizer_state_hash
 from ..tasks.grasp.tabletop_cartesian import CartesianTabletopConfig as Config
 from ..evaluation import tabletop_cartesian as evaluation
-from ..paths import PROJECT_ROOT as ROOT, TABLETOP_CARTESIAN_SCENE as DEFAULT_SCENE
+from ..paths import PROJECT_ROOT as ROOT, ROBOT_MODEL, TABLETOP_CARTESIAN_SCENE as DEFAULT_SCENE
 from ..envs.grasp.tabletop_cartesian_env import (ACTION_CONTRACT,OBSERVATION_FIELDS,
                                          action_contract,observation_fields)
 from ..tasks.grasp.tabletop_cartesian_reward import REWARD
@@ -92,8 +92,10 @@ def load(path,*,allow_legacy_startup=False,allow_legacy_observation=False):
         expected_action,expected_fields=ACTION_CONTRACT,OBSERVATION_FIELDS
     else:
         cfg=Config(**config['environment'])
-        if config['startup_contract']!=startup_contract(cfg.observation_pose):
-            raise ValueError('Checkpoint fixed observation pose contract does not match the configured preset')
+        # 新机型的观察位关节角和动力学不同。旧权重只通过显式迁移入口加载。
+        if config['startup_contract']!=startup_contract(cfg.observation_pose) and not allow_legacy_startup:
+            raise ValueError(f'Checkpoint startup contract does not match {ROBOT_MODEL}. '
+                             'Use a checkpoint validated on this scene or transfer weights with --init-model.')
         expected_action,expected_fields=action_contract(cfg),observation_fields(cfg)
     if config.get('action_contract')!=expected_action or config.get('observation_fields')!=[list(v) for v in expected_fields]:
         raise ValueError('Expected this project\'s Cartesian checkpoint; joint-space legacy models are incompatible')

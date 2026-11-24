@@ -30,7 +30,7 @@ def load_model(path=SCENE, *, gravity_compensation=False):
                     return True
                 body = body.parent
             return False
-        # Include attached payloads, but never compensate unrelated scene bodies.
+        # 重力补偿覆盖机械臂及其附件，桌面与自由物体仍按原重力积分。
         for body in spec.bodies:
             if on_arm(body):
                 body.gravcomp = 1
@@ -56,9 +56,11 @@ def load_model(path=SCENE, *, gravity_compensation=False):
     base = model.body("base_link").id
     require(model.body_parentid[base] == 0 and model.body_jntnum[base] == 0
             and model.body_weldid[base] == 0, "Base must be rigidly fixed to world")
-    for name in ("camera_rolink", "camera_link"):
-        require(model.body_weldid[model.body(name).id] == model.body_weldid[model.body("link_6").id],
-                "Camera must be rigidly attached to link_6")
+    # 纯本体没有相机。带腕部 RGB-D 的场景须把光学坐标系刚性接到法兰。
+    camera = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_CAMERA, "wrist_rgb")
+    if camera >= 0:
+        require(model.body_weldid[model.cam_bodyid[camera]] == model.body_weldid[model.body("link_6").id],
+                "Wrist camera must be rigidly attached to link_6")
     require(np.allclose(model.opt.gravity, [0, 0, -9.81]), "Expected Earth gravity")
     require(not int(model.opt.disableflags) & int(mujoco.mjtDisableBit.mjDSBL_CONTACT), "Contact detection disabled")
     return model, joint_ids, actuator_ids

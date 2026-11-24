@@ -8,6 +8,8 @@ from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 ROBOT_ASSETS = PROJECT_ROOT / "assets/robots/rml63"
+ROBOT_MODEL = "RML63II-6FB"  # 对应已核实的实机本体构型，不含模拟腕部附件。
+UPSTREAM_URDF = ROBOT_ASSETS / "upstream/urdf" / f"{ROBOT_MODEL}.urdf"
 DEFAULT_SCENE = ROBOT_ASSETS / "scene.xml"
 DEFAULT_URDF = ROBOT_ASSETS / "rml63_mujoco.urdf"
 OUTPUTS = PROJECT_ROOT / "outputs"

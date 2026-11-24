@@ -53,7 +53,8 @@ class ReachTaskTests(unittest.TestCase):
             self.assertEqual(a[1], -a[4]['distance_m'])
             rewards.append(a[1])
         self.assertTrue(a[2] and not a[3])
-        self.assertAlmostEqual(sum(rewards), -.01853473770549964, places=14)
+        # 同一动作序列在实机构型的 6FB 场景上重放所得的距离回报。
+        self.assertAlmostEqual(sum(rewards), -.018395640461721704, places=14)
         self.assertEqual(default.reward_mode, 'distance')
 
     def test_random_goals_pass_original_pose_limits_and_collision_checks(self):

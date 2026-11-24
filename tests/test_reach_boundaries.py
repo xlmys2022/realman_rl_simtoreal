@@ -9,7 +9,7 @@ import mujoco
 import numpy as np
 
 from realman_rl_simtoreal.envs.reach.reach_env import ReachEnv
-from realman_rl_simtoreal.paths import PROJECT_ROOT
+from realman_rl_simtoreal.paths import PROJECT_ROOT, ROBOT_MODEL
 from realman_rl_simtoreal.simulation.motion.kinematics import IKResult
 from realman_rl_simtoreal.simulation.physics import joint_control as control
 
@@ -29,9 +29,10 @@ class ReachBoundaryTests(unittest.TestCase):
         e.reset(seed=0)
         return e
 
-    def test_original_default_matches_frozen_prechange_trajectories_exactly(self):
+    def test_default_matches_current_robot_terminate_trajectories(self):
         cases=json.loads((PROJECT_ROOT/'tests/fixtures/reach_terminate_04a.json').read_text())
         for case in cases:
+            self.assertEqual(case['robot_model'], ROBOT_MODEL)
             for explicit in ({},{'boundary_mode':'terminate'}):
                 with ReachEnv(**case['kwargs'],**explicit) as e:
                     self.assertEqual(native(e.reset(seed=case['seed'])),case['reset'])

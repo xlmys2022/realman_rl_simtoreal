@@ -10,13 +10,13 @@ import xml.etree.ElementTree as ET
 
 import mujoco
 
-from realman_rl_simtoreal.paths import GRASP_CONTACT_SCENE, TABLETOP_PICK_SCENE
+from realman_rl_simtoreal.paths import GRASP_CONTACT_SCENE, ROBOT_MODEL, TABLETOP_PICK_SCENE
 from realman_rl_simtoreal.simulation.devices.mujoco_gripper import SIGNS,width_to_angle
 
 
 def build():
     root=ET.parse(GRASP_CONTACT_SCENE).getroot()
-    root.set('model','RML63II tabletop pick; free cube, fixed horizontal desk')
+    root.set('model',f'{ROBOT_MODEL} tabletop pick; free cube, fixed horizontal desk')
     world=root.find('worldbody')
     world.find("body[@name='base_link']").set('pos','0 0 0.75')
     support=world.find("body[@name='support']")
@@ -34,8 +34,7 @@ def build():
     positions[:6]=['0']*6;controls[:6]=['0']*6
     positions[-7:]=['.4','0','.76','1','0','0','0']
     key.set('qpos',' '.join(positions));key.set('ctrl',' '.join(controls))
-    # Calibrate the task marker to the actual pad midpoint at cube width,
-    # using private FK only. The rigid mesh/adapter geometry is unchanged.
+    # 20 mm 开口下用左右夹垫中点定义抓取 TCP。世界系测点转回夹爪底座局部系。
     source=mujoco.MjModel.from_xml_path(str(GRASP_CONTACT_SCENE))
     probe=mujoco.MjData(source)
     mujoco.mj_resetDataKeyframe(source,probe,source.key('home').id)

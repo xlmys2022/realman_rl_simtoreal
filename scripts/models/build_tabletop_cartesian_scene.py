@@ -1,16 +1,20 @@
-"""Derive the Cartesian task scene; additions are visualization frames only."""
+"""生成笛卡尔桌面场景，增加仿真的腕部光学坐标系与查看相机。"""
 import hashlib
 import xml.etree.ElementTree as ET
 import mujoco
 import numpy as np
-from realman_rl_simtoreal.paths import TABLETOP_PICK_SCENE, TABLETOP_CARTESIAN_SCENE as DEFAULT_SCENE
+from realman_rl_simtoreal.paths import ROBOT_MODEL, TABLETOP_PICK_SCENE, TABLETOP_CARTESIAN_SCENE as DEFAULT_SCENE
 from realman_rl_simtoreal.simulation.devices.camera_geometry import camera_rotation
 
 
 def build():
     tree=ET.parse(TABLETOP_PICK_SCENE);root=tree.getroot()
-    root.set('model','RealMan Cartesian PPO; independent kinematics; traditional startup')
-    body=root.find(".//body[@name='camera_link']")
+    root.set('model',f'{ROBOT_MODEL} Cartesian PPO; independent kinematics; traditional startup')
+    flange = root.find(".//body[@name='link_6']")
+    # 6FB 本体没有 V 型相机附件。沿用仿真光心在法兰系的位置（米）与朝向。
+    # 此刚性空坐标系只服务 RGB-D 渲染，不引入未测量的外壳或质量。
+    body = ET.SubElement(flange, 'body', name='camera_link', pos='.0845 .0325 -.03552',
+                         quat='0.7071067811865476 0 0 0.7071067811865476')
     quat=np.empty(4);mujoco.mju_mat2Quat(quat,camera_rotation((0.,0.,1.),(1.,0.,0.)).ravel())
     ET.SubElement(body,'camera',name='wrist_rgb',pos='0 0 0',
                   quat=' '.join(map(str,quat)),fovy=str(90.))

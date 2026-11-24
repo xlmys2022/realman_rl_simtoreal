@@ -119,7 +119,8 @@ class VendorIKTests(unittest.TestCase):
                 p, r = vendor.fk(native["source_q_rad"])
                 np.testing.assert_allclose(native["target_position_m"], p, atol=1e-14)
                 np.testing.assert_allclose(native["target_rotation"], r, atol=1e-14)
-                self.assertGreater(np.linalg.norm(np.array(mj["target_position_m"])-p), .01)
+                # SDK 名义法兰比实机读回的 d6 长 0.1 mm。
+                self.assertAlmostEqual(np.linalg.norm(np.array(mj["target_position_m"])-p), .0001, places=6)
 
     def test_all_branches_checked_and_only_valid_periodic_solutions_exposed(self):
         for c in self.report["configurations"]:
@@ -224,9 +225,12 @@ class VendorIKTests(unittest.TestCase):
                 self.assertFalse(v.solve_all(position, seed, rotation).success)
 
     def test_sdk_joint_units_quaternion_flag_and_model_range_gate(self):
-        v = self.new_vendor()
+        model_limits = self.kin.limits.copy()
+        # 用独立的更窄模拟限位验证交集关卡，已对齐的默认限位无需人为偏移。
+        model_limits[0, 1] = np.deg2rad(177.95)
+        v = RealManIK(model_limits)
         q = self.kin.home_q.copy()
-        q[0] = np.deg2rad(177.99)  # Legal vendor FK input, beyond the URDF rounded bound.
+        q[0] = np.deg2rad(177.99)
         p, r = v.fk(q)
         seed = self.kin.home_q.copy()
         seed[0] = np.deg2rad(177.9)
@@ -296,8 +300,9 @@ class VendorIKTests(unittest.TestCase):
             for row in c["cross"]["rows"]:
                 self.assertTrue(row["result"]["success"])
                 self.assertLessEqual(row["own_model_error"]["position_error_m"], POSITION_TOLERANCE_M)
-                self.assertGreater(row["other_model_error"]["position_error_m"], .01)
-                self.assertGreater(row["other_model_error"]["orientation_error_rad"], .001)
+                # 交叉使用仍可分辨名义法兰的 0.1 mm 长度差。
+                self.assertAlmostEqual(row["other_model_error"]["position_error_m"], .0001, delta=1e-5)
+                self.assertLess(row["other_model_error"]["orientation_error_rad"], ORIENTATION_TOLERANCE_RAD)
 
     def test_repeats_and_timings_are_recorded_without_nan(self):
         json.dumps(self.report, allow_nan=False)

@@ -2,6 +2,7 @@
 """Offline RM_API2/MuJoCo FK measurements; exit 2 means model mismatch, not a test crash."""
 
 import argparse
+from dataclasses import asdict
 import hashlib
 import json
 from pathlib import Path
@@ -11,7 +12,8 @@ from realman_rl_simtoreal.apps.visualization.viewer import configure_backend
 configure_backend()
 from realman_rl_simtoreal.simulation.physics import model as model_api
 from realman_rl_simtoreal.paths import OUTPUTS
-from realman_rl_simtoreal.utils.geometry import transform, inverse
+from realman_rl_simtoreal.hardware.realman_config import REALMAN_HARDWARE
+from realman_rl_simtoreal.utils.geometry import transform, inverse, modified_dh_transform
 from realman_rl_simtoreal.utils.demo_helpers import sample_poses
 from realman_rl_simtoreal.simulation.motion.kinematics import Kinematics, rotation_vector
 from realman_rl_simtoreal.vendor.realman_fk import (
@@ -25,8 +27,7 @@ from realman_rl_simtoreal.vendor.realman_fk import (
 import mujoco
 import numpy as np
 
-# Numerical consistency criterion, not real-arm accuracy. Much larger than the
-# measured float32 SDK conversion noise; smaller than the URDF rounding errors.
+# 仅用于同一组数值模型的对照，实机姿态精度另外测量。
 POSITION_TOLERANCE_M = 1e-5
 ROTATION_TOLERANCE_RAD = np.deg2rad(0.001)
 
@@ -41,11 +42,9 @@ def errors(a, b):
 
 
 def mdh_local(dh, index, angle):
-    """Read-only diagnostic: Tx(a) Rx(alpha) Rz(q+offset) Tz(d)."""
-    alpha, theta = np.deg2rad([dh["alpha"][index], dh["offset"][index]])
-    rx = euler_matrix([alpha, 0, 0])
-    rotation = rx @ euler_matrix([0, 0, theta + angle])
-    return transform(np.array([dh["a"][index], 0, 0]) + rotation[:, 2]*dh["d"][index], rotation)
+    """SDK 扭角与偏置用度，输入关节角 angle 已为弧度。"""
+    alpha, offset = np.deg2rad([dh["alpha"][index], dh["offset"][index]])
+    return modified_dh_transform(dh["a"][index], dh["d"][index], alpha, offset + angle)
 
 
 def mdh_fk(dh, q):
@@ -62,7 +61,7 @@ def maxima(records):
                 all_within_tolerance=all(r["within_tolerance"] for r in records))
 
 
-def measure_configuration(kin, generation="II", sensor="SF"):
+def measure_configuration(kin, generation=REALMAN_HARDWARE.arm_generation, sensor=REALMAN_HARDWARE.sdk_force_type):
     """Compare frames without fitting or changing either robot's parameters."""
     model = kin.model
     data = model_api.initialize(model)  # Private reference data, never integrated.
@@ -140,10 +139,11 @@ def measure_configuration(kin, generation="II", sensor="SF"):
                 tcp_correspondence_confirmed=False,
                 mujoco_link6_fixed_translation_m=model.body_pos[link6].tolist(),
                 joint_zero_frames=joint_frames, rows=rows, summary=summary,
-                caveat="Sensor mapping and true TCP are unconfirmed. No fitted transform is used to declare equivalence.")
+                caveat="Nominal SDK dimensions are compared at the flange without a fitted transform.")
 
 
-def run_comparison(generation="II", sensor="SF", path=model_api.SCENE):
+def run_comparison(generation=REALMAN_HARDWARE.arm_generation, sensor=REALMAN_HARDWARE.sdk_force_type,
+                   path=model_api.SCENE):
     model, _, _ = model_api.load_model(path)
     kin = Kinematics(model)
     configurations = []
@@ -160,8 +160,20 @@ def run_comparison(generation="II", sensor="SF", path=model_api.SCENE):
                 same_robot_model_confirmed=False)
 
 
+def compare_controller_dh(rows, profile):
+    """与控制器读回的 MDH 对照。姿态使用基座到法兰，SDK 名义 DH 另行保留。"""
+    measured = profile.controller_dh
+    dh = dict(a=measured.a_m, d=measured.d_m, alpha=measured.alpha_deg, offset=measured.offset_deg)
+    comparisons = []
+    for row in rows:
+        expected = mdh_fk(dh, np.deg2rad(row["joint_deg"]))
+        comparisons.append(dict(name=row["name"], controller_base=expected.tolist(),
+                                **errors(np.array(row["mujoco_base"]), expected)))
+    return dict(summary=maxima(comparisons), rows=comparisons)
+
+
 def print_report(report):
-    print("Offline FK only; 0 simulation steps. Sensor candidates are not confirmed hardware mappings.")
+    print("Offline FK; 0 simulation steps. The SDK rows use nominal model dimensions.")
     print("p: metres, R: frame-to-base. Errors: SO(3) angle, not Euler subtraction.")
     print(f"Numerical criterion: {report['position_tolerance_m']*1000:g} mm / "
           f"{np.rad2deg(report['rotation_tolerance_rad']):g} deg; not real-arm accuracy.")
@@ -187,17 +199,40 @@ def print_report(report):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--generation", choices=[*MODELS, "all"], default="II")
-    parser.add_argument("--sensor", choices=[*SENSORS, "all"], default="SF", help="candidate, not confirmed 6F-V mapping")
+    parser.add_argument("--generation", choices=[*MODELS, "all"],
+                        help=f"offline SDK generation (default {REALMAN_HARDWARE.arm_generation})")
+    selector = parser.add_mutually_exclusive_group()
+    selector.add_argument("--sensor", choices=[*SENSORS, "all"],
+                          help=f"offline SDK sensor (default {REALMAN_HARDWARE.sdk_force_type})")
+    selector.add_argument("--hardware-profile", action="store_true",
+                          help="include a separate FK comparison against the controller's recorded DH")
     parser.add_argument("--model", type=Path, default=model_api.SCENE)
-    parser.add_argument("--json", type=Path, default=OUTPUTS / "simulation/kinematics/fk_comparison.json")
+    parser.add_argument("--json", type=Path)
     args = parser.parse_args()
     try:
-        report = run_comparison(args.generation, args.sensor, args.model)
+        profile = REALMAN_HARDWARE if args.hardware_profile else None
+        if profile is not None:
+            generation = args.generation or profile.arm_generation
+            sensor = profile.sdk_force_type
+            print(f"Recorded hardware {profile.model}, offline candidates {generation}/{sensor}")
+        else:
+            generation = args.generation or REALMAN_HARDWARE.arm_generation
+            sensor = args.sensor or REALMAN_HARDWARE.sdk_force_type
+        report = run_comparison(generation, sensor, args.model)
+        if profile is not None:
+            report["hardware_profile"] = asdict(profile)
+            report["controller_dh_alignment"] = compare_controller_dh(report["configurations"][0]["rows"], profile)
+        output_name = "fk_hardware_comparison.json" if profile else "fk_comparison.json"
+        output = args.json or OUTPUTS / "simulation/kinematics" / output_name
         print_report(report)
-        args.json.parent.mkdir(parents=True, exist_ok=True)
-        args.json.write_text(json.dumps(report, indent=2, allow_nan=False) + "\n")
-        print(f"\nFull positions/rotation matrices/frame diagnostics: {args.json.resolve()}")
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text(json.dumps(report, indent=2, allow_nan=False) + "\n")
+        print(f"\nFull positions/rotation matrices/frame diagnostics: {output.resolve()}")
+        if profile is not None:
+            alignment = report["controller_dh_alignment"]["summary"]
+            print(f"Controller DH alignment: {alignment['max_position_error_m']*1000:.6f} mm, "
+                  f"{alignment['max_rotation_error_rad']:.6g} rad")
+            return 0 if alignment["all_within_tolerance"] else 2
         return 0 if report["all_numerically_consistent"] else 2
     except (SDKUnavailable, OSError, ValueError, KeyError, RuntimeError, mujoco.FatalError) as exc:
         print(f"[ERROR] {exc}", file=sys.stderr)

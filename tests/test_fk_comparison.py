@@ -19,9 +19,19 @@ _spec.loader.exec_module(comparison)
 from realman_rl_simtoreal.simulation.physics import joint_control as control, model as model_api
 from realman_rl_simtoreal.simulation.motion.kinematics import Kinematics
 from realman_rl_simtoreal.vendor import realman_fk as adapter
+from realman_rl_simtoreal.hardware.realman_config import REALMAN_HARDWARE
 
 
 class FKComparisonMathTests(unittest.TestCase):
+    def test_flange_matches_read_only_controller_pose(self):
+        model, _, _ = model_api.load_model()
+        kin = Kinematics(model)
+        # 控制器在 Base 与 Arm_Tip（两个单位变换）下的近零位回包。
+        # 这条独立实测点可检出 6FB 和 6FB-V 的末端轴向长度差。
+        q = np.deg2rad([0., 0., .002, .002, -.002, .001])
+        p, _ = kin.fk(q)
+        self.assertLess(np.linalg.norm(p - [-.016981, 0., 1.089196]), 1e-5)
+
     def test_quaternion_order_normalization_and_sign(self):
         q = np.array([np.cos(np.pi/4), 0, 0, np.sin(np.pi/4)])
         expected = np.array([[0, -1, 0], [1, 0, 0], [0, 0, 1]])
@@ -113,14 +123,15 @@ class VendorFKTests(unittest.TestCase):
             self.assertEqual(info["dh"]["offset"], [0, -90, 90, 0, 180, 180])
 
     def test_actual_mismatch_is_reported_without_relaxing_criterion(self):
-        # Fixture for this pinned SDK / unchanged II-6F-V URDF. This asserts that
-        # the diagnostic detects the discrepancy, NOT that the models agree.
+        # SDK 名义 d6=132.3 mm，控制器 d6=132.2 mm。报告须能分辨两者。
         self.assertFalse(self.report["all_numerically_consistent"])
         self.assertFalse(self.report["same_robot_model_confirmed"])
-        sf = self.report["configurations"][2]
-        self.assertFalse(sf["summary"]["numerically_consistent"])
-        self.assertGreater(sf["rows"][0]["absolute"]["position_error_m"], .02)
-        self.assertGreater(sf["summary"]["absolute"]["max_rotation_error_rad"], .001)
+        isf = self.report["configurations"][3]
+        self.assertFalse(isf["summary"]["numerically_consistent"])
+        self.assertAlmostEqual(isf["rows"][0]["absolute"]["position_error_m"], .0001, places=7)
+        self.assertLess(isf["summary"]["absolute"]["max_rotation_error_rad"], 1e-6)
+        controller = comparison.compare_controller_dh(isf["rows"], REALMAN_HARDWARE)
+        self.assertTrue(controller["summary"]["all_within_tolerance"])
         self.assertEqual(self.report["position_tolerance_m"], 1e-5)
         self.assertAlmostEqual(self.report["rotation_tolerance_rad"], np.deg2rad(.001))
 
@@ -134,14 +145,16 @@ class VendorFKTests(unittest.TestCase):
             mujoco.mj_forward(model, data)
             np.testing.assert_allclose(row["wrist_mujoco_base_m"], data.xpos[model.body("link_5").id], atol=1e-14)
         self.assertLess(c["summary"]["common_wrist"]["max_position_error_m"], .0003)
-        self.assertFalse(c["summary"]["common_wrist"]["all_within_tolerance"])
-        self.assertGreater(c["joint_zero_frames"][1]["difference"]["rotation_error_rad"], .0015)
-        self.assertAlmostEqual(c["joint_zero_frames"][5]["difference"]["position_error_m"], .023, places=7)
+        self.assertTrue(c["summary"]["common_wrist"]["all_within_tolerance"])
+        self.assertLess(c["joint_zero_frames"][1]["difference"]["rotation_error_rad"], 1e-6)
+        self.assertAlmostEqual(c["joint_zero_frames"][5]["difference"]["position_error_m"], .0114, places=7)
 
     def test_home_transform_is_not_accepted_from_one_pose(self):
         for c in self.report["configurations"]:
-            for key in ("home_left_validation", "home_right_validation"):
-                self.assertFalse(c["summary"][key]["all_within_tolerance"])
+            self.assertFalse(c["summary"]["home_left_validation"]["all_within_tolerance"])
+            # 同为 II 型时 d6 差异是法兰系固定平移。III 型还存在基座高度差。
+            same_generation = c["sdk"]["model"] == "RM_MODEL_RM_63_II_E"
+            self.assertEqual(c["summary"]["home_right_validation"]["all_within_tolerance"], same_generation)
             # Rigid relative home transforms are recorded, not Euler subtraction.
             home = c["rows"][0]
             np.testing.assert_allclose(home["mujoco_relative_home"], np.eye(4), atol=1e-14)

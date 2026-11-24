@@ -88,7 +88,7 @@ class GripperTests(unittest.TestCase):
             np.testing.assert_array_equal(getattr(self.model, attr)[self.aids], getattr(self.original, attr)[self.oaids])
         self.assertAlmostEqual(self.model.body_mass.sum()-self.original.body_mass.sum(), .1052992, places=12)
 
-    def test_mount_camera_and_nominal_grasp_frames(self):
+    def test_flange_mount_and_nominal_grasp_frames(self):
         d, g = self.setup_gripper()
         ee = self.model.site('ee_site').id
         mount = self.model.site('gripper_mount').id
@@ -98,11 +98,9 @@ class GripperTests(unittest.TestCase):
         z = .079+.0223*np.sin(.41)+.035591*np.cos(.41)+.027
         np.testing.assert_allclose((d.site_xpos[grasp]-d.site_xpos[ee]) @ rotation, [0, 0, .008+z], atol=1e-15)
         np.testing.assert_array_equal(d.site_xmat[ee], d.site_xmat[mount])
-        for name in ['camera_rolink', 'camera_link', '4C2_baselink', 'eg2_experimental_adapter']:
+        # 安装板和夹爪底座与法兰刚性连接，夹爪开口仅通过内部铰链变化。
+        for name in ['4C2_baselink', 'eg2_experimental_adapter']:
             self.assertEqual(self.model.body_weldid[self.model.body(name).id], self.model.body_weldid[self.model.body('link_6').id])
-        original_data = initialize(self.original)
-        for name in ['camera_rolink', 'camera_link']:
-            np.testing.assert_array_equal(d.body(name).xpos, original_data.body(name).xpos)
 
     def test_width_inverse_and_actual_urdf_mechanism_agree(self):
         model = mujoco.MjModel.from_xml_path(str(GRIPPER_ASSETS/'eg2_4c2.xml'))
@@ -185,7 +183,8 @@ class GripperTests(unittest.TestCase):
 
     def test_gravity_load_hold_and_total_force_limits(self):
         data, g = self.setup_gripper()
-        self.assertEqual(self.model.ngravcomp, 16)
+        # 六个臂段、转接板和七个夹爪刚体。
+        self.assertEqual(self.model.ngravcomp, 14)
         self.assertTrue(np.all(self.model.jnt_actgravcomp))
         payload_torque = gravity_torque(self.model, data.qpos)[self.model.jnt_dofadr[self.jids]]
         old = initialize(self.original)

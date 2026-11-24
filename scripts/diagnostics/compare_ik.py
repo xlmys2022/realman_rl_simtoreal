@@ -3,6 +3,7 @@
 
 import argparse
 from dataclasses import asdict
+from itertools import product
 import json
 from pathlib import Path
 import sys
@@ -12,10 +13,11 @@ from realman_rl_simtoreal.apps.visualization.viewer import configure_backend
 configure_backend()
 from realman_rl_simtoreal.simulation.physics import model as model_api
 from realman_rl_simtoreal.paths import OUTPUTS
+from realman_rl_simtoreal.hardware.realman_config import REALMAN_HARDWARE
 from realman_rl_simtoreal.utils.demo_helpers import sample_poses
 from realman_rl_simtoreal.utils.geometry import transform, inverse
 from realman_rl_simtoreal.simulation.motion.kinematics import Kinematics, rotation_vector
-from realman_rl_simtoreal.vendor.realman_fk import SDKUnavailable
+from realman_rl_simtoreal.vendor.realman_fk import MODELS, SDKUnavailable
 from realman_rl_simtoreal.vendor.realman_ik import (
     RealManIK,
     periodic_equivalent,
@@ -24,6 +26,12 @@ from realman_rl_simtoreal.vendor.realman_ik import (
 )
 import mujoco
 import numpy as np
+
+
+# 默认比对已确认的力版。其余候选仅用于显式的离线数值对照。
+DEFAULT_SENSORS = (REALMAN_HARDWARE.sdk_force_type,)
+OTHER_SENSORS = ("SF", "ISFV")
+IK_SENSORS = (*DEFAULT_SENSORS, *OTHER_SENSORS)
 
 
 def result_dict(result):
@@ -223,11 +231,15 @@ def cross_diagnostics(kin, vendor, poses):
                 rows=rows)
 
 
-def run_comparison(repeats=5, sensors=("SF", "ISFV"), path=model_api.SCENE):
+def run_comparison(repeats=5, sensors=DEFAULT_SENSORS, path=model_api.SCENE, *,
+                   generation=REALMAN_HARDWARE.arm_generation):
     if not isinstance(repeats, int) or not 1 <= repeats <= 20:
         raise ValueError("repeats must be an integer in [1,20]")
-    if not sensors or len(set(sensors)) != len(sensors) or any(s not in ("SF", "ISFV") for s in sensors):
-        raise ValueError("Select SF and/or ISFV candidates, sequentially")
+    if not sensors or len(set(sensors)) != len(sensors) or any(s not in IK_SENSORS for s in sensors):
+        raise ValueError("Select distinct SF, ISFV or ISF candidates")
+    if generation not in (*MODELS, "all"):
+        raise ValueError("Select II, III or all candidate generations")
+    generations = tuple(MODELS) if generation == "all" else (generation,)
     model, _, _ = model_api.load_model(path)
     kin = Kinematics(model)
     poses, seeds = sample_poses(kin.home_q), seeds_for(kin.home_q)
@@ -237,8 +249,8 @@ def run_comparison(repeats=5, sensors=("SF", "ISFV"), path=model_api.SCENE):
     unreachable_p = np.array([10., 10., 10.])
     mj_unreachable = measure(kin.solve_ik, kin.fk, unreachable_p, kin.home_rotation, kin.home_q, 1)
     configs = []
-    for sensor in sensors:
-        vendor = RealManIK(kin.limits, "II", sensor)
+    for model_generation, sensor in product(generations, sensors):
+        vendor = RealManIK(kin.limits, model_generation, sensor)
         experiment = internal_experiment(vendor.solve_ik, vendor.fk, poses, seeds, repeats)
         boundary = boundary_experiment(vendor.solve_ik, vendor.fk, boundaries)
         _, home_r = vendor.fk(kin.home_q)
@@ -267,7 +279,8 @@ def run_comparison(repeats=5, sensors=("SF", "ISFV"), path=model_api.SCENE):
         for row in rows:
             r = row["result"]
             if r.get("sdk_code") == 0 and not r["success"] and r["reason"] != "No periodic equivalent satisfies BOTH manufacturer/model joint limits":
-                anomalies.append(dict(sensor=c["sdk"]["sensor"], pose=row["pose"], reason=r["reason"]))
+                anomalies.append(dict(model=c["sdk"]["model"], sensor=c["sdk"]["sensor"],
+                                      pose=row["pose"], reason=r["reason"]))
     safe &= not anomalies
     return dict(completed=True, motion_executed=False, simulation_steps=0,
                 same_robot_model_confirmed=False, safety_audits_passed=bool(safe), integrity_anomalies=anomalies, repeats=repeats,
@@ -280,18 +293,19 @@ def run_comparison(repeats=5, sensors=("SF", "ISFV"), path=model_api.SCENE):
 
 def print_report(report):
     print("Offline only; each solver uses its OWN FK targets. No controllers or simulation steps.")
-    print("Same-robot model remains UNCONFIRMED; SF/ISFV are candidates.")
+    print("Targets use simulation geometry and the nominal SDK flange geometry.")
     items = [("MuJoCo DLS", report["mujoco_internal"])]
-    items.extend((c["sdk"]["sensor"], c["internal"]) for c in report["configurations"])
-    print("solver                 verified/total max_pos_m      max_rot_rad    median_public_ms  p95_public_ms")
+    items.extend((f'{c["sdk"]["model"]}/{c["sdk"]["sensor"]}', c["internal"])
+                 for c in report["configurations"])
+    print("solver                                      verified/total max_pos_m      max_rot_rad    median_public_ms  p95_public_ms")
     for label, experiment in items:
         s = experiment["summary"]
-        print(f"{label:23s} {s['successes']:2d}/{s['total']:<2d} {s['max_position_error_m']!s:14s} "
+        print(f"{label:43s} {s['successes']:2d}/{s['total']:<2d} {s['max_position_error_m']!s:14s} "
               f"{s['max_orientation_error_rad']!s:14s} {1000*s['median_public_call_s']:.6f} {1000*s['p95_public_call_s']:.6f}")
         for seed, stats in experiment["by_seed"].items():
             print(f"  seed={seed}: {stats['successes']}/{stats['total']}")
     for c in report["configurations"]:
-        print(f"\n{c['sdk']['sensor']}: unreachable SDK code={c['unreachable']['result']['sdk_code']}, "
+        print(f"\n{c['sdk']['model']}/{c['sdk']['sensor']}: unreachable SDK code={c['unreachable']['result']['sdk_code']}, "
               f"q={c['unreachable']['result']['q']}; limits={c['sdk']['vendor_limits_rad']}")
         for group in c["multisolutions"]:
             a = group["all_result"]
@@ -312,17 +326,37 @@ def print_report(report):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--sensor", choices=("SF", "ISFV", "both"), default="both")
+    parser.add_argument("--generation", choices=[*MODELS, "all"],
+                        help=f"offline SDK generation (default {REALMAN_HARDWARE.arm_generation})")
+    selector = parser.add_mutually_exclusive_group()
+    selector.add_argument("--sensor", choices=[*IK_SENSORS, "both"],
+                          help=f"offline SDK sensor (default {DEFAULT_SENSORS[0]}, both runs SF and ISFV)")
+    selector.add_argument("--hardware-profile", action="store_true",
+                          help="use the recorded RealMan force variant for offline IK")
     parser.add_argument("--repeats", type=int, default=5)
     parser.add_argument("--model", type=Path, default=model_api.SCENE)
-    parser.add_argument("--json", type=Path, default=OUTPUTS / "simulation/kinematics/ik_comparison.json")
+    parser.add_argument("--json", type=Path)
     args = parser.parse_args()
     try:
-        report = run_comparison(args.repeats, ("SF", "ISFV") if args.sensor == "both" else (args.sensor,), args.model)
-        args.json.parent.mkdir(parents=True, exist_ok=True)
-        args.json.write_text(json.dumps(report, indent=2, allow_nan=False) + "\n")
+        profile = REALMAN_HARDWARE if args.hardware_profile else None
+        if profile is not None:
+            generation = args.generation or profile.arm_generation
+            sensors = (profile.sdk_force_type,)
+            print(f"Recorded hardware {profile.model}, offline candidates {generation}/{sensors[0]}")
+        else:
+            generation = args.generation or REALMAN_HARDWARE.arm_generation
+            sensors = DEFAULT_SENSORS if args.sensor is None else (
+                OTHER_SENSORS if args.sensor == "both" else (args.sensor,)
+            )
+        report = run_comparison(args.repeats, sensors, args.model, generation=generation)
+        if profile is not None:
+            report["hardware_profile"] = asdict(profile)
+        output_name = "ik_hardware_comparison.json" if profile else "ik_comparison.json"
+        output = args.json or OUTPUTS / "simulation/kinematics" / output_name
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text(json.dumps(report, indent=2, allow_nan=False) + "\n")
         print_report(report)
-        print(f"Full per-pose/seed/error/timing results: {args.json.resolve()}")
+        print(f"Full per-pose/seed/error/timing results: {output.resolve()}")
         return 0 if report["safety_audits_passed"] else 2
     except (SDKUnavailable, OSError, ValueError, KeyError, RuntimeError, mujoco.FatalError) as exc:
         print(f"[ERROR] {exc}", file=sys.stderr)

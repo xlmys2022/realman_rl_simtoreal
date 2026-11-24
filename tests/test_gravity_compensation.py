@@ -37,7 +37,8 @@ class GravityCompensationTests(unittest.TestCase):
         self.assertEqual(baseline.opt.integrator, enabled.opt.integrator)
         self.assertEqual(baseline.opt.disableflags, enabled.opt.disableflags)
         self.assertEqual(baseline.ngravcomp, 0)
-        self.assertEqual(enabled.ngravcomp, 8)
+        # 6FB 裸臂的六个运动连杆参与补偿。
+        self.assertEqual(enabled.ngravcomp, 6)
         self.assertTrue(np.all(enabled.jnt_actgravcomp[jids]))
         self.assertTrue(np.all(enabled.body_gravcomp[enabled.body_weldid != 0] == 1))
         self.assertFalse(np.any(baseline.body_gravcomp))
@@ -149,7 +150,7 @@ class GravityCompensationTests(unittest.TestCase):
             self.assertLess(np.max(np.abs(d["velocity_rad_s"])), 1e-10)
             self.assertLess(np.max(np.abs(d["velocity_bias_nm"])), 1e-10)
         np.testing.assert_allclose(pd["diagnostics"]["pd_generated_nm"], pd["diagnostics"]["pure_gravity_nm"], atol=1e-8)
-        self.assertGreater(pd["metrics"]["home_offset_norm_mm"], 2)
+        self.assertGreater(pd["metrics"]["home_offset_norm_mm"], 1)
         self.assertLess(gc["metrics"]["home_offset_norm_mm"], 1e-6)
         self.assertLess(np.max(np.abs(gc["diagnostics"]["joint_error_deg"])), 1e-8)
         self.assertLess(np.max(np.abs(gc["diagnostics"]["pd_generated_nm"])), 1e-8)
@@ -162,9 +163,10 @@ class GravityCompensationTests(unittest.TestCase):
                 np.testing.assert_allclose(np.array(result["home_offset_mm"]) + result["relative_error_mm"],
                                            result["absolute_error_mm"], atol=1e-12, rtol=0)
         case = self.report["controllers"]["pd"]["cases"]["x_plus_5mm"]["metrics"]
-        self.assertAlmostEqual(case["home_offset_norm_mm"], 2.2102383598, places=6)
-        self.assertAlmostEqual(case["relative_error_norm_mm"], .210909, places=5)
-        self.assertAlmostEqual(case["absolute_error_norm_mm"], 2.3915444026, places=6)
+        # 固定 6FB CAD 惯量下，无重力补偿的三种误差（mm）。
+        self.assertAlmostEqual(case["home_offset_norm_mm"], 1.0723313750, places=6)
+        self.assertAlmostEqual(case["relative_error_norm_mm"], .1889028574, places=6)
+        self.assertAlmostEqual(case["absolute_error_norm_mm"], 1.1799401556, places=6)
 
     def test_matched_ik_targets_and_below_one_mm_exploratory_goal(self):
         a, b = [self.report["controllers"][mode]["cases"] for mode in ("pd", "gravity")]

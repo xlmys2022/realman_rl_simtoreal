@@ -1,8 +1,8 @@
 # realman_rl_simtoreal
 
-基于 MuJoCo 的 RealMan **RML63II-6F-V** 机械臂强化学习仿真项目，长期方向为 Reach → Grasp → 视觉 → 真机部署。当前采用 Python 3.11、Gymnasium、Stable-Baselines3 和 PyTorch；代码组织与算法实验分别维护。
+基于 MuJoCo 的 RealMan 机械臂强化学习项目。默认仿真为已核实的 **RML63II-6FB**，使用官方 CAD 资产和实机控制器读回的运动学参数。项目采用 Python 3.11、Gymnasium、Stable-Baselines3 和 PyTorch。
 
-当前目录与回归结果见 [src 重构报告](docs/validation/SRC_LAYOUT_REFACTOR_VALIDATION.md)。下列训练成绩与复现记录对应各链接报告当时的版本；本轮未重新执行正式长训练。
+本体替换前的训练成绩与复现记录对应历史 `RML63II-6F-V` 场景。当前机型、坐标系和重生成步骤见 [资产与实机参数](assets/robots/rml63/SOURCE.md)。
 
 实验产物按仿真、Reach、抓取、模仿学习和验证分类。找模型、评估结果及动图，请先看 [outputs 导航](outputs/README.md)；目录约定与旧路径对照见 [输出目录说明](docs/OUTPUTS.md)。
 
@@ -18,13 +18,30 @@
 - 独立 BC 示范采集、训练和推理。历史 SAC 实验和 BC→SAC 产物可从输出目录与验证索引查阅。
 - 自动化回归测试、环境探针及只读训练曲线绘图。
 
+## RML63-6FB 实机配置
+
+2026-11-24 向控制器只读查询，原始型号枚举为 `RM_MODEL_RM_63_II_E`，力版为 `ISF`，对应官方 `RML63II-6FB`。兼容 URDF 的关节零位变换与限位使用读回值，其中法兰 `d6=132.2 mm`。项目保留同一套模型生成、运动学和任务入口。[硬件配置](src/realman_rl_simtoreal/hardware/realman_config.py) · [只读回包](outputs/validation/rml63ii_6fb/controller_readback.json)
+
+厂家 `V1.7.0` 发布表列出的联机 API2 版本为 `1.0.7`。本机实际用 SDK `1.1.7` 读取基本信息、DH、工作与工具坐标系及限位。离线 SDK 内置的名义法兰 `d6=132.3 mm`，与本机读回值相差 0.1 mm。[SDK 枚举](https://develop.realman-robotics.com/robot/apic/type/) · [控制器版本表](https://develop.realman-robotics.com/robot/releaseNotes/releaseNotes/)
+
+以下命令在 `realman_rl` 下运行，使用已确认的 II 型和 `ISF` 做离线对照。
+
+```bash
+python -I scripts/diagnostics/compare_fk.py --hardware-profile
+python -I scripts/diagnostics/compare_ik.py --hardware-profile --repeats 1
+```
+
+FK 报告保留名义 SDK 的差异，并独立比较同一组关节角下的控制器 DH。两个近零位实测样本的法兰位置差均小于 0.01 mm。
+
+`table_down` 在新场景从零位安全到达，世界系 TCP 目标仍为 `(0.10, 0, 1.10)` m，启动耗时 22.70 s。真实夹爪安装、抓取 TCP、相机手眼外参和打包关节角仍需实测或标定。[模型来源及坐标系](assets/robots/rml63/SOURCE.md) · [新版观察位记录](outputs/validation/rml63ii_6fb/startup_down.json)
+
 ## 腕部 RGB-D 视觉完整抓取
 
 已在现有 `tabletop_cartesian` 中加入 `--observation-source rgbd_hsv`。相机沿用原 `camera_link/wrist_rgb` 的位置，读取对齐 RGB/深度，HSV 分割橙色方块，输出白色目标、黑色背景的 Mask，并恢复基座坐标。策略输入中的物体位置、速度、夹持置信度、目标及保持进度均由相机数据生成；真实接触力、物体真值和真值保持时间退出策略输入，仅用于仿真物理、安全、训练奖励及独立验收。零位到固定观测姿态仍使用传统控制，交接后的 XYZ 和夹爪增量由 PPO 网络输出，FK/IK 独立执行。
 
-**选定视觉 PPO 模型独立复测：固定位置 3/3，半径 2 cm 随机位置 3/3，零安全终止。** 六次离台 29.61–29.67 mm、物理连续稳定保持至少 3.511 秒；视觉连续稳定 3 秒后结束，再接受原完整物理标准验收。另保存一条成功的完整 RGB/Mask 回放。79 项相关测试通过，10,601 个控制周期的相机观测及原始网络动作核对通过。当前范围为理想 MuJoCo RGB-D、20 mm 正立方块和 `table_down` 起点；随机位置仅三个样本，真实相机与真机尚未验证。
+**6FB 场景已复测冻结的视觉 PPO。** 固定位置 1/1，半径 2 cm 内随机位置 1/1，方块离台约 29.7 mm，物理连续保持至少 3.57 s。两次均实际从零位启动，通过原抓取标准。模型权重来自旧视觉 PPO，本次在新场景复测，没有新增训练步。[新场景模型](outputs/grasp/ppo/tabletop_cartesian/rml63ii_6fb/vision_transfer_step768/model.zip) · [复测结果](outputs/grasp/ppo/tabletop_cartesian/rml63ii_6fb/vision_transfer_step768/validation.json)
 
-[视觉模型](outputs/grasp/ppo/tabletop_cartesian/vision_rgbd_v1/full_table_down_seed2031_r4_zero_anchored/checkpoints/step_00000768/model.zip) · [完整视觉回放](outputs/grasp/ppo/tabletop_cartesian/vision_rgbd_v1/full_table_down_seed2031_r4_zero_anchored/review/full_rgbd_grasp_step768.gif) · [接口与复现命令](docs/tabletop_vision.md) · [验证报告](docs/validation/TABLETOP_VISION_VALIDATION.md)。模型由既有 PPO 迁移，选中检查点新增 768 步；原真值模型与下述历史成绩单独保留。
+原 6F-V 场景中的固定位置 3/3、随机位置 3/3 以及完整回放见历史报告。[历史视觉报告](docs/validation/TABLETOP_VISION_VALIDATION.md) · [当前接口与命令](docs/tabletop_vision.md)
 
 实物方块可用 `scripts/demos/calibrate_cube_hsv.py` 选择部署相机、对照实时掩膜调整 HSV 滑块并保存阈值。[HSV 标定操作步骤](docs/tabletop_vision.md#标定实物方块的-hsv)
 
@@ -36,7 +53,7 @@
 
 默认面向桌面使用 XYZ＋夹爪四维动作、29 维观测；平视起点使用 XYZ＋末端旋转＋夹爪七维笛卡尔动作、38 维观测，让 PPO 自己完成转向。FK/IK 和执行器负责关节控制，观测与奖励不包含 IK 关节目标。原任务和旧七维关节控制保留。
 
-**固定观测起点的完整抓取已通过仿真独立验证：3/3 成功，零安全终止。** 选用 r13 的 3,072 步检查点，离台约 28.96 mm（30 mm 目标、2 mm 容差），连续稳定保持 2.009 秒。每次都实际执行零位传统启动；随后 PPO 输出 XYZ 与夹爪增量，独立 IK/FK 执行。模型使用原 Reach PPO 初始化，末端、夹爪及目标门控在本轮均有实际 PPO 更新。
+**历史 6F-V 场景的固定观测起点抓取为 3/3 成功，零安全终止。** 选用 r13 的 3,072 步检查点，离台约 28.96 mm（30 mm 目标、2 mm 容差），连续稳定保持 2.009 秒。每次都实际执行零位传统启动；随后 PPO 输出 XYZ 与夹爪增量，独立 IK/FK 执行。模型使用原 Reach PPO 初始化，末端、夹爪及目标门控均有实际 PPO 更新。
 
 [模型](outputs/grasp/ppo/tabletop_cartesian/fixed_observation_v2/full_table_down_seed2029_r13_secure_grip/checkpoints/step_00003072/model.zip) · [完整回放](outputs/grasp/ppo/tabletop_cartesian/fixed_observation_v2/full_table_down_seed2029_r13_secure_grip/review/full_grasp_step3072.gif) · [独立复测](outputs/grasp/ppo/tabletop_cartesian/fixed_observation_v2/full_table_down_seed2029_r13_secure_grip/review/independent_full_step3072_850000.json)。上述 3/3 属于固定方块 `(0.40,0)` m、`table_down` 姿态的重复复现；随机位置成绩单独记录。59 项专项/兼容检查通过；随机采样的两个训练回合未通过，评估使用确定性动作。
 
@@ -48,7 +65,7 @@
 
 开发阶段按用户确认，以六轴全零 `[0,0,0,0,0,0]` 为起点；这是临时开发零位，不标注为示教器的打包姿态。`initial_q_deg` / `--initial-q-deg` 支持以后替换为准确的打包角度。完整任务 reset 不使用原项目 `[0,-20,30,0,20,0]`，也不把机械臂重置到方块附近。
 
-**完整零位流程已通过仿真验证。** 冻结的七维 PPO 从零位、60 mm 开口开始，完成接近、夹取、抬升并稳定保持。种子 360000–360019 的固定场景复测 **20/20 成功**，零安全终止；离台间隙 28.679 mm、世界竖直抬升 28.856 mm，连续保持 2.031 秒，432 个控制周期共 21.6 秒。目标高度为 30 mm、允许 2 mm 高度容差。
+**历史 6F-V 场景的完整零位流程为 20/20 成功。** 冻结的七维 PPO 从零位、60 mm 开口开始，完成接近、夹取、抬升并稳定保持。种子 360000–360019 的固定场景复测零安全终止；离台间隙 28.679 mm、世界竖直抬升 28.856 mm，连续保持 2.031 秒，432 个控制周期共 21.6 秒。目标高度为 30 mm、允许 2 mm 高度容差。
 
 [模型](outputs/grasp/ppo/tabletop_zero_seed2027/final/model.zip) · [完整回放](outputs/grasp/ppo/tabletop_zero_seed2027/learned_zero_pick.gif) · [复测数据](outputs/grasp/ppo/tabletop_zero_seed2027/heldout_360000_360019.json) · [验证报告](docs/validation/TABLETOP_PPO_VALIDATION.md)。方块位置固定，这 20 次验证确定性复现；随机位置泛化另行评估。
 
@@ -489,7 +506,7 @@ BC 使用 `scripts/evaluate/evaluate_bc_reach.py`。评估读取保存的环境�
 - `rl/` 管理 PPO 模型、网络、分布、checkpoint 和采样回调，`imitation/` 保留 BC。
 - `apps/{cli,training,visualization}/` 组织命令、训练流程、Viewer 与回放。
 - `evaluation/` 负责独立回合和原统计口径，`perception/` 负责 RGB-D 数据与检测、反投影和跟踪。
-- `hardware/` 预留真实机械臂、夹爪和相机适配，`deployment/` 预留真机观测、模型推理与执行。
+- `hardware/` 记录真实机械臂型号和版本，`deployment/` 预留真机观测、模型推理与执行。
 - `vendor/` 提供厂家离线 FK/IK，`utils/` 提供共享几何、演示、统计及产物工具。
 - `scripts/{train,evaluate,demos,models,diagnostics,plots}/` 保留现行命令的位置。模型和实验结果按 [outputs 导航](outputs/README.md) 查找。
 
@@ -512,4 +529,4 @@ BC 使用 `scripts/evaluate/evaluate_bc_reach.py`。评估读取保存的环境�
 
 ## 已知限制
 
-历史局部 PPO 的默认 20 mm 起点尚未通过；完整桌面任务和 RGB-D 任务具有各自的模型及独立验证范围，不能混用成绩。视觉当前依赖已知 20 mm 正立方块、理想对齐深度及仿真标定，尚未验证真实光照、深度噪声和手眼误差。尚未接入 HER 或真机通信。训练入口支持权重迁移并重建优化器，不提供跨进程完整续训。实物代际、TCP、零位、惯量和碰撞几何尚需校准；厂家 SDK 与 MuJoCo 模型不完全一致，仿真重力补偿精度不代表真机精度。历史实验细节和失败结论保存在文档中。
+历史局部 PPO 的默认 20 mm 起点尚未通过。视觉当前依赖已知 20 mm 正立方块、理想对齐深度及仿真标定。真实光照、深度噪声、手眼外参和工具 TCP 待验证。已完成控制器只读查询，项目尚无真机动作执行入口。训练入口支持权重迁移并重建优化器，尚无跨进程完整续训。新版模型沿用官方 CAD 惯量和碰撞几何，真机动力学待标定。历史实验细节和失败结论保存在文档中。

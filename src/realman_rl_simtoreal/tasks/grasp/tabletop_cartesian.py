@@ -22,8 +22,8 @@ class CartesianTabletopConfig:
     vision_cube_size: float = .02
     vision_hsv_low: tuple = (3,175,50)
     vision_hsv_high: tuple = (25,255,255)
-    # CAD camera_link has no calibrated optical frame. These are explicit
-    # simulation conventions: optical +Z parallel to the fingers, local +X up.
+    # camera_link 是仿真法兰附件。光轴取其局部 +Z，图像上方取局部 +X。
+    # 手眼标定后才由真实的法兰到相机变换替换这些约定。
     camera_forward_local: tuple = (0., 0., 1.)
     camera_up_local: tuple = (1., 0., 0.)
     camera_fovy_deg: float = 90.

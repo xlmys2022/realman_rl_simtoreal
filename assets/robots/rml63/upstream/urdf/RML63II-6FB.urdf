@@ -3,7 +3,7 @@
      Commit Version: 1.6.0-1-g15f4949  Build Version: 1.6.7594.29634
      For more information, please see http://wiki.ros.org/sw_urdf_exporter -->
 <robot
-  name="RML63II-6F-V">
+  name="RML63II-6FB">
   <link
     name="base_link">
     <inertial>
@@ -26,7 +26,7 @@
         rpy="0 0 0" />
       <geometry>
         <mesh
-          filename="package://RML63II-6F-V/meshes/base_link.STL" />
+          filename="package://RML63II-6FB/meshes/base_link.STL" />
       </geometry>
       <material
         name="">
@@ -40,7 +40,7 @@
         rpy="0 0 0" />
       <geometry>
         <mesh
-          filename="package://RML63II-6F-V/meshes/base_link.STL" />
+          filename="package://RML63II-6FB/meshes/base_link.STL" />
       </geometry>
     </collision>
   </link>
@@ -66,7 +66,7 @@
         rpy="0 0 0" />
       <geometry>
         <mesh
-          filename="package://RML63II-6F-V/meshes/link_1.STL" />
+          filename="package://RML63II-6FB/meshes/link_1.STL" />
       </geometry>
       <material
         name="">
@@ -80,7 +80,7 @@
         rpy="0 0 0" />
       <geometry>
         <mesh
-          filename="package://RML63II-6F-V/meshes/link_1.STL" />
+          filename="package://RML63II-6FB/meshes/link_1.STL" />
       </geometry>
     </collision>
   </link>
@@ -124,7 +124,7 @@
         rpy="0 0 0" />
       <geometry>
         <mesh
-          filename="package://RML63II-6F-V/meshes/link_2.STL" />
+          filename="package://RML63II-6FB/meshes/link_2.STL" />
       </geometry>
       <material
         name="">
@@ -138,7 +138,7 @@
         rpy="0 0 0" />
       <geometry>
         <mesh
-          filename="package://RML63II-6F-V/meshes/link_2.STL" />
+          filename="package://RML63II-6FB/meshes/link_2.STL" />
       </geometry>
     </collision>
   </link>
@@ -182,7 +182,7 @@
         rpy="0 0 0" />
       <geometry>
         <mesh
-          filename="package://RML63II-6F-V/meshes/link_3.STL" />
+          filename="package://RML63II-6FB/meshes/link_3.STL" />
       </geometry>
       <material
         name="">
@@ -196,7 +196,7 @@
         rpy="0 0 0" />
       <geometry>
         <mesh
-          filename="package://RML63II-6F-V/meshes/link_3.STL" />
+          filename="package://RML63II-6FB/meshes/link_3.STL" />
       </geometry>
     </collision>
   </link>
@@ -240,7 +240,7 @@
         rpy="0 0 0" />
       <geometry>
         <mesh
-          filename="package://RML63II-6F-V/meshes/link_4.STL" />
+          filename="package://RML63II-6FB/meshes/link_4.STL" />
       </geometry>
       <material
         name="">
@@ -254,7 +254,7 @@
         rpy="0 0 0" />
       <geometry>
         <mesh
-          filename="package://RML63II-6F-V/meshes/link_4.STL" />
+          filename="package://RML63II-6FB/meshes/link_4.STL" />
       </geometry>
     </collision>
   </link>
@@ -298,7 +298,7 @@
         rpy="0 0 0" />
       <geometry>
         <mesh
-          filename="package://RML63II-6F-V/meshes/link_5.STL" />
+          filename="package://RML63II-6FB/meshes/link_5.STL" />
       </geometry>
       <material
         name="">
@@ -312,7 +312,7 @@
         rpy="0 0 0" />
       <geometry>
         <mesh
-          filename="package://RML63II-6F-V/meshes/link_5.STL" />
+          filename="package://RML63II-6FB/meshes/link_5.STL" />
       </geometry>
     </collision>
   </link>
@@ -356,7 +356,7 @@
         rpy="0 0 0" />
       <geometry>
         <mesh
-          filename="package://RML63II-6F-V/meshes/link_6.STL" />
+          filename="package://RML63II-6FB/meshes/link_6.STL" />
       </geometry>
       <material
         name="">
@@ -370,7 +370,7 @@
         rpy="0 0 0" />
       <geometry>
         <mesh
-          filename="package://RML63II-6F-V/meshes/link_6.STL" />
+          filename="package://RML63II-6FB/meshes/link_6.STL" />
       </geometry>
     </collision>
   </link>
@@ -378,7 +378,7 @@
     name="joint_6"
     type="revolute">
     <origin
-      xyz="0 0.1666 0"
+      xyz="0 0.1323 0"
       rpy="1.5708 0 3.1416" />
     <parent
       link="link_5" />
@@ -391,116 +391,5 @@
       upper="6.28"
       effort="10"
       velocity="3.14" />
-  </joint>
-  <link
-    name="camera_rolink">
-    <inertial>
-      <origin
-        xyz="0.010432 -0.036654 -0.0024431"
-        rpy="0 0 0" />
-      <mass
-        value="0.21281" />
-      <inertia
-        ixx="0.00015933"
-        ixy="3.6864E-07"
-        ixz="-3.3995E-08"
-        iyy="0.00014209"
-        iyz="9.1072E-07"
-        izz="3.1695E-05" />
-    </inertial>
-    <visual>
-      <origin
-        xyz="0 0 0"
-        rpy="0 0 0" />
-      <geometry>
-        <mesh
-          filename="package://RML63II-6F-V/meshes/camera_rolink.STL" />
-      </geometry>
-      <material
-        name="">
-        <color
-          rgba="0.89804 0.91765 0.92941 1" />
-      </material>
-    </visual>
-    <collision>
-      <origin
-        xyz="0 0 0"
-        rpy="0 0 0" />
-      <geometry>
-        <mesh
-          filename="package://RML63II-6F-V/meshes/camera_rolink.STL" />
-      </geometry>
-    </collision>
-  </link>
-  <joint
-    name="camera_rojoint"
-    type="revolute">
-    <origin
-      xyz="0.045 -0.002 -0.0653"
-      rpy="-3.1416 -1.5708 -1.5708" />
-    <parent
-      link="link_6" />
-    <child
-      link="camera_rolink" />
-    <axis
-      xyz="0 0 1" />
-    <limit
-      lower="0"
-      upper="1.05"
-      effort="0"
-      velocity="0" />
-  </joint>
-  <link
-    name="camera_link">
-    <inertial>
-      <origin
-        xyz="-0.03617 1.9588E-08 -6.501E-05"
-        rpy="0 0 0" />
-      <mass
-        value="9.2946E-05" />
-      <inertia
-        ixx="2.3027E-09"
-        ixy="-2.4474E-14"
-        ixz="1.3209E-14"
-        iyy="4.7494E-08"
-        iyz="-7.0676E-21"
-        izz="4.9797E-08" />
-    </inertial>
-    <visual>
-      <origin
-        xyz="0 0 0"
-        rpy="0 0 0" />
-      <geometry>
-        <mesh
-          filename="package://RML63II-6F-V/meshes/camera_link.STL" />
-      </geometry>
-      <material
-        name="">
-        <color
-          rgba="0.75294 0.75294 0.75294 1" />
-      </material>
-    </visual>
-    <collision>
-      <origin
-        xyz="0 0 0"
-        rpy="0 0 0" />
-      <geometry>
-        <mesh
-          filename="package://RML63II-6F-V/meshes/camera_link.STL" />
-      </geometry>
-    </collision>
-  </link>
-  <joint
-    name="camera_joint"
-    type="fixed">
-    <origin
-      xyz="0.02978 -0.0395 -0.0345"
-      rpy="2.0452 1.5708 2.0452" />
-    <parent
-      link="camera_rolink" />
-    <child
-      link="camera_link" />
-    <axis
-      xyz="0 0 0" />
   </joint>
 </robot>

@@ -1,6 +1,6 @@
 # 腕部 RGB-D 视觉抓取
 
-这是现有 `tabletop_cartesian` 的 `rgbd_hsv` 观测模式，使用同一工程和 `realman_rl` 环境。保留原 `state` 模式、旧 Reach/夹取任务及旧模型。运动流程仍为六轴零位 → 传统控制到固定观测姿态 → PPO 输出末端 XYZ 和夹爪增量 → 独立 FK/IK 执行。
+这是 `RML63II-6FB` 场景中 `tabletop_cartesian` 的 `rgbd_hsv` 观测模式，使用 `realman_rl` 环境。机械臂从六轴零位经传统控制到固定观察位，再由 PPO 输出末端 XYZ 和夹爪增量，独立 FK/IK 执行。
 
 ## 交互演示
 
@@ -17,7 +17,7 @@ python -I scripts/demos/demo_vision_grasp.py
 
 ## 图像与三维定位
 
-读取现有 `camera_link` 上的 `wrist_rgb` 相机，局部位置保持 `(0,0,0)`，没有把相机移动到更容易看到方块的位置。RGB 与深度使用同一分辨率、相同相机和同一个物理时刻；深度是光轴 Z 方向的米制测量，不使用物体 ID、MuJoCo 分割标签或物体位姿。
+读取 `camera_link` 原点处的 `wrist_rgb` 相机。6FB 视觉场景将 `camera_link` 作为法兰的刚性安装坐标系，位置沿用仿真中的法兰到光心变换。RGB 与深度由同一相机在同一个物理时刻采集，相同分辨率。深度是光轴 Z 方向的米制测量，不使用物体 ID、MuJoCo 分割标签或物体位姿。[法兰、相机及 TCP 坐标系](../assets/robots/rml63/SOURCE.md)
 
 OpenCV 按 RGB → HSV 转换，默认阈值为 H `[3,25]`、S `[175,255]`、V `[50,255]`。输出单通道 `uint8` Mask：目标白色 255，背景黑色 0。选择橙色连通区域后，对相应像素的深度反投影：
 
@@ -62,32 +62,30 @@ MuJoCo 物体真值继续用于仿真动力学、碰撞安全、训练奖励和�
 
 当前 `wrist_rgbd_hsv_cube_v4` 使用同一个末端网络分别计算当前请求及保持参考时的响应，两者之差作为末端动作均值，使零参考误差对应零增量，消除继承网络的小幅静态漂移。相机目标误差进入 XY 1 mm、Z 0.5 mm 精度带后保持已发出的参考；夹爪动作仍由独立网络产生。这个结构参与 PPO 采样、似然计算和梯度更新，没有在执行器中替换网络动作。
 
-模型存放于 `outputs/grasp/ppo/tabletop_cartesian/vision_rgbd_v1/`，与原真值模式成绩分开。加载器校验视觉观测字段、策略类型和版本；早期视觉版本只允许显式作为 `--init-model` 迁移，不作为当前版本的正式评估模型。
+加载器校验视觉观测字段、策略类型、版本和 6FB 观察位契约。用原场景的权重初始化训练时，可显式指定 `--init-model`。
 
 ## 已保存模型与复现
 
-当前选用 `full_table_down_seed2031_r4_zero_anchored/checkpoints/step_00000768/model.zip`。从既有 PPO 权重迁移，当前检查点新增 768 步、60 次优化器更新；末端和夹爪权重均已更新，门控在该检查点保持继承值。整轮训练完成 1,536 步、120 次优化器更新，末端、夹爪和门控均有更新，但下列独立成绩只归属于选中的 768 步模型。
+当前选用 `rml63ii_6fb/vision_transfer_step768/model.zip`。沿用旧视觉 PPO 的冻结权重，在新机型上重做完整回合验收。本次无新增 PPO 优化器更新。固定位置和半径 2 cm 内随机位置各取一个样本，均通过原有物理标准，结束时分别离台 29.671 mm 和 29.690 mm，物理保持 3.570 s 和 3.593 s，视觉保持均为 3 s。[6FB 复测结果](../outputs/grasp/ppo/tabletop_cartesian/rml63ii_6fb/vision_transfer_step768/validation.json)
 
-冻结并重载后，固定位置独立复测 **3/3**，半径 **2 cm** 圆盘内随机位置 **3/3**，均通过完整物理标准且无安全终止。六次结束时离台 29.61–29.67 mm，物理连续稳定保持 3.511–3.584 秒，视觉连续保持 3 秒。三次固定位置为确定性重复复现；三个随机位置是小样本验证，不能当作整体泛化成功率。
-
-[完整零位启动与视觉抓取回放](../outputs/grasp/ppo/tabletop_cartesian/vision_rgbd_v1/full_table_down_seed2031_r4_zero_anchored/review/full_rgbd_grasp_step768.gif) 包含实际 RGB 和 Mask；[验证报告](validation/TABLETOP_VISION_VALIDATION.md)记录输入隔离、模型来源、全部网络动作重算及物理验收证据。
+旧 6F-V 场景的 768 步检查点曾通过固定 3/3 和随机 3/3。原配置、模型、源码归档和评估保留在 `vision_rgbd_v1/`。[历史验证报告](validation/TABLETOP_VISION_VALIDATION.md) · [历史回放](../outputs/grasp/ppo/tabletop_cartesian/vision_rgbd_v1/full_table_down_seed2031_r4_zero_anchored/review/full_rgbd_grasp_step768.gif)
 
 以下命令从仓库根目录执行，输出路径须选择尚未使用的新文件：
 
 ```bash
 conda activate realman_rl
-VISION_MODEL=outputs/grasp/ppo/tabletop_cartesian/vision_rgbd_v1/full_table_down_seed2031_r4_zero_anchored/checkpoints/step_00000768/model.zip
+VISION_MODEL=outputs/grasp/ppo/tabletop_cartesian/rml63ii_6fb/vision_transfer_step768/model.zip
 python -I scripts/evaluate/evaluate_ppo_tabletop_cartesian.py \
-  --model "$VISION_MODEL" --episodes 3 --seed-start 997000 \
-  --json /tmp/rgbd_fixed_retest.json
+  --model "$VISION_MODEL" --episodes 1 --seed-start 997000 \
+  --json /tmp/rgbd_6fb_fixed_retest.json
 python -I scripts/evaluate/evaluate_ppo_tabletop_cartesian.py \
-  --model "$VISION_MODEL" --object-radius .02 --episodes 3 --seed-start 997100 \
-  --json /tmp/rgbd_random2cm_retest.json
+  --model "$VISION_MODEL" --object-radius .02 --episodes 1 --seed-start 997100 \
+  --json /tmp/rgbd_6fb_random2cm_retest.json
 python -I scripts/demos/render_ppo_tabletop_cartesian.py \
-  --model "$VISION_MODEL" --seed 997200 --output /tmp/rgbd_full_grasp.gif
+  --model "$VISION_MODEL" --seed 997000 --output /tmp/rgbd_6fb_full_grasp.gif
 ```
 
-评估从 checkpoint 自动恢复视觉模式、标定配置及动作尺度，实际执行零位启动，禁用启动缓存。物理验收用真值不等于策略读取真值。回放以 4 倍仿真时间播放，包含约 23.45 秒传统启动和约 75 秒 PPO 任务。
+评估从 checkpoint 自动恢复视觉模式、相机配置及动作尺度，实际执行零位启动，禁用启动缓存。策略物体信息来自 RGB-D，仿真真值用于物理验收。回放以 4 倍仿真时间播放，包含 22.70 s 传统启动和约 76 s PPO 任务。
 
 继续训练的示例（新目录，不覆盖现有模型）：
 
@@ -97,12 +95,14 @@ python -I scripts/train/train_ppo_tabletop_cartesian.py --stage full \
   --init-model "$VISION_MODEL" --jaw-control delta --jaw-delta-scale .0015 \
   --reset-exploration --std .025 --jaw-std .1 --learning-rate .00001 \
   --n-envs 1 --n-steps 256 --batch-size 128 --timesteps 1536 --eval-every 768 \
-  --seed 2031 --run-dir outputs/grasp/ppo/tabletop_cartesian/vision_rgbd_v1/continue_new
+  --seed 2031 --run-dir outputs/grasp/ppo/tabletop_cartesian/rml63ii_6fb/continue_new
 ```
 
 这是权重迁移并重建优化器的新增训练，不是完整优化器状态的跨进程恢复；进一步训练后的模型需要重新评估。
 
 ## 真机接口准备
+
+部署设备已确认是 **RML63II-6FB**。实机法兰到夹爪和法兰到腕部相机的外参待标定。[实机本体](../assets/robots/rml63/SOURCE.md)
 
 ### 标定实物方块的 HSV
 
@@ -128,6 +128,6 @@ python -I scripts/demos/calibrate_cube_hsv.py
 3. 使用真实采集时间和匹配的机器人位姿，提供实际夹爪开口/参考等机器人自身状态。
 4. 按实际方块尺寸和光照校准尺寸先验、HSV 阈值；目标丢失时停止，禁止补入模拟器物体状态。
 
-当前使用 MuJoCo 的相机内参与机器人相机位姿作为仿真标定，不冒充厂家光学标定。没有连接或控制真实机械臂；真实相机噪声、时间同步及手眼误差需要单独验证。
+当前使用 MuJoCo 的相机内参与仿真安装变换。实机只读查询核实了本体型号和运动学参数。真实相机的内参、手眼外参、噪声和时间同步仍待验证。
 
 接口依据：[OpenCV HSV 分割](https://docs.opencv.org/4.x/da/d97/tutorial_threshold_inRange.html)、[OpenCV 相机投影约定](https://docs.opencv.org/4.x/d5/d1f/calib3d_solvePnP.html)、[MuJoCo 相机约定](https://mujoco.readthedocs.io/en/stable/XMLreference.html#body-camera)。

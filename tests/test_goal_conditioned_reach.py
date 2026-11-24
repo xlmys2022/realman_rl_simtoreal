@@ -71,8 +71,10 @@ class AxisEnvironmentTests(unittest.TestCase):
                 for key in x[0]:np.testing.assert_array_equal(x[0][key],y[0][key])
                 self.assertEqual(x[1:4],y[1:4]);self.assertEqual(x[1],a.compute_reward(x[0]['achieved_goal'],x[0]['desired_goal'],x[4]))
 
-    def test_legacy_golden_trajectories_exact(self):
+    def test_legacy_mode_trajectories_on_current_robot(self):
         fixture=json.loads((PROJECT_ROOT/'tests/fixtures/reach_env_legacy_contract.json').read_text())
+        from realman_rl_simtoreal.paths import ROBOT_MODEL
+        self.assertEqual(fixture['rollout_robot_model'], ROBOT_MODEL)
         for row in fixture['rollouts']:
             with ReachEnv(**row['config']) as env:
                 env.reset(seed=row['seed'])

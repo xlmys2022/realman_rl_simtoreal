@@ -136,7 +136,10 @@ class SequenceReachTests(unittest.TestCase):
             with self.subTest(values=values),self.assertRaises(ValueError):make_reach_env(config)
 
     def test_command_tracks_the_issued_pose_without_accumulating_unexecuted_motion(self):
-        with make_reach_env(environment_config('random_start_multi_reach_20cm')) as env:
+        config = environment_config('random_start_multi_reach_20cm')
+        # 此起点使用更大的测试动作，确保新法兰几何下也触发 0.5° 关节步长限制。
+        config['action_scale'] = .004
+        with make_reach_env(config) as env:
             obs,_=env.reset(seed=180000)
             origin=env._command_position.copy()
             previous=env._joint_reference.copy()

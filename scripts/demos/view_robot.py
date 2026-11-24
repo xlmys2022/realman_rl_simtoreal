@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Show RML63II-6F-V at its URDF zero pose without advancing physics."""
+"""在 MuJoCo 中查看 RML63II-6FB 的 URDF 零位。"""
 
 import argparse
 import math

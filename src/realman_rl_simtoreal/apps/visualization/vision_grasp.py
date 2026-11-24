@@ -11,10 +11,8 @@ from ...paths import PROJECT_ROOT
 from .viewer import configure_backend, passive_viewer
 
 
-DEFAULT_MODEL = PROJECT_ROOT / (
-    "outputs/grasp/ppo/tabletop_cartesian/vision_rgbd_v1/"
-    "full_table_down_seed2031_r4_zero_anchored/checkpoints/step_00000768/model.zip"
-)
+# 配置含 6FB 的固定观察位契约，权重来自冻结的视觉 PPO 并在新场景复测。
+DEFAULT_MODEL = PROJECT_ROOT / "outputs/grasp/ppo/tabletop_cartesian/rml63ii_6fb/vision_transfer_step768/model.zip"
 PHASE_LABELS = {
     "traditional_startup": "Moving from zero to observation pose",
     "traditional_settle": "Settling at observation pose",

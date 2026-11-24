@@ -10,6 +10,7 @@ from time import perf_counter
 import mujoco
 import numpy as np
 
+from ..hardware.realman_config import REALMAN_HARDWARE
 from .realman_fk import RealManFK
 from ..simulation.motion.kinematics import rotation_vector
 
@@ -87,7 +88,9 @@ def periodic_equivalent(q, seed, limits):
 
 
 class RealManIK(RealManFK):
-    def __init__(self, model_limits, model="II", sensor="SF"):
+    def __init__(self, model_limits, model=REALMAN_HARDWARE.arm_generation,
+                 sensor=REALMAN_HARDWARE.sdk_force_type):
+        # 仿真和名义 SDK 的限位都用 rad，逆解只返回两者交集内的关节角。
         limits = np.asarray(model_limits, dtype=float)
         if limits.shape != (6, 2) or not np.isfinite(limits).all() or np.any(limits[:, 0] >= limits[:, 1]):
             raise ValueError("Expected six ordered finite model joint ranges in radians")

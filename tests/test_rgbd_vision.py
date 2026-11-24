@@ -178,8 +178,14 @@ class VisualPhysicsTests(unittest.TestCase):
 
     def test_existing_camera_origin_and_real_rgbd_mask_are_preserved(self):
         env=self.env;cid=env.camera.camera_id
-        self.assertEqual(env.robot.model.cam_bodyid[cid],env.robot.model.body('camera_link').id)
-        np.testing.assert_array_equal(env.robot.model.cam_pos[cid],[0,0,0])
+        model = env.robot.model
+        camera = model.body('camera_link')
+        self.assertEqual(model.cam_bodyid[cid], camera.id)
+        np.testing.assert_array_equal(model.cam_pos[cid],[0,0,0])
+        # 插件光心用法兰系米制平移，6FB 本体没有 V 型相机外壳。
+        self.assertEqual(model.body_parentid[camera.id], model.body('link_6').id)
+        np.testing.assert_array_equal(camera.pos, [.0845, .0325, -.03552])
+        self.assertEqual(model.body_geomnum[camera.id], 0)
         self.assertEqual(env.camera.frame.rgb.shape,(480,640,3))
         self.assertEqual(set(np.unique(env.tracker.detector.mask)),{0,255})
         np.testing.assert_allclose(self.info['vision']['object_position_base_m'],[.4,0,.01],atol=1e-5)
