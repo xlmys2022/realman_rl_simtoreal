@@ -4,6 +4,7 @@
 
 2026-11-15 的输出整理保留所有原始实验文件。当前结果入口见 [outputs 导航](../../outputs/README.md)；历史输出地址与新地址的对应关系见 [输出目录说明](../OUTPUTS.md)。旧目录链接已从 outputs 根目录移除，历史报告中的输出路径统一按迁移表查找。
 
+- [src 分层重构与回归验证](SRC_LAYOUT_REFACTOR_VALIDATION.md)。
 - [渐进式结构审计](STRUCTURE_AUDIT.md)：实际基线树、全部源码依赖、确认重复与语义差异、六阶段记录。
 - [六阶段结构重构验证](STRUCTURE_REFACTOR_VALIDATION.md)：共享产物、CLI / 回放、独立桌面评估、Runtime、视觉组合、原任务奖励迁移及模型 / 物理回归。
 - [腕部 RGB-D 视觉 PPO 完整抓取](TABLETOP_VISION_VALIDATION.md)：固定位置 3/3、半径 2 cm 随机位置 3/3，无安全终止。物体观测、目标和结束判断来自相机；79 项相关测试以及 10,601 个控制周期的观测与网络动作重算通过。仅验证理想仿真 RGB-D、20 mm 正立方块，未部署真机。

@@ -5,15 +5,15 @@ from contextlib import nullcontext
 from pathlib import Path
 import time
 
-from realman_rl_simtoreal.viewer import configure_backend, passive_viewer
+from realman_rl_simtoreal.apps.visualization.viewer import configure_backend, passive_viewer
 configure_backend()
 
-from realman_rl_simtoreal.envs.grasp_lift_env import GraspLiftEnv
+from realman_rl_simtoreal.envs.grasp.grasp_lift_env import GraspLiftEnv
 from realman_rl_simtoreal.paths import OUTPUTS
 from realman_rl_simtoreal.rl.common.artifacts import write_json
 from realman_rl_simtoreal.evaluation.grasp_lift import rollout, summarize
-from realman_rl_simtoreal.utils.artifacts import experiment_metadata
-from realman_rl_simtoreal.tasks.grasp_lift import GRASP_LIFT_CONFIG
+from realman_rl_simtoreal.evaluation.grasp_lift import experiment_metadata
+from realman_rl_simtoreal.tasks.grasp.lift import GRASP_LIFT_CONFIG
 
 
 def main():

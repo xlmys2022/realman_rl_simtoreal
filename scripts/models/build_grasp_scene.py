@@ -7,8 +7,8 @@ import mujoco
 import numpy as np
 
 from realman_rl_simtoreal.paths import GRIPPER_ASSETS, GRIPPER_SCENE, GRASP_CONTACT_SCENE
-from realman_rl_simtoreal.simulation.gripper import SIGNS, width_to_angle
-from realman_rl_simtoreal.simulation.model import initialize
+from realman_rl_simtoreal.simulation.devices.mujoco_gripper import SIGNS, width_to_angle
+from realman_rl_simtoreal.simulation.physics.model import initialize
 
 DESTINATION = GRASP_CONTACT_SCENE
 

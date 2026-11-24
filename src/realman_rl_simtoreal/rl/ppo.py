@@ -1,4 +1,4 @@
-"""Official PPO Reach helpers and read-only rollout audit; no custom loss/buffer."""
+"""通过 SB3 创建 Reach PPO，核验 rollout、模型状态、保存契约和只读评估。"""
 import copy
 import json
 from pathlib import Path
@@ -11,8 +11,8 @@ from stable_baselines3.common.callbacks import BaseCallback
 from ..utils.artifacts import file_sha256
 from ..utils.metrics import MotionStats
 from .common.artifacts import parameter_hashes, optimizer_steps
-from ..tasks.reach import task_environment, ENV_CONFIG, OBSERVATION_MODES, TASKS
-from ..tasks.rewards import REWARD_COMPONENT_KEYS, validate_checkpoint_reward
+from ..tasks.reach.config import ppo_environment_config as environment_config
+from ..tasks.reach.reward import REWARD_COMPONENT_KEYS, validate_checkpoint_reward
 from .common.observation import checkpoint_transform, validate_model_observation
 from ..evaluation.reach import evaluate
 from ..evaluation.metrics import summarize_episodes
@@ -26,24 +26,8 @@ TRAIN_METRICS=('policy_gradient_loss','value_loss','entropy_loss','approx_kl','c
                'explained_variance','std','loss','learning_rate','clip_range')
 
 
-def environment_config(task='fixed_reach',reward_mode=None,action_scale=None,
-                       observation_mode=None, reward_progress_parameters=None):
-    if observation_mode is None:
-        observation_mode = ('goal_relative_v3' if TASKS.get(task,{}).get('target_radius',0)>.01 else
-                            'legacy' if task == 'fixed_reach' else 'goal_relative_v1')
-    if observation_mode not in OBSERVATION_MODES:
-        raise ValueError('Unknown observation_mode: '+str(observation_mode))
-    if reward_mode is None:
-        reward_mode = 'reach_progress_v1' if observation_mode.startswith('goal_relative_') else 'reach_shaped_v1'
-    if action_scale is None:
-        action_scale = TASKS.get(task,{}).get('action_scale',.00025)
-    return task_environment(task,dict(ENV_CONFIG,boundary_mode='terminate'),
-                            reward_mode=reward_mode,action_scale=action_scale,
-                            observation_mode=None if observation_mode=='legacy' else observation_mode,
-                            reward_progress_parameters=reward_progress_parameters)
-
-
 def make_ppo(env,seed,*,n_steps=512,batch_size=64,n_epochs=10,initial_model=None):
+    """按固定默认网络与指定 rollout 参数创建 PPO，可载入同契约的历史权重。"""
     if seed<0 or min(n_steps,batch_size)<2 or n_epochs<1 or n_steps%batch_size:
         raise ValueError('Nonnegative seed, n_steps/batch>=2, positive epochs and full minibatches required')
     if env.num_envs!=1:raise ValueError('This experiment currently audits one environment')
@@ -74,7 +58,7 @@ def crossed_thresholds(previous,current,interval):
 
 
 class ActionClipStats:
-    """Environment Box clipping; never PPO likelihood-ratio clip_fraction."""
+    """统计环境 Box 对动作向量及分量的裁剪比例，用于对照实际执行。"""
     def __init__(self):
         self.samples=self.components=self.clipped_vectors=self.clipped_components=0
         self.raw_abs_max=self.applied_abs_max=0.
@@ -99,6 +83,7 @@ class ActionClipStats:
 
 
 class PPOAudit(BaseCallback):
+    """记录原始动作、执行动作与奖励，用完整性检查保护单环境 PPO 的采样。"""
     def __init__(self,folder,action_scale):
         super().__init__()
         self.folder=Path(folder);self.action_scale=action_scale
@@ -297,6 +282,7 @@ def save_ppo_checkpoint(model,folder,config,trained_rollouts,*,completed_stage):
 
 
 def load_ppo(path, *, observation_mode=None):
+    """加载 CPU checkpoint 和固定观测变换，核对奖励版本及输入维度。"""
     path=Path(path).resolve();config=json.loads((path.parent/'config.json').read_text())
     if config.get('algorithm')!='PPO':raise ValueError('Expected an explicitly marked PPO checkpoint')
     validate_checkpoint_reward(config)

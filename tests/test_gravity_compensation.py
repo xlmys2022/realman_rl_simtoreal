@@ -10,12 +10,12 @@ import mujoco
 import numpy as np
 
 ROOT = Path(__file__).resolve().parents[1]
-from realman_rl_simtoreal.simulation import control, model as model_api
-from realman_rl_simtoreal.simulation import ee_control as ee
+from realman_rl_simtoreal.simulation.physics import joint_control as control, model as model_api
+from realman_rl_simtoreal.simulation.motion import traditional_ee_control as ee
 _spec = importlib.util.spec_from_file_location("_test_compare_controllers", ROOT / "scripts/diagnostics/compare_controllers.py")
 compare = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(compare)
-from realman_rl_simtoreal.simulation.kinematics import Kinematics
+from realman_rl_simtoreal.simulation.motion.kinematics import Kinematics
 
 
 class GravityCompensationTests(unittest.TestCase):

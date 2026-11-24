@@ -7,18 +7,18 @@ import os
 from pathlib import Path
 import time
 
-from realman_rl_simtoreal.viewer import configure_backend, passive_viewer
+from realman_rl_simtoreal.apps.visualization.viewer import configure_backend, passive_viewer
 configure_backend()
 
 import mujoco
 import numpy as np
 
 from realman_rl_simtoreal.paths import OUTPUTS
-from realman_rl_simtoreal.simulation.control import advance_synchronized_cycle, validate_target
-from realman_rl_simtoreal.simulation.grasp_contact import load_experiment, ContactRecorder
-from realman_rl_simtoreal.simulation.gripper import angle_to_width, width_to_angle
-from realman_rl_simtoreal.simulation.kinematics import Kinematics
-from realman_rl_simtoreal.simulation.model import require
+from realman_rl_simtoreal.simulation.physics.joint_control import advance_synchronized_cycle, validate_target
+from realman_rl_simtoreal.simulation.physics.grasp_contact import load_experiment, ContactRecorder
+from realman_rl_simtoreal.simulation.devices.mujoco_gripper import angle_to_width, width_to_angle
+from realman_rl_simtoreal.simulation.motion.kinematics import Kinematics
+from realman_rl_simtoreal.simulation.physics.model import require
 
 CASES = dict(normal=dict(), no_close=dict(close=False), release=dict(release=True),
              low_friction=dict(friction=.05), heavy=dict(mass=.03), hull=dict(hull=True))

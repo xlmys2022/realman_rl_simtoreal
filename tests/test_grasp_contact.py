@@ -9,11 +9,11 @@ import mujoco
 import numpy as np
 
 from realman_rl_simtoreal.paths import PROJECT_ROOT, GRIPPER_SCENE, GRIPPER_ASSETS
-from realman_rl_simtoreal.simulation import control
-from realman_rl_simtoreal.simulation.gripper import Gripper
-from realman_rl_simtoreal.simulation.grasp_contact import (
+from realman_rl_simtoreal.simulation.physics import joint_control as control
+from realman_rl_simtoreal.simulation.devices.mujoco_gripper import Gripper
+from realman_rl_simtoreal.simulation.physics.grasp_contact import (
     SCENE, load_experiment, ContactRecorder, contact_force_on_target, groove_probe)
-from realman_rl_simtoreal.simulation.model import load_model, initialize
+from realman_rl_simtoreal.simulation.physics.model import load_model, initialize
 
 
 def script_module(filename, name):

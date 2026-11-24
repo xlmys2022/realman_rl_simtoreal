@@ -53,7 +53,7 @@ python -I scripts/evaluate/evaluate_ppo_grasp_lift.py \
   --episodes 20 --seed-start 270000 --json /tmp/realman_ppo_pick_lift_new.json
 ```
 
-九个相关 CLI 的默认输入 / 输出位置已同步到新目录：`evaluate_reach_baselines.py`、`compare_controllers.py`、`compare_fk.py`、`compare_ik.py`、`run_grasp_contact_cases.py`、`run_grasp_lift.py`、`train_sac_reach.py`、`diagnose_sac_reach.py` 和 `compare_sac_boundary.py`。命令行参数、计算与保存格式沿用原实现。
+九个相关 CLI 的默认输入 / 输出位置已同步到新目录：`evaluate_reach_baselines.py`、`compare_controllers.py`、`compare_fk.py`、`compare_ik.py`、`run_grasp_contact_cases.py`、`run_grasp_lift.py`、`train_sac_reach.py`、`diagnose_sac_reach.py` 和 `compare_sac_boundary.py`。命令行参数、计算与保存格式沿用原实现。 SAC 的三个列举入口后来已退役，历史产物仍可从上述目录查找。
 
 ## 旧目录对照
 

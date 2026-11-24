@@ -9,10 +9,10 @@ from pathlib import Path
 
 import numpy as np
 
-from realman_rl_simtoreal.envs.reach_env import ReachEnv
+from realman_rl_simtoreal.envs.reach.reach_env import ReachEnv
 from realman_rl_simtoreal.rl.ppo import PPO_CONFIG
-from realman_rl_simtoreal.tasks.reach import ENV_CONFIG, task_environment
-from realman_rl_simtoreal.tasks.rewards import REWARD_MODES
+from realman_rl_simtoreal.tasks.reach.config import ENV_CONFIG, task_environment
+from realman_rl_simtoreal.tasks.reach.reward import REWARD_MODES
 
 
 OLD_MODES = ('distance', 'safe_dense', 'reach_shaped_v1')

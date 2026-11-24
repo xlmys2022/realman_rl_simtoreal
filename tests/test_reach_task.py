@@ -15,11 +15,11 @@ import gymnasium as gym
 from gymnasium.utils.env_checker import check_env
 import numpy as np
 
-from realman_rl_simtoreal.envs.reach_env import ReachEnv
+from realman_rl_simtoreal.envs.reach.reach_env import ReachEnv
 from realman_rl_simtoreal.paths import PROJECT_ROOT
-from realman_rl_simtoreal.simulation.control import validate_target
-from realman_rl_simtoreal.simulation.ee_control import check_motion
-from realman_rl_simtoreal.simulation.kinematics import IKResult, rotation_vector
+from realman_rl_simtoreal.simulation.physics.joint_control import validate_target
+from realman_rl_simtoreal.simulation.motion.traditional_ee_control import check_motion
+from realman_rl_simtoreal.simulation.motion.kinematics import IKResult, rotation_vector
 
 _spec = util.spec_from_file_location('_test_reach_baselines', PROJECT_ROOT/'scripts/evaluate/evaluate_reach_baselines.py')
 baselines = util.module_from_spec(_spec)
@@ -113,7 +113,7 @@ class ReachTaskTests(unittest.TestCase):
             if calls <= 2:
                 raise ValueError('Joint interpolation has an unexpected collision')
             return check_motion(*args, **kwargs)
-        with patch('realman_rl_simtoreal.envs.reach_env.check_motion', side_effect=screen):
+        with patch('realman_rl_simtoreal.envs.reach.reach_env.check_motion', side_effect=screen):
             _, info = env.reset(seed=10)
         self.assertGreaterEqual(info['goal_sampling']['attempts'], 3)
         self.assertEqual(info['goal_sampling']['rejections']['collision'], 2)
@@ -198,7 +198,7 @@ class ReachTaskTests(unittest.TestCase):
                               if case == 'ik_failure' else IKResult(True, np.full(6, 100.), 1, 0, 0))
                     stack.enter_context(patch.object(env.kinematics, 'solve_ik', return_value=result))
                 elif case == 'collision':
-                    stack.enter_context(patch('realman_rl_simtoreal.envs.reach_env.check_motion',
+                    stack.enter_context(patch('realman_rl_simtoreal.envs.reach.reach_env.check_motion',
                                               side_effect=ValueError('Unexpected collision')))
                 elif case == 'numerical_failure':
                     env.data.qvel[0] = np.nan  # terminal fault fixture
@@ -291,7 +291,7 @@ class BlockSDK(importlib.abc.MetaPathFinder):
         if fullname=='Robotic_Arm' or fullname.startswith('Robotic_Arm.'):
             raise ModuleNotFoundError('SDK intentionally unavailable')
 sys.meta_path.insert(0,BlockSDK())
-from realman_rl_simtoreal.envs.reach_env import ReachEnv
+from realman_rl_simtoreal.envs.reach.reach_env import ReachEnv
 with ReachEnv(target_mode='random') as env:
     obs,info=env.reset(seed=10)
     obs,r,t,tr,info=env.step([0,0,0])

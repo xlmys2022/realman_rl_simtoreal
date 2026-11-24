@@ -1,97 +1,48 @@
-"""PPO learns all four grasp actions; fixed encodings and potential shaping.
-
-Training and inference never construct the staged grasp controller. Curriculum
-stages change only the declared reset distance, lift height and hold duration.
-"""
-import copy
+"""局部夹取与抬升 PPO 的模型参数、checkpoint、训练回调和评估适配。"""
 import json
 from pathlib import Path
 
-import gymnasium as gym
 import numpy as np
 import torch
 from stable_baselines3 import PPO
 from stable_baselines3.common.callbacks import BaseCallback
-from stable_baselines3.common.monitor import Monitor
-from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv, VecCheckNan
 
-from ..envs.grasp_lift_env import GraspLiftEnv
-from ..utils.artifacts import experiment_metadata
-from ..tasks.grasp_lift import GRASP_LIFT_CONFIG, CURRICULUM, REWARD, aperture_score, goal_alignment, potential, shaped_reward
-from ..evaluation.grasp_lift import evaluate
+from ..envs.grasp.grasp_lift_env import GraspLiftEnv, PPOGraspEnv, ENCODING, encode
+from ..tasks.grasp.lift import GRASP_LIFT_CONFIG, CURRICULUM, REWARD, environment_config, aperture_score, goal_alignment, potential, shaped_reward
+from ..evaluation.grasp_lift import evaluate, experiment_metadata
+from .common.env_factory import grasp_training_vector
 from .common.artifacts import append_json, write_json, parameter_hashes, optimizer_steps
 
 
-ENCODING=dict(name='grasp_relative_v1',input_dim=41,output_dim=41,
-    method='asinh on position errors/displacements at 1mm; all other features unchanged',
-    position_slice=[12,21],command_lag_slice=[38,41],running_normalization=False)
 PPO_PARAMETERS=dict(learning_rate=3e-4,n_steps=128,batch_size=256,n_epochs=10,
     gamma=.995,gae_lambda=.95,clip_range=.2,ent_coef=.001,vf_coef=.5,max_grad_norm=.5,
     target_kl=.05,policy_kwargs=dict(net_arch=dict(pi=[128,128],vf=[128,128]),log_std_init=-1.),device='cpu')
 
 
-def environment_config(stage='full'):
-    if stage not in CURRICULUM:raise ValueError('Unknown grasp curriculum stage')
-    return dict(GRASP_LIFT_CONFIG,**CURRICULUM[stage])
-
-
-def encode(observation):
-    value=np.asarray(observation,dtype=np.float32).copy()
-    if value.shape[-1:]!=(41,) or not np.isfinite(value).all():
-        raise ValueError('PPO grasp requires finite 41-dimensional observations')
-    value[...,12:21]=np.arcsinh(value[...,12:21]*50.)
-    value[...,38:41]=np.arcsinh(value[...,38:41]*10.)
-    return value
-
-
-class PPOGraspEnv(gym.Wrapper):
-    """Fixed observation encoding and discount-consistent task reward."""
-    def __init__(self,config,reward=None,randomize_height=False,randomize_approach=False):
-        super().__init__(GraspLiftEnv(**config))
-        self.task_config=self.env.config.copy()
-        self.reward_config=copy.deepcopy(REWARD if reward is None else reward)
-        self.randomize_height=bool(randomize_height)
-        self.randomize_approach=bool(randomize_approach)
-        if self.randomize_approach and self.task_config['approach_distance']<.005:
-            raise ValueError('Random approach curriculum requires a maximum distance of at least 5mm')
-        self._curriculum_rng=None
-        self.observation_space=gym.spaces.Box(-np.inf,np.inf,(41,),dtype=np.float32)
-
-    def reset(self,**kwargs):
-        if self.randomize_height or self.randomize_approach:
-            if kwargs.get('seed') is not None or self._curriculum_rng is None:
-                seed=kwargs.get('seed')
-                self._curriculum_rng=np.random.default_rng(None if seed is None else [int(seed),38117])
-        if self.randomize_height:
-            height=float(self._curriculum_rng.uniform(.005,self.task_config['lift_height']))
-            self.env.config['lift_height']=height
-            self.env.config['height_tolerance']=height*self.task_config['height_tolerance']/self.task_config['lift_height']
-        if self.randomize_approach:
-            self.env.config['approach_distance']=float(self._curriculum_rng.uniform(.005,self.task_config['approach_distance']))
-        obs,info=self.env.reset(**kwargs)
-        self.episode_config=self.env.config.copy()
-        info['training_goal_height_m']=self.episode_config['lift_height']
-        info['training_approach_distance_m']=self.episode_config['approach_distance']
-        self.previous_phi=potential(info,self.episode_config,self.reward_config)
-        return encode(obs),info
-
-    def step(self,action):
-        obs,base,terminated,truncated,info=self.env.step(action)
-        reward,terms=shaped_reward(self.previous_phi,info,terminated,self.episode_config,self.reward_config)
-        self.previous_phi=potential(info,self.episode_config,self.reward_config)
-        info.update(environment_reward=base,environment_reward_components=info['reward_components'],
-                    reward_components=terms,ppo_reward=reward,reward_mode=self.reward_config['name'],
-                    training_goal_height_m=self.episode_config['lift_height'])
-        info['training_approach_distance_m']=self.episode_config['approach_distance']
-        return encode(obs),reward,terminated,truncated,info
-
-
 def make_training_env(config,n_envs,seed,reward=None,randomize_height=False,randomize_approach=False):
     if not 1<=n_envs<=16:raise ValueError('Expected 1..16 environments')
-    def factory():return Monitor(PPOGraspEnv(config,reward,randomize_height,randomize_approach))
-    vector=DummyVecEnv([factory]) if n_envs==1 else SubprocVecEnv([factory for _ in range(n_envs)],start_method='fork')
-    vector.seed(seed)
-    return VecCheckNan(vector,raise_exception=True)
+    return grasp_training_vector(lambda: PPOGraspEnv(config,reward,randomize_height,randomize_approach), n_envs, seed)
+
+
+def reset_exploration_std(model, xyz_std, gripper_std):
+    """对平移和夹爪各自设置初始高斯标准差。"""
+    with torch.no_grad():
+        model.policy.log_std[:3].fill_(float(np.log(xyz_std)))
+        model.policy.log_std[3].fill_(float(np.log(gripper_std)))
+
+
+def reset_gripper_bias(model, mean):
+    """设置夹爪动作头的初始均值偏置。"""
+    with torch.no_grad():
+        model.policy.action_net.bias[3] = mean
+
+
+def make_model(env, seed, parameters, *, xyz_std, gripper_std, gripper_mean):
+    """创建四动作 PPO，并应用原有分通道初始探索参数。"""
+    model = PPO('MlpPolicy', env, seed=seed, verbose=0, **parameters)
+    reset_exploration_std(model, xyz_std, gripper_std)
+    reset_gripper_bias(model, gripper_mean)
+    return model
 
 
 def validate_model(model,config):
@@ -160,6 +111,7 @@ def evaluate_model(model,config,seeds):
 
 
 class GraspAudit(BaseCallback):
+    """按并行环境记录四动作 PPO 的回合、抬升、接触和完整 rollout 指标。"""
     def __init__(self,folder,n_envs):
         super().__init__()
         self.folder=Path(folder);self.episodes=[];self.rollouts=0;self.abort_reason=None

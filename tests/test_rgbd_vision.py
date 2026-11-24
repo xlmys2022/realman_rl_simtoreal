@@ -94,7 +94,7 @@ class RgbdPerceptionTests(unittest.TestCase):
 
     def test_perception_and_camera_adapter_do_not_read_simulator_object_state(self):
         pure=(ROOT/'src/realman_rl_simtoreal/perception/rgbd.py').read_text()
-        adapter=(ROOT/'src/realman_rl_simtoreal/simulation/rgbd_camera.py').read_text()
+        adapter=(ROOT/'src/realman_rl_simtoreal/simulation/devices/mujoco_rgbd_camera.py').read_text()
         for forbidden in ('object_qadr','target_free','target_object','qpos','qvel','segmentation_rendering'):
             self.assertNotIn(forbidden,pure);self.assertNotIn(forbidden,adapter)
         self.assertNotIn('mujoco',pure.lower())
@@ -165,7 +165,7 @@ class VisualPolicyTests(unittest.TestCase):
 class VisualPhysicsTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        from realman_rl_simtoreal.tasks.tabletop_cartesian import CartesianTabletopConfig
+        from realman_rl_simtoreal.tasks.grasp.tabletop_cartesian import CartesianTabletopConfig
         from realman_rl_simtoreal.envs.factory import make_tabletop_cartesian_env
         cls.env=make_tabletop_cartesian_env(CartesianTabletopConfig(observation_source='rgbd_hsv',cache_startup=True,
             jaw_control='delta',jaw_delta_scale=.0005))
@@ -210,7 +210,7 @@ class VisualPhysicsTests(unittest.TestCase):
         self.assertTrue(np.isfinite(obs).all())
 
     def test_privileged_success_cannot_end_visual_execution(self):
-        from realman_rl_simtoreal.envs.tabletop_cartesian_env import TabletopCartesianEnv
+        from realman_rl_simtoreal.envs.grasp.tabletop_cartesian_env import TabletopCartesianEnv
         info=copy.deepcopy(self.info);info.update(is_success=True,termination_reason='success')
         self.env._stable_ticks=self.env._required_ticks
         self.env._visual_hold=2.
@@ -220,7 +220,7 @@ class VisualPhysicsTests(unittest.TestCase):
         self.assertIsNone(result['termination_reason']);self.assertLess(reward,100.)
 
     def test_camera_completion_is_audited_without_oracle_continuation(self):
-        from realman_rl_simtoreal.envs.tabletop_cartesian_env import TabletopCartesianEnv
+        from realman_rl_simtoreal.envs.grasp.tabletop_cartesian_env import TabletopCartesianEnv
         self.env._stable_ticks=0;self.env._visual_hold=3.
         info=copy.deepcopy(self.info)
         with patch.object(TabletopCartesianEnv,'step',return_value=(self.obs,0.,False,False,info)):

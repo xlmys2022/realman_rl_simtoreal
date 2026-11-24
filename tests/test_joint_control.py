@@ -10,7 +10,7 @@ import mujoco
 import numpy as np
 
 ROOT = Path(__file__).resolve().parents[1]
-from realman_rl_simtoreal.simulation import control, model as model_api
+from realman_rl_simtoreal.simulation.physics import joint_control as control, model as model_api
 
 
 class JointControlTests(unittest.TestCase):

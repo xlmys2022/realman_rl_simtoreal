@@ -1,99 +1,37 @@
 # 工程架构与调用约定
 
-本项目采用 src + editable 布局。脚本组织命令行、训练时序和展示；可复用实现位于 `realman_rl_simtoreal` 包。当前目录重构不改变 MuJoCo 资源、控制、ReachEnv、算法及超参数。逐文件说明见 [FILE_MAP](FILE_MAP.md)，当前六阶段实测见 [结构重构验证](validation/STRUCTURE_REFACTOR_VALIDATION.md)；[早期布局重构报告](validation/PROJECT_ORGANIZATION_REFACTOR.md)保留当时版本的迁移记录。
+项目使用 src 和 editable 布局。包内应用提供可复用的训练、命令调度和可视化逻辑，`scripts/` 保留用户命令。实际 Python 文件见 [FILE_MAP](FILE_MAP.md)，完整目录与兼容性结果见 [src 重构报告](validation/SRC_LAYOUT_REFACTOR_VALIDATION.md)。2026-11-18 的目录与历史验证见 [渐进式结构重构](validation/STRUCTURE_REFACTOR_VALIDATION.md)。
 
-## 当前结构（2026-11-18）
-
-以实际代码为准的基线目录、依赖和六阶段记录见 [STRUCTURE_AUDIT](validation/STRUCTURE_AUDIT.md)。桌面笛卡尔 / RGB-D 代码包括 `simulation/tabletop_runtime.py`、`cartesian_controller.py`、`tool_kinematics.py`、`rgbd_camera.py`，`envs/tabletop_cartesian_env.py` / `tabletop_cartesian_vision_env.py`，`perception/rgbd.py` 和三个独立可序列化 Policy 模块。后文早期任务说明保留其语义，不能据旧目录简图认为视觉功能尚不存在。
-
-## 目录
+## 目录与依赖
 
 ```text
-realman_rl_simtoreal/
-├── assets/{robots,grippers,scenes}/
-├── src/realman_rl_simtoreal/
-│   ├── __init__.py, paths.py, viewer.py
-│   ├── simulation/{model,kinematics,tool_kinematics,control,ee_control,cartesian_controller,tabletop_runtime,gripper,grasp_contact,grasp_controller,grasp_metrics,camera,rgbd_camera,observation_pose,observation_profiles}.py
-│   ├── envs/{factory,reach_env,sequence_reach_env,grasp_lift_env,tabletop_pick_env,tabletop_cartesian_env,tabletop_cartesian_vision_env}.py
-│   ├── tasks/{reach,grasp_lift,tabletop_pick,tabletop_cartesian,tabletop_cartesian_reward,rewards}.py
-│   ├── rl/
-│   │   ├── common/{observation,env_factory,artifacts,logging}.py
-│   │   ├── ppo.py
-│   │   ├── sac.py
-│   │   ├── ppo_grasp.py
-│   │   ├── ppo_tabletop_cartesian.py
-│   │   ├── cartesian_policy.py, cartesian_reach_policy.py, vision_policy.py
-│   │   ├── ppo_tabletop.py
-│   │   ├── sac_monitoring.py
-│   │   └── sac_diagnostics.py
-│   ├── cli/{__init__,tabletop_cartesian}.py
-│   ├── visualization/{__init__,tabletop_cartesian}.py
-│   ├── evaluation/{__init__,reach,grasp_lift,tabletop_cartesian,metrics,baselines}.py
-│   ├── perception/rgbd.py
-│   ├── imitation/{bc,bc_to_sac}.py
-│   ├── utils/{geometry,demo_helpers,metrics,artifacts,tabletop_cartesian_cli,tabletop_cartesian_render}.py
-│   └── vendor/{realman_fk,realman_ik}.py
-├── scripts/{train,evaluate,demos,models,diagnostics,plots}/
-├── tests/{fixtures/,test_*.py}
-├── docs/{architecture.md,FILE_MAP.md,OUTPUTS.md,experiments/,validation/}
-├── outputs/{simulation,reach,grasp,vision,imitation,validation}/
-├── pyproject.toml
-├── requirements{,-rl,-vendor,-vision}.txt
-└── README.md
+scripts ──→ apps/cli ──→ apps/training、apps/visualization
+        ├─→ apps/training ──→ rl、envs、tasks、evaluation
+        └─→ checkpoint 加载与 evaluation
+
+rl ──→ SB3 模型、策略、分布、训练回调与模型状态
+evaluation ──→ envs、固定观测编码与通用统计
+envs ──→ tasks、simulation、perception
+simulation/runtime ──→ physics、motion、devices
+simulation/devices/mujoco_rgbd_camera ──→ perception/RgbdFrame
 ```
 
-所有包目录具有轻量 `__init__.py`，不实例化模型、环境、SDK 或学习器。脚本目录不作为包，不需要额外 `__init__.py`。正式入口已迁移，不保留旧脚本副本或 `experiments.*` 转发层。
+- `simulation/physics` 放模型加载、关节步进、执行审计和抓取接触力。`motion` 放法兰和工具 FK/IK、传统末端演示、笛卡尔回溯及分阶段抓取。`devices` 放 MuJoCo 夹爪、相机几何与 RGB-D 读取。`runtime` 组合桌面机器人、观察位预设与启动过程。
+- `envs/reach` 提供单目标和连续多目标环境。`envs/grasp` 提供局部夹取、关节桌面、笛卡尔真值和 RGB-D 环境，以及局部和关节桌面的训练观测/奖励包装。`envs/factory.py` 保存按契约创建 Reach 和笛卡尔环境的入口。
+- `tasks/reach` 持有 Reach 分布、配置和奖励版本，`tasks/grasp` 持有抓取的三个任务配置和奖励。`ReachEnv` 内保留历史奖励计算，以维持 GoalEnv 重标记、批次输入和原终止语义。
+- `rl` 持有 PPO 网络、分布、模型工厂、checkpoint 和完整 rollout 审计。`apps/training` 管理四类训练的任务配置、评估间隔及输出生命周期。局部与关节桌面向量环境共用 `rl.common.env_factory.grasp_training_vector`。
+- `evaluation` 接收策略或动作 callable，由独立环境执行回合。无需加载 PyTorch 或 SB3。Reach 和 BC 共用 `rl.common.observation` 固定编码，后者依赖 Gymnasium/NumPy。
+- `perception/rgbd.py` 通过 `RgbdFrame` 提供对齐图像、米制深度、内外参与时间戳。目标检测和跟踪消费此契约。
+- `hardware` 预留设备适配接口，`deployment` 预留真机策略观测、推理和执行流程。当前两包只有初始化说明。厂家离线 FK/IK 继续位于 `vendor`。
+- `utils/metrics.py` 提供运动统计，`utils/artifacts.py` 提供通用产物 I/O、SHA256 和源码归档。局部抓取的来源集合定义在 `evaluation.grasp_lift.experiment_metadata`。
 
-实验产物统一从 [输出导航](../outputs/README.md) 查找；分类和路径对照见 [OUTPUTS](OUTPUTS.md)。训练 run 内的模型、配置、评估、TensorBoard 和课程来源记录一起保留。outputs 根目录目前保留六个分类目录与 README；机器索引、旧路径映射和迁移审计集中在 `validation/output_organization/`，日常使用五类正式路径。
+`apps/cli/tabletop_cartesian.py` 统一四个笛卡尔命令的参数与调度。`apps/visualization` 负责 MuJoCo Viewer、关节/笛卡尔回放和视觉交互。
 
-## 层次与依赖方向
+`TabletopPickEnv` 使用独立的 `tabletop_pick.xml`，复用局部抓取的逐物理步保持判据。完整 reset 在仿真时间零初始化六轴零位和 60 mm 开口。课程起点记录与抓取上方姿态的插值比例。七维动作给出六轴绝对角度（度）和归一化夹爪开口，经同步限速及碰撞预检后由执行器执行。私有 IK 用于目标特征、奖励和探索坐标。评估向 `evaluation.grasp_lift.rollout` 提供非空策略并记录原始网络动作。
 
-```mermaid
-flowchart TD
-    SCLI["原 Cartesian scripts: train / evaluate / render / setup"] --> CCLI["cli.tabletop_cartesian: 共享参数与调度"]
-    CCLI --> RL
-    CCLI --> VIS["visualization.tabletop_cartesian: 回放与图像"]
-    VIS --> RL
-    TRAIN["其他 scripts/train: 参数与训练调度"] --> RL["rl: 模型 / 优化 / checkpoint / 薄策略适配"]
-    CLI["scripts/evaluate: 参数 / 加载 / 输出 JSON"] --> LOAD["rl 或 imitation: checkpoint 加载"]
-    CLI --> EVAL["evaluation: 独立 Episode / 评估指标"]
-    RL --> EVAL
-    RL --> FACTORY["rl.common.env_factory: 原训练包装栈"]
-    FACTORY --> ENV["envs: Gymnasium 接口"]
-    EVAL --> ENV
-    EVAL --> RULE["evaluation.baselines: 公开观测规则策略"]
-    BC["imitation: 模型 / 监督训练 / BC 权重保护适配"] --> EVAL
-    BC --> RULE
-    EVAL --> OBS["rl.common.observation: 算法无关的固定观测契约"]
-    FACTORY --> OBS
-    EVAL --> METRIC["evaluation.metrics: 纯结果汇总"]
-    RL --> METRIC
-    RL --> LOG["rl.common.logging: 已测评估结果写入训练 logger"]
-    LOG --> METRIC
-    RL --> UTIL["utils.metrics / artifacts: 中立统计与来源指纹"]
-    EVAL --> UTIL
-    ENV --> TASK["tasks: 任务配置 / 奖励"]
-    ENV --> SIM["simulation: TabletopRuntime / IK / 执行器 / 物理步进"]
-    ENV --> SENSOR["perception: 原 RGB-D 检测与跟踪"]
-    ENV --> CAMERA["simulation.rgbd_camera: 传感器适配"]
-    EVAL --> CTRL["simulation.grasp_controller: 原阶段控制器"]
-    CTRL --> SIM
-    SIM --> ASSETS["MuJoCo + assets"]
-```
+`rl/ppo_tabletop.py` 的关节空间高斯探索使用完整协方差、可逆动作坐标和保存的刷新周期。v6 的关节动作正则与夹爪开口正则基于动作执行前的目标，以保留子目标交接时的计分口径。
 
-`simulation/`、`envs/`、`tasks/` 不导入评估或算法。`evaluation/` 不导入 PPO、SAC、BC 模块或训练入口，也不导入 PyTorch / SB3；策略由调用者传入。仅共享 `rl/common/observation.py` 的固定观测契约，这个模块本身不导入算法或学习框架。无需为了目录归属再复制一份缩放逻辑。
-
-`rl/` 负责模型创建、训练、优化状态和 checkpoint。`evaluate_ppo` / `evaluate_model` 是保留的算法薄适配：选择确定性预测、编码观测、核对原始动作与 Box 裁剪、保护参数 / 训练计数，然后调用 Evaluation 执行 Episode；它们不创建第二套环境步进循环。SAC 直接用共享 Reach 协议。BC 的薄适配只提供权重指纹检查，训练与示范采集继续在 imitation。
-
-`utils/metrics.py` 保存训练与评估都使用的 `MotionStats` 及余弦辅助，只有 NumPy 依赖；没有让训练基础设施反向依赖 Reach 或 GraspLift 的执行器。`utils/artifacts.py` 提供公共 JSON / JSONL、文件 SHA256、版本、源码归档与空目录检查；调用者保留各自 JSON 选项、来源集合、排序和路径键。`experiment_metadata()` 继续保留局部抓取的原始来源定义。`rl/common/artifacts.py` 兼容原文件操作名称，另保存模型参数 / Adam 计数等 RL 状态工具。
-
-`cli/tabletop_cartesian.py` 统一四个笛卡尔命令的参数和调度；`visualization/tabletop_cartesian.py` 负责 MuJoCo 回放与图像生成。原 scripts 路径不变，原 `utils/tabletop_cartesian_cli.py` / `tabletop_cartesian_render.py` 只保留兼容转发。
-
-`TabletopPickEnv` 使用独立的 `tabletop_pick.xml`，复用现有抓取环境的逐物理步保持判据及执行器保护。完整 reset 在仿真时间零设置用户批准的全零起点和 60 mm 开口；课程 reset 显式记录与抓取上方关节姿态的插值比例。七维动作直接给出六轴绝对角度（度）和夹爪绝对开口，经过同步限速及碰撞预检后由真实执行器执行。私有 IK 计算观测目标、奖励和探索坐标，可选的接近子目标仅切换目标特征。目标高度与课程成功门槛可分别配置。
-
-`rl/ppo_tabletop.py` 使用 SB3 PPO 的采样、优势估计和裁剪更新。高斯探索采用完整协方差和可逆仿射动作坐标，刷新周期随 checkpoint 继承；最终模型每步重新采样，并通过 0.05 的关节参考平滑系数维持连续运动。全部七个输出由网络学习。v6 包含当前运动学目标的关节动作正则和远处张开夹爪的动作正则，使用动作执行前的目标，避免子目标完成的同一步被错误惩罚。评估薄适配向 `evaluation.grasp_lift.rollout()` 传入非空策略，记录原始网络动作并核对模型参数和训练计数不变。
-
-`sac_monitoring` 保留显式 BC 参照的惰性分支；普通纯 RL 不导入 imitation。核心包不导入 scripts，不修改 sys.path。所有包初始化保持轻量，新 Evaluation 包的 `__init__.py` 不加载环境或算法。
+资源和实验目录见 [输出目录说明](OUTPUTS.md)。源码摘要使用实际新路径与文件内容。训练配置、评估指标和输出目录协议沿用原定义。
 
 ## 评估实现与入口
 
@@ -137,7 +75,7 @@ result = evaluate_policy(policy.predict, [88100], name='bc',
 
 ```python
 from realman_rl_simtoreal.evaluation.grasp_lift import evaluate
-from realman_rl_simtoreal.tasks.grasp_lift import GRASP_LIFT_CONFIG
+from realman_rl_simtoreal.tasks.grasp.lift import GRASP_LIFT_CONFIG
 
 controller_result = evaluate(GRASP_LIFT_CONFIG, [230000])
 ```
@@ -146,7 +84,7 @@ PPO 用 `rl.ppo_grasp.load_checkpoint()` 加载，再由 `evaluate_model()` 编�
 
 ### 笛卡尔桌面接口
 
-旧调用继续使用 `rl.ppo_tabletop_cartesian.load()` / `evaluate()` / `rollout()`；它们分别负责 checkpoint、原 PPO 分布的确定性推理与薄适配。共用循环只有 `evaluation.tabletop_cartesian` 一份，当前真值与 RGB-D 环境由 `envs.factory` 按保存的观测契约创建。GraspLift 和关节桌面的不同任务协议继续使用原 GraspLift 评估器。
+笛卡尔训练调用 `apps.training.tabletop_cartesian.train()`。`rl.ppo_cartesian` 提供 `load()` 和 `evaluate()`，单回合执行位于 `evaluation.tabletop_cartesian.rollout()`。真值与 RGB-D 环境由 `envs.factory` 按保存的观测契约创建。GraspLift 和关节桌面继续使用原 GraspLift 评估器。
 
 其他算法或规则可传 `predict(observation)`，返回未裁剪动作；Evaluation 沿用 `[-1,1]` 裁剪与 float32、原 seed、终止规则和统计定义。`evaluate(..., action_shape=(4,), state_fingerprint=..., sources=..., algorithm=...)` 接收完整任务 / startup / contact 配置；可选回调保护调用者自己的只读状态。未提供指纹时通用接口的 `parameters_unchanged` 为 null，避免声称完成未执行的参数核验；旧 PPO 薄适配始终提供指纹，JSON 保持 true。
 
@@ -154,19 +92,17 @@ PPO 指纹覆盖全体参数、num_timesteps、_n_updates、Adam 每参数 step�
 
 ## 训练公共工具
 
-`rl/common/observation.py`、`env_factory.py`、`artifacts.py` 保留原观测、包装和训练产物接口。训练回调、Rollout 审计、SAC Q/TD / Replay 诊断仍在原算法模块；BC 监督验证 MSE、数据集指标和网络训练仍在 imitation，只有环境内闭环评估迁出。
-
-SE(3)、演示序列和文本格式仍位于 utils。没有新的抽象基类、训练器、第三方依赖或自动环境注册。
+`rl/common/observation.py`、`env_factory.py`、`artifacts.py` 保留固定观测、包装、模型状态和来源接口。PPO 回调留在相应的 RL 模块。BC 监督训练与数据集指标留在 imitation，闭环评估委托 evaluation。SE(3)、演示序列和文本格式位于 utils。
 
 ## 视觉职责与组合边界
 
 `VisionTabletopCartesianEnv` 继续复用基类的物理动作执行和独立物理审计，组合原 RGB-D Camera / Detector / Tracker。`_observation` 只从机器人本体和传感器读取允许数据；在同一模块内组合两个纯函数：`visual_grip_and_hold` 计算相机夹持置信度 / 连续保持，`encode_visual_observation` 编码原 29 维视觉通道；姿态模式沿用原额外 9 维。函数参数显式限定为相机测量与机器人状态，不传整个特权 info 或 simulator 对象。
 
-物理执行、传感器跟踪、观测编码、视觉进度和最终物理验收由不同现有职责承担；不为单个实现新增 ObservationProvider / CompletionChecker 类或独立文件。视觉环境的 step / reset、vision_lost、visual_false_success、settling margin 和禁止特权成功提前结束的规则保持原实现。真值与视觉观测即便维数相同，也保留各自模型契约和特征类。相机几何、深度单位、坐标变换、RGB-D 检测器与所有 Policy 类没有改动。
+物理执行、传感器跟踪、观测编码、视觉进度和最终物理验收由不同现有职责承担；不为单个实现新增 ObservationProvider / CompletionChecker 类或独立文件。视觉环境的 step / reset、vision_lost、visual_false_success、settling margin 和禁止特权成功提前结束的规则保持原实现。真值与视觉观测即便维数相同，也保留各自模型契约和特征类。相机几何、深度单位、坐标变换、RGB-D 检测和 Policy 类保持原有计算与序列化语义。
 
 ## 最新机器人运行时的最小接口
 
-保留具体 `simulation.TabletopRuntime`，不增加只有一个实现的抽象基类，也不强制迁移全部历史环境。当前公共接口为：
+笛卡尔环境使用具体的 `simulation.runtime.tabletop.TabletopRuntime`。
 
 - `reset_zero(object_xy)` / `prepare(object_xy, tick)`：明确复位与传统启动；prepare 仍沿用原物理轨迹或显式训练缓存。
 - `get_joint_state()`：SI 单位的关节位置、速度和实际参考，返回独立数组副本。
@@ -176,13 +112,13 @@ SE(3)、演示序列和文本格式仍位于 utils。没有新的抽象基类、
 - `reference_is_safe()` / `path_is_safe()` / `advance(target, width, observer)`：原安全检查与 50 × 1 ms 同步物理执行。
 - `forces()` / `raw_forces()`：保持 inward grasp force 与原接触法向力的不同定义和读取顺序。
 
-最新笛卡尔环境、视觉环境与控制器只迁移状态读取；关节参考限幅、夹爪约束、每个 1 ms 的 recorder → grasp_forces → observer 顺序及任务 hold 计算不变。Runtime 不计算任务奖励 / 完成，也不检测视觉目标。Reach 的旧 TCP 与 25 × 2 ms、局部抓取保护和关节桌面动作不同，未强行替换；继续复用已有 model / kinematics / control / gripper。
+关节参考限幅、夹爪约束、每个 1 ms 的 recorder → grasp_forces → observer 顺序及任务 hold 计算沿用原实现。任务奖励与完成由环境计算，视觉检测由 perception 处理。Reach 继续使用法兰 TCP 和 25 × 2 ms 控制周期。局部抓取和关节桌面环境保留各自保护和动作契约，共用底层模型、运动学、关节执行与夹爪。
 
 ## 任务与奖励的归属
 
-`tasks/grasp_lift.py` / `tabletop_pick.py` 保存原 REWARD / CURRICULUM 和原 potential / shaped_reward 等纯计算；`tasks/tabletop_cartesian.py` 保存原 EASY / STAGES。表达式、默认字典、组件键及旧奖励版本的条件分支保持不变。`rl/ppo_grasp.py` / `ppo_tabletop.py` / `ppo_tabletop_cartesian.py` 继续以旧名称重导出，历史脚本与导入可用。PPO 参数、训练包装、观测编码、模型保存 / 加载和自定义 Policy 路径留在 RL。
+`tasks/grasp/lift.py` 和 `tabletop_joint.py` 保存各自的 REWARD、CURRICULUM 与原 potential/shaped_reward。`tasks/grasp/tabletop_cartesian.py` 定义 EASY/STAGES 和环境配置，`tabletop_cartesian_reward.py` 保存笛卡尔奖励。
 
-任务层不依赖算法或评估，其他算法可以复用原任务计算。局部抓取、关节桌面和笛卡尔桌面具有不同公式，继续分别定义；没有为了统一目录合并数值语义。关节桌面的参数 / Adam helper 直接来自 rl.common，不再为读公共状态导入另一个 PPO 任务实现。
+`rl/ppo_grasp.py` 与 `rl/ppo_tabletop.py` 保留历史奖励、课程或编码导入。局部抓取和关节桌面的包装与编码实现位于各自环境，训练调度由应用持有。
 
 ## 观测、动作和奖励契约
 
@@ -194,7 +130,7 @@ PPO可显式选择 `observation_mode="fetch_like_v1"`：普通observation仅包�
 `mj_jacSite`完整位置Jacobian乘qvel、再乘control_period的运动特征(3)，加两个3维goal共12维。
 运动特征单位为米。schema=3固定变换将位置相对home、运动特征按0.01m缩放；两个goal仍为世界坐标米。
 官方MultiInputPolicy/CombinedExtractor将完整Dict的12维传给Actor和Critic，无自定义筛选或额外相对位置拼接。
-规则策略、BC与SAC专用实验/诊断当前只支持legacy，遇到新模式明确拒绝；运动统计从已有info读取命令位置。
+规则策略和 BC 使用 legacy 契约。运动统计从回合 info 读取命令位置。
 
 包装顺序从内向外严格为：
 
@@ -202,12 +138,12 @@ PPO可显式选择 `observation_mode="fetch_like_v1"`：普通observation仅包�
 ReachEnv → ScaledReachObservation → Monitor → DummyVecEnv → VecCheckNan
 ```
 
-包装器的 `compute_reward` 仍向原环境传入米制 goal。PPO 按官方实现将原始高斯动作裁剪到动作 Box 后交给环境，RolloutBuffer 与 log_prob 仍使用原始动作；SAC 保留官方压缩动作及 Replay 语义。所有奖励、失败、拒绝与 timeout 逻辑都留在原 `reach_env.py`。
+包装器的 `compute_reward` 仍向原环境传入米制 goal。PPO 按官方实现将原始高斯动作裁剪到动作 Box 后交给环境。RolloutBuffer 与 log_prob 仍使用原始动作。所有奖励、失败、拒绝与 timeout 逻辑都留在原 `reach_env.py`。
 
 奖励保留distance、safe_dense和reach_shaped_v1，并可显式选择reach_progress_v1。
 新奖励使用真实previous_achieved_goal与当前achieved_goal相对传入desired_goal的距离差，
 加持续距离成本、每步成本、成功奖金及真实安全/拒绝成本；不使用命令位移或历史成功标记。
-`tasks/rewards.py`集中默认参数和校验；GoalEnv接口支持标量/批量与目标重标记，
+`tasks/reach/reward.py` 集中默认参数和校验；GoalEnv接口支持标量/批量与目标重标记，
 `reward_components()`为纯查询，info和现有训练/评估JSON记录六个signed分项及距离元数据，不进入观测。
 新checkpoint在环境配置、顶层reward_parameters及SB3普通metadata中保存/核对完整参数；旧checkpoint继续加载。
 PPO更新、目标分布和控制/安全逻辑不变。诊断先于新实现完成，旧公式无明确错误；
@@ -215,16 +151,16 @@ PPO更新、目标分布和控制/安全逻辑不变。诊断先于新实现完�
 
 ## PPO 训练数据流
 
-1. `scripts/train/train_ppo_reach.py` 解析任务与观测模式，用 `tasks.reach` 的配置构造独立训练环境，保存环境、对应schema=2/3变换、模式/空间/字段顺序/实际特征维度、依赖和资源指纹。
+1. `scripts/train/train_ppo_reach.py` 解析任务与观测模式，调用 `apps.training.reach.train`。训练应用用 `tasks.reach.config` 的配置构造独立训练环境，保存环境、对应schema=2/3变换、模式/空间/字段顺序/实际特征维度、依赖和资源指纹。
 2. `rl.ppo.make_ppo` 创建官方 `PPO("MultiInputPolicy")`，保留独立 256×256/Tanh 策略和价值网络及原超参数。
 3. SB3 从包装后的 Dict 预测动作；经原动作 Box 裁剪和 `env.step` 形成真实轨迹。PPOAudit 只读记录原始 / 实际动作、运动、安全与训练 Episode，不产生动作或修改奖励。
 4. SB3 采集完整 512 步 Rollout，计算原优势和 log_prob，按 64 样本 minibatch 完成 10 个 epoch。timeout bootstrap 与优化器逻辑完全使用官方实现。
 5. `learn` 返回后读取优化指标，在跨越配置阈值的完整更新点执行评估和 checkpoint；保留第 0 步、最终步、部分更新中断的原标记。
 6. `evaluate_ppo` 使用独立环境和保存的预处理，确定性推理并核验参数 / 优化计数不变；`record_evaluation` 写原有 JSON / TensorBoard 指标，绘图脚本只读取这些已测量数据。
 
-04-F2直接复用上述流程及`tasks.reach`现有`random_reach`，不增加物理环境或训练器。正式训练只需显式选择随机任务及20个评估目标。PPO评估结果额外保存每个Episode的`raw_actions`、`actual_positions_before_m`和`box_clipping`；原`actions`仍为真正输入环境的Box裁剪动作。记录只读，不改变分布、动作、奖励、网络、Rollout或更新顺序。
+04-F2直接复用上述流程及`tasks.reach.config`现有`random_reach`，不增加物理环境或训练器。正式训练只需显式选择随机任务及20个评估目标。PPO评估结果额外保存每个Episode的`raw_actions`、`actual_positions_before_m`和`box_clipping`；原`actions`仍为真正输入环境的Box裁剪动作。记录只读，不改变分布、动作、奖励、网络、Rollout或更新顺序。
 
-04-F3在`tasks.reach`增加`axis_pair_reach`和`axis_six_reach`两个显式候选配置。ReachEnv增加`target_mode="discrete"`及米制`target_offsets`；构造时检查全部候选的原IK、home±5°、姿态与路径碰撞条件，任何一个失败都报告并拒绝整个任务，不删除或缩短目标。reset随机选候选，正常step不变。`options={"goal_index": i}`仅供合法reset选目标；`goal_index`只在info中，不进入33维网络观测。候选数组及预检报告通过副本提供，不能用它们修改命令或实际状态。
+04-F3在`tasks.reach.config`增加`axis_pair_reach`和`axis_six_reach`两个显式候选配置。ReachEnv增加`target_mode="discrete"`及米制`target_offsets`；构造时检查全部候选的原IK、home±5°、姿态与路径碰撞条件，任何一个失败都报告并拒绝整个任务，不删除或缩短目标。reset随机选候选，正常step不变。`options={"goal_index": i}`仅供合法reset选目标；`goal_index`只在info中，不进入33维网络观测。候选数组及预检报告通过副本提供，不能用它们修改命令或实际状态。
 
 目前±X5mm合法；六方向5mm中±Y的当前DLS候选解违反原home±5°范围，默认六方向配置会拒绝启动。显式3mm六方向只用于离线诊断，不是暗中改变训练阶段。`scripts/diagnostics/probe_ppo_goals.py`从合法reset获取同一物理状态的观测，检查冻结Actor对目标特征的响应，不执行step或修改权重。旧`probe_reach_env.py`继续只检查原固定/球壳任务。
 
@@ -232,7 +168,7 @@ PPO更新、目标分布和控制/安全逻辑不变。诊断先于新实现完�
 
 `scripts/evaluate/analyze_reach_results.py`只读取评估JSON，按相对reset home的XYZ符号（六组可重叠）、八象限及3–4/4–5mm半径分组，保留空组、小样本和范围外目标计数。它还比较原始/实际动作方向、裁剪角度及+X偏置；缺少原始轨迹的历史文件明确标记不可计算，不反推数据或重新调用IK。该入口仅依赖NumPy/标准库，不加载SDK、模型或环境。原有公共指标名称保留，不创建语义相同的TensorBoard标签。准备检查、种子划分和手动命令见[随机Reach验证](validation/PPO_RANDOM_REACH_VALIDATION.md)。
 
-SAC 同样共享包装、独立评估和日志，保留官方 DictReplayBuffer、损失、采样 RNG 与熵系数。不同算法的更新调度和算法专属 checkpoint 状态分别保留，不强行抽象为一个训练器。
+历史 SAC 和 BC→SAC 实验的模型、回放数据和报告仍可查阅。现行训练入口支持 PPO 与独立 BC。
 
 ## Gymnasium 与 MuJoCo
 
@@ -241,28 +177,28 @@ SAC 同样共享包装、独立评估和日志，保留官方 DictReplayBuffer�
   → ReachEnv 独立命令参考
   → 原 DLS IK / 限位 / 位姿 / 51 点路径碰撞预检
   → 原关节命令变化率限制与插值
-  → simulation.control.advance_control_cycle
+  → simulation.physics.joint_control.advance_control_cycle
   → ctrl + mj_step（正常周期 25 × 2ms = 50ms）
   → 实际状态观测、奖励、terminated / truncated
 ```
 
-正常 step 不写实际 qpos；reset 使用官方 home keyframe。每个物理步继续审计原总驱动力、有限数值、速度、限位与碰撞。模型加载、重力补偿、FK/IK、夹爪原执行和接触时序未改变；本轮仅补充只读状态读取。`ee_site` 仍是 link_6 原点，不是已标定 TCP。
+正常 step 不写实际 qpos；reset 使用官方 home keyframe。每个物理步继续审计原总驱动力、有限数值、速度、限位与碰撞。模型加载、重力补偿、FK/IK、夹爪原执行和接触时序未改变；仿真模块的现行入口对应迁移后的分层路径。`ee_site` 仍是 link_6 原点，不是已标定 TCP。
 
 ## 训练、评估、诊断与测试
 
-训练更新网络并写新 run；每次 CLI 从头创建模型，不是跨进程完整续训。Evaluation 衡量固定策略在独立环境中的行为和性能，使用指定目标种子与保存配置；tests 则核对实现正确性、协议与数值回归。评估不更新网络或 Replay。诊断只读分析 Q/TD/轨迹；边界对照脚本仅在原明确训练模式中启动新的 SAC 进程，`--final` 模式只评估。环境 `probe_reach_env.py` 不创建学习器。
+训练应用按原流程更新网络并写入新 run。独立评估读取指定种子与保存配置并记录动作及结果。Reach 环境探针和奖励诊断继续使用原物理与规则基线。
 
-测试位于 `tests/`，模型构建器由逐字节重生成测试覆盖；自动扫描全部 37 个 argparse / shared-CLI 入口，在 `/tmp` 下通过绝对路径检查 `--help`；5 个无参数构建器仍由资源回归覆盖。测试含小规模训练更新与保存 / 加载，不以短测试成功率作为算法效果要求。PPO 测试阻断本项目 SAC、BC 与 SDK 导入，纯 SAC 测试阻断 BC / SDK 和专家动作。随机目标测试覆盖200个目标的原可达性/安全预检、reset/home与Episode内目标稳定、33维方向特征、分组分析及一次完整512步随机任务更新；固定任务的原PPO产物可显式复用，避免重复训练。
+`tests/test_package.py` 在外部目录发现现行 CLI 并运行 `--help`，模型和场景构建器由资源回归覆盖。全量测试使用 `MUJOCO_GL=egl python -I -m unittest discover -s tests -v`，含原小规模训练更新、checkpoint 读写、相机和算法无关评估。手动完整轨迹回归在 `tests/manual_structure_regression.py`。
 
 ## 保存兼容性与边界
 
-PPO/SAC 使用官方 SB3 保存格式，配置以 JSON 保存；Replay 使用官方序列化并 gzip 压缩。部分桌面 PPO 使用自定义 Policy / 分布 / 特征类，必须保留 `rl/ppo_tabletop.py`、`cartesian_policy.py`、`cartesian_reach_policy.py`、`vision_policy.py` 的可导入路径与类实现；本轮全部保持。BC 保存显式网络标识、配置和 state_dict，继续 `torch.load(weights_only=True)`。原 utils CLI / 回放导入有兼容转发，模型类没有移动。仅使用仓库已有、来源明确的本地模型做只读验证，不下载或加载未知文件。
+PPO 使用官方 SB3 保存格式，配置以 JSON 保存。历史 SAC 归档继续可通过 SB3 读取模型数据。部分桌面 PPO 使用自定义 Policy、分布和特征类，序列化依赖 `rl/ppo_tabletop.py`、`rl/cartesian_policy.py`、`rl/cartesian_reach_policy.py` 与 `rl/vision_policy.py` 中的类路径。BC 保存显式网络标识、配置和 state_dict，继续使用 `torch.load(weights_only=True)`。回归验证使用仓库已有的本地模型。
 
 新PPO配置schema=2保存观测元数据；历史PPO配置schema=1、变换schema=2仍按legacy加载。
 加载核对保存模式、固定变换、模型空间与实际features_dim，33/12维模型不得混用或自动迁移权重。
 314项双模式开发验收及用户完成的12维随机Reach两档预算结果（16384步、131072步）见[Fetch观测验证报告](validation/REACH_FETCH_OBSERVATION_VALIDATION.md)。
 
-早期 schema 1 SAC smoke 配置以及缺少相邻 config.json 的历史文件在基线已不可通过当前加载协议评估；本次不改变原拒绝行为、不猜测配置。其历史限制见原项目结构重构报告；本次未尝试猜测缺失的历史配置。
+项目加载器继续检查相邻的 config.json、观测版本、动作契约与启动姿态。早期笛卡尔 checkpoint 的兼容 flags 继续用于既有权重迁移路径。SAC 专用训练、评估、诊断与绘图入口已退役。
 
 `pyproject.toml` 原 `include = ["realman_rl_simtoreal*"]` 自动发现新包；安装元数据、依赖版本及 editable 导入在隔离进程验证。未重新安装、升级依赖，也未修改 PYTHONPATH。普通 wheel 的资源打包仍未实现。
 
@@ -272,7 +208,7 @@ PPO/SAC 使用官方 SB3 保存格式，配置以 JSON 保存；Replay 使用官
 
 ## 后续扩展
 
-夹取抬升任务已经由 `envs/grasp_lift_env.py`、`tasks/grasp_lift.py`、`simulation/grasp_controller.py` 和 `evaluation/grasp_lift.py` 实现，入口为 `scripts/demos/run_grasp_lift.py`。环境提供 41 维 Box 观测、XYZ 加绝对夹爪开口的 4 维动作，通过 `advance_synchronized_cycle` 让机械臂、夹爪和自由物体共享每步 50 次 1 ms 积分。阶段控制器只产生这个动作空间中的动作，使用双侧接触后的有界横向对中反馈；物体的运动由接触、摩擦和重力产生。
+夹取抬升任务已经由 `envs/grasp/grasp_lift_env.py`、`tasks/grasp/lift.py`、`simulation/motion/staged_grasp_controller.py` 和 `evaluation/grasp_lift.py` 实现，入口为 `scripts/demos/run_grasp_lift.py`。环境提供 41 维 Box 观测、XYZ 加绝对夹爪开口的 4 维动作，通过 `advance_synchronized_cycle` 让机械臂、夹爪和自由物体共享每步 50 次 1 ms 积分。阶段控制器只产生这个动作空间中的动作，使用双侧接触后的有界横向对中反馈；物体的运动由接触、摩擦和重力产生。
 
 成功计时在 1 ms 物理步后读取实际接触力和物体运动，要求持续离台、双侧夹持、低速度及有限滑移。`ContactRecorder` 可选择仅保留最近采样或保存完整物理历史，读取力缓存后才刷新实时几何；数值失败返回明确标记的最近有效观测。抓取评估保存在独立的 `outputs/grasp/controller/`，Reach 仍复用 `rl/common` 的固定观测变换；任务行为评估统一由 Evaluation 组织。这是早期局部 GraspLift 的非视觉接口。当前桌面 RGB-D 观测已实现于独立视觉环境并有本轮逐步回归；真机适配仍未实现。
 
@@ -281,6 +217,6 @@ PPO/SAC 使用官方 SB3 保存格式，配置以 JSON 保存；Replay 使用官
 旧版细节完整保存在 [历史架构快照](experiments/ARCHITECTURE_BEFORE_REFACTOR.md)；历史验证报告中的旧路径对应其原版本。现行命令以 README 和 FILE_MAP 为准。
 ## 桌面末端控制任务
 
-`tabletop_cartesian` 是现有工程中的任务功能。固定观测预设位于 `simulation/observation_profiles.py`，由任务选择 `table_down` 或 `forward`，不读取物体位置来决定启动目标。`simulation/observation_pose.py` 从零位执行固定关节轨迹，到位后由 PPO 接管；所有课程共享同一预设起点。任务环境提供四维位置控制（29 维状态）或七维笛卡尔姿态控制（38 维状态），策略不读取 IK 关节目标，任务奖励不调用 IK。`simulation/cartesian_controller.py`、工具坐标 FK/IK 适配层及共享执行器执行策略请求，平视起点的转向也来自策略。原 reach、grasp_lift 和七维 tabletop_pick 接口继续保留。详细命令见 [任务说明](tabletop_cartesian.md)。
+`tabletop_cartesian` 是现有工程中的任务功能。固定观测预设位于 `simulation/runtime/observation_presets.py`，由任务选择 `table_down` 或 `forward`，不读取物体位置来决定启动目标。`simulation/runtime/observation_startup.py` 从零位执行固定关节轨迹，到位后由 PPO 接管；所有课程共享同一预设起点。任务环境提供四维位置控制（29 维状态）或七维笛卡尔姿态控制（38 维状态），策略不读取 IK 关节目标，任务奖励不调用 IK。`simulation/motion/cartesian_controller.py`、工具坐标 FK/IK 适配层及共享执行器执行策略请求，平视起点的转向也来自策略。原 reach、grasp_lift 和七维 tabletop_pick 接口继续保留。详细命令见 [任务说明](tabletop_cartesian.md)。
 
-`rgbd_hsv` 是该任务的独立视觉观测契约，由 `envs/factory.py` 选择视觉环境。`simulation/rgbd_camera.py` 只提供原腕部相机的 RGB、对齐深度与机器人相机标定；中立的 `perception/rgbd.py` 从这些传感器数据生成 Mask、基座位置及视觉速度。视觉环境以此构造全部物体观测、目标和完成判断，网络不读取模拟器物体位置、速度、受力或保持进度。物理真值仅保留于动力学、安全、奖励和独立验收。`rl/vision_policy.py` 输出神经末端和夹爪动作，继续复用原 FK/IK；视觉模型与原真值模型严格区分。详见 [视觉抓取接口](tabletop_vision.md)。
+`rgbd_hsv` 是该任务的独立视觉观测契约，由 `envs/factory.py` 选择视觉环境。`simulation/devices/mujoco_rgbd_camera.py` 只提供原腕部相机的 RGB、对齐深度与机器人相机标定；中立的 `perception/rgbd.py` 从这些传感器数据生成 Mask、基座位置及视觉速度。视觉环境以此构造全部物体观测、目标和完成判断，网络不读取模拟器物体位置、速度、受力或保持进度。物理真值仅保留于动力学、安全、奖励和独立验收。`rl/vision_policy.py` 输出神经末端和夹爪动作，继续复用原 FK/IK；视觉模型与原真值模型严格区分。详见 [视觉抓取接口](tabletop_vision.md)。

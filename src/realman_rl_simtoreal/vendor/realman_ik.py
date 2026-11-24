@@ -11,7 +11,7 @@ import mujoco
 import numpy as np
 
 from .realman_fk import RealManFK
-from ..simulation.kinematics import rotation_vector
+from ..simulation.motion.kinematics import rotation_vector
 
 POSITION_TOLERANCE_M = 1e-5
 ORIENTATION_TOLERANCE_RAD = 1e-4

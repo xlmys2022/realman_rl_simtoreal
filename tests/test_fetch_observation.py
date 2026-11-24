@@ -19,9 +19,9 @@ import mujoco
 import numpy as np
 from gymnasium.utils.env_checker import check_env
 
-from realman_rl_simtoreal.envs.reach_env import ReachEnv
+from realman_rl_simtoreal.envs.reach.reach_env import ReachEnv
 from realman_rl_simtoreal.paths import PROJECT_ROOT
-from realman_rl_simtoreal.tasks.reach import ENV_CONFIG, task_environment
+from realman_rl_simtoreal.tasks.reach.config import ENV_CONFIG, task_environment
 from realman_rl_simtoreal.rl.common.observation import (
     FEATURE_KEYS, ReachTransform, ScaledReachObservation, features,
     observation_metadata, checkpoint_transform,
@@ -336,18 +336,15 @@ class ObservationPolicyTests(unittest.TestCase):
     def test_legacy_only_consumers_refuse_new_mode_clearly(self):
         from realman_rl_simtoreal.evaluation.baselines import rule_action
         from realman_rl_simtoreal.evaluation.reach import evaluate
-        from realman_rl_simtoreal.rl.sac import make_model
-        from realman_rl_simtoreal.rl.sac_diagnostics import trace_policy
         from realman_rl_simtoreal.imitation.bc import collect_demonstrations, evaluate_policy, BCPolicy, BCNetwork
         config = dict(observation_mode='fetch_like_v1')
         with ReachEnv(**config) as env:
             obs, _ = env.reset()
-            calls = [lambda:rule_action(obs, env.action_scale), lambda:make_model(env, 1),
-                     lambda:evaluate('rule', [1], config=config), lambda:trace_policy('idle', [1], config=config),
+            calls = [lambda:rule_action(obs, env.action_scale),
+                     lambda:evaluate('rule', [1], config=config),
                      lambda:collect_demonstrations([1], [2], environment=config),
                      lambda:evaluate_policy('rule', [1], environment=config),
-                     lambda:BCPolicy(BCNetwork(), ReachTransform.from_env(env)),
-                     lambda:script('scripts/train/train_sac_reach.py').train(Path('/tmp/unused-fetch-sac'), observation_mode='fetch_like_v1')]
+                     lambda:BCPolicy(BCNetwork(), ReachTransform.from_env(env))]
             for call in calls:
                 with self.assertRaisesRegex(ValueError, "legacy"):call()
 

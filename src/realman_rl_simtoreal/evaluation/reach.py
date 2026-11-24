@@ -4,13 +4,13 @@ from time import perf_counter
 import numpy as np
 
 from ..envs.factory import make_reach_env
-from ..tasks.reach import ENV_CONFIG
-from ..tasks.rewards import REWARD_COMPONENT_KEYS
+from ..tasks.reach.config import ENV_CONFIG
+from ..tasks.reach.reward import REWARD_COMPONENT_KEYS
 from ..rl.common.observation import ReachTransform, require_legacy
 from ..utils.metrics import MotionStats
 from .baselines import rule_action
 from .metrics import summarize_episodes, summarize_bc_episodes
-from ..envs.reach_env import ReachEnv
+from ..envs.reach.reach_env import ReachEnv
 from ..utils.metrics import cosine
 
 

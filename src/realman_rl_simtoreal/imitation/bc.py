@@ -15,13 +15,13 @@ import torch
 from torch import nn
 
 from ..utils.artifacts import file_sha256
-from ..envs.reach_env import ReachEnv
+from ..envs.reach.reach_env import ReachEnv
 from ..evaluation.reach import evaluate_bc
 from ..utils.metrics import cosine
 from ..evaluation.baselines import rule_action
 from ..rl.common.observation import FEATURE_KEYS, features, ReachTransform, require_legacy
 from ..rl.common.artifacts import empty_directory, write_json, versions
-from ..tasks.reach import ENV_CONFIG
+from ..tasks.reach.config import ENV_CONFIG
 
 
 FINAL_SEEDS = tuple(range(20000, 20100))

@@ -21,11 +21,9 @@ SCRIPT_PATHS = {'train_ppo_tabletop_cartesian':'train/train_ppo_tabletop_cartesi
  'render_ppo_tabletop_cartesian':'demos/render_ppo_tabletop_cartesian.py',
  'move_to_observation_pose':'demos/move_to_observation_pose.py',
  'train_ppo_reach': 'train/train_ppo_reach.py',
- 'train_sac_reach': 'train/train_sac_reach.py',
  'train_bc_reach': 'train/train_bc_reach.py',
  'collect_reach_demonstrations': 'train/collect_reach_demonstrations.py',
  'evaluate_ppo_reach': 'evaluate/evaluate_ppo_reach.py',
- 'evaluate_sac_reach': 'evaluate/evaluate_sac_reach.py',
  'evaluate_bc_reach': 'evaluate/evaluate_bc_reach.py',
  'evaluate_reach_baselines': 'evaluate/evaluate_reach_baselines.py',
  'view_robot': 'demos/view_robot.py',
@@ -39,11 +37,8 @@ SCRIPT_PATHS = {'train_ppo_tabletop_cartesian':'train/train_ppo_tabletop_cartesi
  'compare_controllers': 'diagnostics/compare_controllers.py',
  'compare_fk': 'diagnostics/compare_fk.py',
  'compare_ik': 'diagnostics/compare_ik.py',
- 'compare_sac_boundary': 'diagnostics/compare_sac_boundary.py',
- 'diagnose_sac_reach': 'diagnostics/diagnose_sac_reach.py',
  'smoke_reach_env': 'diagnostics/smoke_reach_env.py',
  'plot_ppo_training': 'plots/plot_ppo_training.py',
- 'plot_sac_training': 'plots/plot_sac_training.py',
  'run_grasp_contact_cases': 'demos/run_grasp_contact_cases.py',
  'probe_reach_env': 'diagnostics/probe_reach_env.py'}
 
@@ -69,8 +64,19 @@ import realman_rl_simtoreal.rl.common
 import realman_rl_simtoreal.imitation
 import realman_rl_simtoreal.utils
 import realman_rl_simtoreal.evaluation
-import realman_rl_simtoreal.cli
-import realman_rl_simtoreal.visualization
+import realman_rl_simtoreal.apps.cli
+import realman_rl_simtoreal.apps.training
+import realman_rl_simtoreal.apps.visualization
+import realman_rl_simtoreal.hardware
+import realman_rl_simtoreal.deployment
+import realman_rl_simtoreal.envs.reach
+import realman_rl_simtoreal.envs.grasp
+import realman_rl_simtoreal.tasks.reach
+import realman_rl_simtoreal.tasks.grasp
+import realman_rl_simtoreal.simulation.physics
+import realman_rl_simtoreal.simulation.motion
+import realman_rl_simtoreal.simulation.devices
+import realman_rl_simtoreal.simulation.runtime
 assert '/src/realman_rl_simtoreal/' in package.__file__
 assert not any(n in sys.modules for n in ('mujoco','glfw','Robotic_Arm','torch','stable_baselines3'))
 ''')
@@ -81,8 +87,8 @@ import os,sys
 os.environ.pop('PYGLFW_LIBRARY_VARIANT',None)
 before=os.environ.get('PYGLFW_LIBRARY_VARIANT')
 from realman_rl_simtoreal.paths import PROJECT_ROOT, DEFAULT_SCENE, DEFAULT_URDF
-from realman_rl_simtoreal.simulation.model import load_model, initialize
-from realman_rl_simtoreal.simulation.kinematics import Kinematics
+from realman_rl_simtoreal.simulation.physics.model import load_model, initialize
+from realman_rl_simtoreal.simulation.motion.kinematics import Kinematics
 assert sys.flags.isolated and '/nonexistent/ros/python' not in sys.path
 assert DEFAULT_SCENE.is_file() and DEFAULT_URDF.is_file()
 assert (PROJECT_ROOT/'pyproject.toml').is_file()
@@ -104,10 +110,10 @@ class BlockSDK(importlib.abc.MetaPathFinder):
         if fullname=='Robotic_Arm' or fullname.startswith('Robotic_Arm.'):
             raise ModuleNotFoundError('SDK deliberately unavailable')
 sys.meta_path.insert(0,BlockSDK())
-from realman_rl_simtoreal.simulation.model import load_model,initialize
-from realman_rl_simtoreal.simulation.control import run_segment
-from realman_rl_simtoreal.simulation.kinematics import Kinematics
-from realman_rl_simtoreal.simulation.ee_control import check_motion
+from realman_rl_simtoreal.simulation.physics.model import load_model,initialize
+from realman_rl_simtoreal.simulation.physics.joint_control import run_segment
+from realman_rl_simtoreal.simulation.motion.kinematics import Kinematics
+from realman_rl_simtoreal.simulation.motion.traditional_ee_control import check_motion
 from realman_rl_simtoreal.vendor.realman_fk import RealManFK,SDKUnavailable
 from realman_rl_simtoreal.vendor.realman_ik import RealManIK
 model,jids,aids=load_model(gravity_compensation=True)
@@ -144,7 +150,10 @@ for constructor in (lambda:RealManFK(),lambda:RealManIK(kin.limits)):
         self.assertTrue(direct['dir_info']['editable'])
         from setuptools import find_packages
         discovered = set(find_packages(where=str(ROOT/'src'), include=['realman_rl_simtoreal*']))
-        for suffix in ('tasks','rl','rl.common','imitation','utils','evaluation','cli','visualization'):
+        for suffix in ('tasks.reach', 'tasks.grasp', 'envs.reach', 'envs.grasp',
+                       'simulation.physics', 'simulation.motion', 'simulation.devices', 'simulation.runtime',
+                       'rl', 'rl.common', 'imitation', 'utils', 'evaluation',
+                       'apps.cli', 'apps.training', 'apps.visualization', 'hardware', 'deployment'):
             self.assertIn('realman_rl_simtoreal.'+suffix, discovered)
 
     def test_canonical_import_graph_has_no_scripts_or_cycles(self):
@@ -181,11 +190,12 @@ for constructor in (lambda:RealManFK(),lambda:RealManIK(kin.limits)):
                 if '.rl.common.' in name or name=='realman_rl_simtoreal.rl.ppo':
                     self.assertFalse(any(n.startswith(('realman_rl_simtoreal.rl.sac',
                                                        'realman_rl_simtoreal.imitation')) for n in imports))
-                if name.startswith('realman_rl_simtoreal.rl.sac'):
-                    self.assertFalse(any(n.startswith('realman_rl_simtoreal.rl.ppo') for n in imports))
+                if name.startswith(('realman_rl_simtoreal.simulation.', 'realman_rl_simtoreal.envs.',
+                                    'realman_rl_simtoreal.tasks.', 'realman_rl_simtoreal.evaluation.')):
+                    self.assertFalse(any(n.startswith('realman_rl_simtoreal.apps') for n in imports))
                 if '.simulation.' in name:
                     self.assertFalse(any(n.startswith(('realman_rl_simtoreal.vendor','realman_rl_simtoreal.rl','realman_rl_simtoreal.imitation','realman_rl_simtoreal.tasks','realman_rl_simtoreal.utils',
-                                                       'realman_rl_simtoreal.viewer',
+                                                       'realman_rl_simtoreal.apps.visualization.viewer',
                                                        'realman_rl_simtoreal.evaluation')) for n in imports))
                 edges[name].update(n for n in imports if n in modules)
         done,visiting=set(),set()
@@ -221,10 +231,8 @@ for constructor in (lambda:RealManFK(),lambda:RealManIK(kin.limits)):
                    for node in imports):
                 script_paths[path.stem] = str(path.relative_to(ROOT/'scripts'))
         for name,script_path in sorted(script_paths.items()):
-            if name in ('train_ppo_reach','train_sac_reach','train_bc_reach',
-                        'collect_reach_demonstrations','evaluate_ppo_reach','evaluate_sac_reach',
-                        'evaluate_bc_reach','compare_sac_boundary','diagnose_sac_reach',
-                        'probe_reach_env') and util.find_spec('stable_baselines3') is None:
+            if name in ('train_ppo_reach','train_bc_reach','collect_reach_demonstrations',
+                        'evaluate_ppo_reach','evaluate_bc_reach','probe_reach_env') and util.find_spec('stable_baselines3') is None:
                 continue
             if name.startswith('plot_') and util.find_spec('matplotlib') is None:
                 continue
@@ -253,7 +261,7 @@ for constructor in (lambda:RealManFK(),lambda:RealManIK(kin.limits)):
         self.assertIn('No desktop display',result.stderr)
 
     def test_viewer_backend_defaults_and_explicit_preference(self):
-        from realman_rl_simtoreal.viewer import configure_backend
+        from realman_rl_simtoreal.apps.visualization.viewer import configure_backend
         with patch.dict(os.environ,{'DISPLAY':':0'},clear=True):
             configure_backend()
             self.assertEqual(os.environ['PYGLFW_LIBRARY_VARIANT'],'x11')
@@ -263,7 +271,7 @@ for constructor in (lambda:RealManFK(),lambda:RealManIK(kin.limits)):
 
     def test_viewer_threads_are_joined_on_normal_and_exceptional_exit(self):
         import mujoco
-        from realman_rl_simtoreal.viewer import passive_viewer
+        from realman_rl_simtoreal.apps.visualization.viewer import passive_viewer
         handle=object()
         @contextmanager
         def launch(*args):
@@ -273,7 +281,7 @@ for constructor in (lambda:RealManFK(),lambda:RealManIK(kin.limits)):
             existing,worker=Mock(),Mock()
             with (patch.dict(sys.modules,{'mujoco.viewer':fake}),
                   patch.object(mujoco,'viewer',fake,create=True),
-                  patch('realman_rl_simtoreal.viewer.threading.enumerate',side_effect=[[existing],[existing,worker]])):
+                  patch('realman_rl_simtoreal.apps.visualization.viewer.threading.enumerate',side_effect=[[existing],[existing,worker]])):
                 try:
                     with passive_viewer(None,None) as viewer:
                         self.assertIs(viewer,handle)

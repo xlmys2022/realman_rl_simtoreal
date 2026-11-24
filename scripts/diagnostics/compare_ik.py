@@ -8,13 +8,13 @@ from pathlib import Path
 import sys
 from time import perf_counter
 
-from realman_rl_simtoreal.viewer import configure_backend
+from realman_rl_simtoreal.apps.visualization.viewer import configure_backend
 configure_backend()
-from realman_rl_simtoreal.simulation import model as model_api
+from realman_rl_simtoreal.simulation.physics import model as model_api
 from realman_rl_simtoreal.paths import OUTPUTS
 from realman_rl_simtoreal.utils.demo_helpers import sample_poses
 from realman_rl_simtoreal.utils.geometry import transform, inverse
-from realman_rl_simtoreal.simulation.kinematics import Kinematics, rotation_vector
+from realman_rl_simtoreal.simulation.motion.kinematics import Kinematics, rotation_vector
 from realman_rl_simtoreal.vendor.realman_fk import SDKUnavailable
 from realman_rl_simtoreal.vendor.realman_ik import (
     RealManIK,

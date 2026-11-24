@@ -1,4 +1,4 @@
-# Optional CPU-only SAC experiment; install with the official CPU index.
+# Optional CPU-only PPO / BC support; install Torch with the official CPU index.
 # Existing base dependencies remain constrained by requirements.txt.
 filelock==4.2.9
 Jinja2==3.1.6

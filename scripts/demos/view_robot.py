@@ -9,7 +9,7 @@ import sys
 import time
 
 from realman_rl_simtoreal.paths import DEFAULT_URDF as DEFAULT_MODEL
-from realman_rl_simtoreal.viewer import configure_backend, passive_viewer
+from realman_rl_simtoreal.apps.visualization.viewer import configure_backend, passive_viewer
 
 
 def positive_seconds(value):

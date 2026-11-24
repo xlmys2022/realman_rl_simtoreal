@@ -13,12 +13,12 @@ from unittest.mock import patch
 import mujoco
 import numpy as np
 
-from realman_rl_simtoreal.tasks.tabletop_cartesian import CartesianTabletopConfig as Config
-from realman_rl_simtoreal.envs.tabletop_cartesian_env import TabletopCartesianEnv as TabletopEnv, ACTION_CONTRACT, OBSERVATION_FIELDS
-from realman_rl_simtoreal.tasks.tabletop_cartesian_reward import calculate, potential, REWARD
+from realman_rl_simtoreal.tasks.grasp.tabletop_cartesian import CartesianTabletopConfig as Config
+from realman_rl_simtoreal.envs.grasp.tabletop_cartesian_env import TabletopCartesianEnv as TabletopEnv, ACTION_CONTRACT, OBSERVATION_FIELDS
+from realman_rl_simtoreal.tasks.grasp.tabletop_cartesian_reward import calculate, potential, REWARD
 from realman_rl_simtoreal.paths import PROJECT_ROOT as ROOT
-from realman_rl_simtoreal.simulation.kinematics import IKResult, rotation_vector
-from realman_rl_simtoreal.simulation.observation_profiles import OBSERVATION_POSES, startup_contract
+from realman_rl_simtoreal.simulation.motion.kinematics import IKResult, rotation_vector
+from realman_rl_simtoreal.simulation.runtime.observation_presets import OBSERVATION_POSES, startup_contract
 
 
 class CartesianPhysicsTests(unittest.TestCase):
@@ -189,7 +189,7 @@ class CartesianPhysicsTests(unittest.TestCase):
 
     def test_cartesian_execution_can_physically_pick_and_hold(self):
         # A controller diagnostic, not a PPO success claim or training data.
-        from realman_rl_simtoreal.simulation.gripper import MAX_WIDTH
+        from realman_rl_simtoreal.simulation.devices.mujoco_gripper import MAX_WIDTH
         env = self.env
         final = None
         initial_potential=potential(self.info,env.config)
@@ -236,15 +236,17 @@ class PackageTests(unittest.TestCase):
             Config(observation_tcp=(.4,0,.763))
 
     def test_feature_uses_shared_physics_and_has_no_joint_goal_coupling(self):
-        from realman_rl_simtoreal.simulation import tabletop_runtime, control, gripper
-        from realman_rl_simtoreal.simulation.kinematics import Kinematics
-        from realman_rl_simtoreal.simulation.tool_kinematics import ToolKinematics
+        from realman_rl_simtoreal.simulation.runtime import tabletop as tabletop_runtime
+        from realman_rl_simtoreal.simulation.physics import joint_control as control
+        from realman_rl_simtoreal.simulation.devices import mujoco_gripper as gripper
+        from realman_rl_simtoreal.simulation.motion.kinematics import Kinematics
+        from realman_rl_simtoreal.simulation.motion.tool_kinematics import ToolKinematics
         self.assertIs(ToolKinematics.solve_ik, Kinematics.solve_ik)
         self.assertIs(ToolKinematics.fk, Kinematics.fk)
         self.assertIs(ToolKinematics.jacobian, Kinematics.jacobian)
         self.assertIs(tabletop_runtime.advance_synchronized_cycle, control.advance_synchronized_cycle)
         self.assertIs(tabletop_runtime.Gripper, gripper.Gripper)
-        environment=(ROOT/'src/realman_rl_simtoreal/envs/tabletop_cartesian_env.py').read_text()
+        environment=(ROOT/'src/realman_rl_simtoreal/envs/grasp/tabletop_cartesian_env.py').read_text()
         self.assertNotIn('solve_ik',environment)
         self.assertNotIn('grasp_q',environment)
         self.assertNotIn('tabletop_pick_env',environment)
@@ -266,7 +268,7 @@ class RandomEvaluationTests(unittest.TestCase):
     def setUp(self):
         import torch
         from gymnasium import spaces
-        from realman_rl_simtoreal.simulation.grasp_metrics import CONTACT_MEASUREMENT
+        from realman_rl_simtoreal.simulation.physics.grasp_metrics import CONTACT_MEASUREMENT
         policy=torch.nn.Module();policy.optimizer=SimpleNamespace(state={},state_dict=lambda:dict(state={},param_groups=[]))
         self.model=SimpleNamespace(policy=policy,action_space=spaces.Box(-1.,1.,(4,),dtype=np.float32),
                                    num_timesteps=123,_n_updates=4)
@@ -277,7 +279,7 @@ class RandomEvaluationTests(unittest.TestCase):
             startup_contract=startup_contract('table_down'),contact_measurement=CONTACT_MEASUREMENT)
 
     def test_full_evaluation_preserves_explicit_randomization_and_strict_criteria(self):
-        from realman_rl_simtoreal.rl.ppo_tabletop_cartesian import evaluate
+        from realman_rl_simtoreal.rl.ppo_cartesian import evaluate
         def environment(cfg,**kwargs):return SimpleNamespace(config=cfg,close=lambda:None)
         with patch('realman_rl_simtoreal.evaluation.tabletop_cartesian.TabletopEnv',side_effect=environment), \
              patch('realman_rl_simtoreal.evaluation.tabletop_cartesian.rollout',return_value=dict(success=False,reason='time_limit')):
@@ -292,33 +294,34 @@ class RandomEvaluationTests(unittest.TestCase):
                 self.assertEqual(result['startup_contract'],startup_contract('table_down'))
 
     def test_invalid_randomization_is_rejected_before_robot_allocation(self):
-        from realman_rl_simtoreal.rl.ppo_tabletop_cartesian import evaluate
+        from realman_rl_simtoreal.rl.ppo_cartesian import evaluate
         with patch('realman_rl_simtoreal.evaluation.tabletop_cartesian.TabletopEnv') as allocate:
             for radius in (-.001,.051,np.nan,np.inf):
                 with self.assertRaises(ValueError):evaluate(self.model,self.config,[8],full=True,object_radius=radius)
             allocate.assert_not_called()
 
     def test_custom_environment_cannot_hide_a_randomization_override(self):
-        from realman_rl_simtoreal.rl.ppo_tabletop_cartesian import evaluate
+        from realman_rl_simtoreal.rl.ppo_cartesian import evaluate
         with self.assertRaisesRegex(ValueError,'must construct its own'):
             evaluate(self.model,self.config,[8],environment=object(),object_radius=.02)
 
 
 class PPOIntegrationTests(unittest.TestCase):
     def test_source_capture_does_not_include_training_outputs(self):
-        from realman_rl_simtoreal.rl.ppo_tabletop_cartesian import capture_sources
+        from realman_rl_simtoreal.rl.ppo_cartesian import capture_sources
         with tempfile.TemporaryDirectory(dir=ROOT, prefix='source-copy-test-') as temp:
             capture_sources(temp)
             import zipfile
             with zipfile.ZipFile(Path(temp)/'source_snapshot.zip') as archive:
                 names=archive.namelist()
             self.assertIn('assets/scenes/tabletop_cartesian.xml',names)
-            self.assertIn('src/realman_rl_simtoreal/envs/tabletop_cartesian_env.py',names)
+            self.assertIn('src/realman_rl_simtoreal/envs/grasp/tabletop_cartesian_env.py',names)
             self.assertFalse(any(name.startswith('outputs/') for name in names))
             self.assertFalse(any(name.startswith(Path(temp).name+'/') for name in names))
 
     def test_real_ppo_updates_both_networks_and_saved_inference_is_immutable(self):
-        from realman_rl_simtoreal.rl.ppo_tabletop_cartesian import train, load, evaluate, hashes
+        from realman_rl_simtoreal.apps.training.tabletop_cartesian import train
+        from realman_rl_simtoreal.rl.ppo_cartesian import load, evaluate, hashes
         with tempfile.TemporaryDirectory(prefix='realman-ee-test-') as temp:
             args = SimpleNamespace(stage='pinch', timesteps=64, n_envs=1, n_steps=32,
                                    eval_every=64, learning_rate=.0003, std=.2,jaw_std=.6,
@@ -361,8 +364,9 @@ class PPOIntegrationTests(unittest.TestCase):
                 load(checkpoint)
 
     def test_pose_mode_ppo_updates_and_restores_the_fixed_forward_start(self):
-        from realman_rl_simtoreal.rl.ppo_tabletop_cartesian import train,load,evaluate
-        from realman_rl_simtoreal.envs.tabletop_cartesian_env import POSE_ACTION_CONTRACT
+        from realman_rl_simtoreal.apps.training.tabletop_cartesian import train
+        from realman_rl_simtoreal.rl.ppo_cartesian import load, evaluate
+        from realman_rl_simtoreal.envs.grasp.tabletop_cartesian_env import POSE_ACTION_CONTRACT
         with tempfile.TemporaryDirectory(prefix='realman-pose-test-') as temp:
             args=SimpleNamespace(stage='easy',timesteps=64,n_envs=1,n_steps=32,eval_every=64,
                 learning_rate=.0003,std=.15,run_dir=Path(temp)/'run',init_model=None,
@@ -382,7 +386,7 @@ class PPOIntegrationTests(unittest.TestCase):
             np.testing.assert_allclose(initial['actual_tcp_m'],(.15,0,1.15),atol=.001)
 
     def test_legacy_near_object_policy_is_not_silently_evaluated(self):
-        from realman_rl_simtoreal.rl.ppo_tabletop_cartesian import load
+        from realman_rl_simtoreal.rl.ppo_cartesian import load
         with tempfile.TemporaryDirectory() as temp:
             path=Path(temp)/'model.zip'
             path.with_name('config.json').write_text(json.dumps(dict(schema=1,environment=dict(observation_tcp=[.4,0,.763]))))
@@ -392,7 +396,7 @@ class PPOIntegrationTests(unittest.TestCase):
 
 class FixedObservationTests(unittest.TestCase):
     def test_all_curricula_use_the_task_preset_and_full_translation_range(self):
-        from realman_rl_simtoreal.rl.ppo_tabletop_cartesian import STAGES,environment_config
+        from realman_rl_simtoreal.tasks.grasp.tabletop_cartesian import STAGES, environment_config
         for name,profile in OBSERVATION_POSES.items():
             for stage in STAGES:
                 cfg=environment_config(stage,observation_pose=name)
@@ -403,7 +407,7 @@ class FixedObservationTests(unittest.TestCase):
                 self.assertNotIn('observation_tcp',STAGES[stage])
 
     def test_actual_startup_target_and_trajectory_do_not_follow_objects(self):
-        from realman_rl_simtoreal.simulation.tabletop_runtime import TabletopRuntime
+        from realman_rl_simtoreal.simulation.runtime.tabletop import TabletopRuntime
         for name,profile in OBSERVATION_POSES.items():
             robot=TabletopRuntime(Config(observation_pose=name))
             traces=[]
@@ -423,8 +427,8 @@ class FixedObservationTests(unittest.TestCase):
             np.testing.assert_array_equal(traces[0],traces[1])
 
     def test_blocked_observation_path_aborts_without_choosing_another_pose(self):
-        from realman_rl_simtoreal.simulation.tabletop_runtime import TabletopRuntime
-        from realman_rl_simtoreal.simulation.observation_pose import observation_solution
+        from realman_rl_simtoreal.simulation.runtime.tabletop import TabletopRuntime
+        from realman_rl_simtoreal.simulation.runtime.observation_startup import observation_solution
         robot=TabletopRuntime(Config());robot.reset_zero((.4,0))
         with patch.object(robot,'path_is_safe',return_value=False),patch.object(robot.kinematics,'solve_ik') as solve:
             with self.assertRaisesRegex(ValueError,'observation path is obstructed'):
@@ -445,7 +449,7 @@ class PoseControlTests(unittest.TestCase):
     def setUp(self):self.obs,self.info=self.env.reset(seed=906)
 
     def test_handoff_has_no_hidden_approach_or_automatic_turn(self):
-        from realman_rl_simtoreal.simulation.gripper import MAX_WIDTH
+        from realman_rl_simtoreal.simulation.devices.mujoco_gripper import MAX_WIDTH
         self.assertEqual(self.obs.shape,(38,));self.assertEqual(self.env.action_space.shape,(7,))
         self.assertEqual(self.info['policy_steps'],0)
         self.assertEqual(self.info['policy_time_s'],0)

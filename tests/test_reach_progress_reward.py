@@ -14,10 +14,10 @@ from unittest.mock import patch
 import gymnasium as gym
 import numpy as np
 
-from realman_rl_simtoreal.envs.reach_env import ReachEnv
+from realman_rl_simtoreal.envs.reach.reach_env import ReachEnv
 from realman_rl_simtoreal.paths import PROJECT_ROOT
-from realman_rl_simtoreal.tasks.reach import ENV_CONFIG, task_environment
-from realman_rl_simtoreal.tasks.rewards import REACH_PROGRESS_V1_DEFAULTS, REWARD_COMPONENT_KEYS, progress_parameters
+from realman_rl_simtoreal.tasks.reach.config import ENV_CONFIG, task_environment
+from realman_rl_simtoreal.tasks.reach.reward import REACH_PROGRESS_V1_DEFAULTS, REWARD_COMPONENT_KEYS, progress_parameters
 
 
 def script(path):
@@ -255,7 +255,7 @@ class Block(importlib.abc.MetaPathFinder):
    raise AssertionError('No BC/SAC/SDK in PPO reward smoke')
 sys.meta_path.insert(0,Block())
 from realman_rl_simtoreal.paths import PROJECT_ROOT
-from realman_rl_simtoreal.envs.reach_env import ReachEnv
+from realman_rl_simtoreal.envs.reach.reach_env import ReachEnv
 from realman_rl_simtoreal.evaluation import baselines, reach as evaluation
 def forbidden(*a,**kw):raise AssertionError('No expert actions')
 baselines.rule_action=evaluation.rule_action=forbidden

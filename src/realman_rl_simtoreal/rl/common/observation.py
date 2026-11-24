@@ -1,4 +1,4 @@
-"""Versioned fixed transforms; raw physics and SI GoalEnv keys stay separate."""
+"""定义 Reach 固定观测编码和历史 checkpoint 验证，供 PPO、BC 与评估共用。"""
 import copy
 
 import gymnasium as gym
@@ -32,17 +32,11 @@ def observation_fields(mode):
 
 
 class ReachTransform:
-    """Fixed affine SI -> dimensionless inputs; no online/reward normalization.
+    """根据 config 编码 Reach 观测并校验模式、字段与尺度。
 
-    Position centre = nominal home, scale = original 10mm command envelope.
-    Angles use original 5deg local command envelope, velocity uses 30deg/s.
-    Legacy schema=2 is preserved byte-for-byte in generated configuration.
-    Fetch-like schema=3 centres ee position on home and scales both XYZ and
-    velocity*control_period by .01m. Goal-relative schema=4 expresses both
-    residuals in millimetres. Schema=5 uses 5mm affine residuals; schema=6
-    applies asinh to millimetre residuals for centimetre-scale tasks.
-    Goal keys stay SI float64 for compute_reward.
-    SB3 itself casts network tensors to float32. Nothing is clipped or sent to IK.
+    encode 保持世界系 achieved_goal、desired_goal 的米制坐标。legacy 模式以
+    home 为基准定标，Fetch 式将周期位移归一化，goal_relative 各版本编码位置误差。
+    宽工作空间版本用 asinh 压缩远距离误差，同时保持近零处对小位移的分辨率。
     """
     def __init__(self, config):
         self.observation_mode = config.get('observation_mode', 'legacy')
@@ -136,6 +130,7 @@ class ReachTransform:
 
 
 class ScaledReachObservation(gym.ObservationWrapper):
+    """在 Gymnasium 边界编码策略输入，保留原始目标和奖励计算接口。"""
     def __init__(self, env, transform=None):
         super().__init__(env)
         self.transform = ReachTransform.from_env(env.unwrapped) if transform is None else transform

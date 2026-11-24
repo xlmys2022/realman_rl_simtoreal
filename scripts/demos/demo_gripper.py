@@ -8,15 +8,15 @@ import os
 from pathlib import Path
 import time
 
-from realman_rl_simtoreal.viewer import configure_backend, passive_viewer
+from realman_rl_simtoreal.apps.visualization.viewer import configure_backend, passive_viewer
 configure_backend()
 
 import mujoco
 import numpy as np
 
 from realman_rl_simtoreal.paths import GRIPPER_SCENE
-from realman_rl_simtoreal.simulation.gripper import Gripper, MAX_WIDTH, angle_to_width
-from realman_rl_simtoreal.simulation.model import initialize, load_model, require
+from realman_rl_simtoreal.simulation.devices.mujoco_gripper import Gripper, MAX_WIDTH, angle_to_width
+from realman_rl_simtoreal.simulation.physics.model import initialize, load_model, require
 
 
 class ViewerStopped(Exception):

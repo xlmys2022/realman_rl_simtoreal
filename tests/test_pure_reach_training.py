@@ -1,10 +1,5 @@
 """Pure-RL task and discount-aware reward contracts, independent of learning quality."""
 import importlib.util
-import json
-from pathlib import Path
-import subprocess
-import sys
-import tempfile
 import unittest
 from unittest.mock import patch
 
@@ -12,10 +7,9 @@ import mujoco
 import numpy as np
 from gymnasium.utils.env_checker import check_env
 
-from realman_rl_simtoreal.envs.reach_env import ReachEnv
-from realman_rl_simtoreal.tasks.reach import TASKS, task_environment
+from realman_rl_simtoreal.envs.reach.reach_env import ReachEnv
+from realman_rl_simtoreal.tasks.reach.config import TASKS, task_environment
 from realman_rl_simtoreal.utils.metrics import MotionStats
-from realman_rl_simtoreal.paths import PROJECT_ROOT
 
 
 class PureTaskRewardTests(unittest.TestCase):
@@ -171,78 +165,12 @@ AVAILABLE=importlib.util.find_spec('stable_baselines3') is not None
 
 
 @unittest.skipUnless(AVAILABLE,'Optional SB3/PyTorch unavailable')
-class PureTrainingTests(unittest.TestCase):
-    def driver(self):
-        spec=importlib.util.spec_from_file_location('pure_sac_entry',PROJECT_ROOT/'scripts/train/train_sac_reach.py')
-        module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module);return module
-
-    def test_pure_task_rejects_all_bc_initialization_or_reference(self):
-        for init,path in [('bc_actor',Path('unused.pt')),('scratch',Path('unused.pt'))]:
-            with tempfile.TemporaryDirectory() as temp:
-                with self.assertRaisesRegex(ValueError,'Pure RL'):
-                    self.driver().train(Path(temp)/'run',timesteps=1,task='fixed_reach',init_mode=init,bc_model=path)
-
-    def test_pure_training_import_isolated_from_bc_sdk_and_expert_calls(self):
-        code='''
-import importlib.abc,importlib.util,sys,tempfile,json
-from pathlib import Path
-class Block(importlib.abc.MetaPathFinder):
- def find_spec(self,name,*args):
-  if any(s in name for s in ['realman_rl_simtoreal.imitation','Robotic_Arm','realman_rl_simtoreal.vendor']):
-   raise AssertionError('BC/SDK import forbidden: '+name)
-sys.meta_path.insert(0,Block())
-from realman_rl_simtoreal.paths import PROJECT_ROOT
-from realman_rl_simtoreal.evaluation import reach as evaluation, baselines
-def forbidden(*a,**kw):raise AssertionError('Expert action forbidden')
-evaluation.rule_action=baselines.rule_action=forbidden
-spec=importlib.util.spec_from_file_location('pure_driver',PROJECT_ROOT/'scripts/train/train_sac_reach.py')
-driver=importlib.util.module_from_spec(spec);spec.loader.exec_module(driver)
-with tempfile.TemporaryDirectory() as temp:
- folder=Path(temp)/'run'
- monitoring=importlib.util.find_spec('tensorboard') is not None
- result=driver.train(folder,timesteps=4,task='fixed_reach',reward_mode='reach_shaped_v1',
-  eval_every=4,eval_episodes=1,environment={'max_episode_steps':2},seed=91,tensorboard=monitoring)
- assert result['status']=='completed',result['error']
- assert result['buffer_size']==4 and result['n_updates']==0
- config=json.loads((folder/'config.json').read_text())
- assert config['pure_rl'] and config['init_mode']=='scratch' and config['bc_model'] is None
- from stable_baselines3 import SAC
- model=SAC.load(folder/'final/model.zip',device='cpu')
- assert model.num_timesteps==4
- assert (folder/'final/replay_buffer.pkl.gz').exists()
- if monitoring:
-  from tensorboard.backend.event_processing.event_accumulator import EventAccumulator
-  events=EventAccumulator(str(folder/'sb3'));events.Reload()
-  tags=events.Tags()['scalars']
-  assert 'training/motion/mean_actual_displacement_m' in tags
-  assert 'evaluation/motion/toward_actual_fraction' in tags
-  assert not any(tag.startswith('bc/') for tag in tags)
-assert not any(n.startswith('realman_rl_simtoreal.imitation') for n in sys.modules)
-'''
-        result=subprocess.run([sys.executable,'-I','-c',code],capture_output=True,text=True,timeout=60)
-        self.assertEqual(result.returncode,0,result.stdout+result.stderr)
-
+class ProcessedReachObservationTests(unittest.TestCase):
     def test_sb3_processed_goal_reward_contract(self):
         from stable_baselines3.common.env_checker import check_env as sb3_check
         from realman_rl_simtoreal.rl.common.observation import ScaledReachObservation
         with ScaledReachObservation(ReachEnv(reward_mode='reach_shaped_v1')) as env:
             sb3_check(env,warn=True)
-
-    def test_new_reward_terminal_td_labels_come_from_flags_not_large_negative_threshold(self):
-        import torch
-        from realman_rl_simtoreal.rl.common.env_factory import training_env
-        from realman_rl_simtoreal.rl.sac import make_model
-        from realman_rl_simtoreal.tasks.reach import ENV_CONFIG
-        from realman_rl_simtoreal.rl.sac_diagnostics import td_diagnostic
-        torch.set_num_threads(1);env,_=training_env(ENV_CONFIG);self.addCleanup(env.close)
-        model=make_model(env,11,overrides=dict(buffer_size=8,policy_kwargs=dict(net_arch=[16,16])))
-        obs=env.reset()
-        for reward in [-2.,3.]:
-            model.replay_buffer.add(obs,obs,np.zeros((1,3),np.float32),np.array([reward]),np.array([True]),[{}])
-        summary,arrays=td_diagnostic(model,terminal_labels={0:'safety_terminal',1:'success_terminal'})
-        self.assertEqual(summary['categories']['safety_terminal']['count'],1)
-        self.assertEqual(summary['categories']['success_terminal']['count'],1)
-        np.testing.assert_allclose(arrays['td_target'],[-2,3])
 
 
 if __name__=='__main__':unittest.main()

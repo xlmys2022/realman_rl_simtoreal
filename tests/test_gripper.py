@@ -15,10 +15,10 @@ import mujoco
 import numpy as np
 
 from realman_rl_simtoreal.paths import GRIPPER_ASSETS, GRIPPER_SCENE, PROJECT_ROOT
-from realman_rl_simtoreal.simulation import control
-from realman_rl_simtoreal.simulation.gripper import Gripper, SIGNS, MAX_WIDTH, angle_to_width, width_to_angle
-from realman_rl_simtoreal.simulation.kinematics import Kinematics
-from realman_rl_simtoreal.simulation.model import load_model, initialize, gravity_torque
+from realman_rl_simtoreal.simulation.physics import joint_control as control
+from realman_rl_simtoreal.simulation.devices.mujoco_gripper import Gripper, SIGNS, MAX_WIDTH, angle_to_width, width_to_angle
+from realman_rl_simtoreal.simulation.motion.kinematics import Kinematics
+from realman_rl_simtoreal.simulation.physics.model import load_model, initialize, gravity_torque
 
 
 class GripperTests(unittest.TestCase):

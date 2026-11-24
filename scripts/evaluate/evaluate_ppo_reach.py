@@ -5,7 +5,7 @@ from pathlib import Path
 
 from realman_rl_simtoreal.rl.ppo import load_ppo, evaluate_ppo
 from realman_rl_simtoreal.rl.common.artifacts import write_json
-from realman_rl_simtoreal.envs.reach_env import OBSERVATION_MODES
+from realman_rl_simtoreal.envs.reach.reach_env import OBSERVATION_MODES
 
 
 def run(model_path,*,episodes=None,seed_start=88000,observation_mode=None):

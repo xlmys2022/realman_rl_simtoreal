@@ -13,7 +13,7 @@ import numpy as np
 import torch
 
 from realman_rl_simtoreal.paths import PROJECT_ROOT
-from realman_rl_simtoreal.envs.grasp_lift_env import GraspLiftEnv
+from realman_rl_simtoreal.envs.grasp.grasp_lift_env import GraspLiftEnv
 from realman_rl_simtoreal.rl.ppo_grasp import (
     ENCODING,REWARD,PPOGraspEnv,encode,potential,shaped_reward,environment_config,
     aperture_score,make_training_env,load_checkpoint,evaluate_model,parameter_hashes,optimizer_steps)

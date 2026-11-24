@@ -8,12 +8,13 @@ import json
 from pathlib import Path
 import sys
 
-from realman_rl_simtoreal.viewer import configure_backend
+from realman_rl_simtoreal.apps.visualization.viewer import configure_backend
 configure_backend()
-from realman_rl_simtoreal.simulation import model as model_api, control, ee_control as ee
-from realman_rl_simtoreal.simulation.model import gravity_torque
-from realman_rl_simtoreal.simulation.control import ForceMonitor
-from realman_rl_simtoreal.simulation.kinematics import Kinematics, rotation_vector
+from realman_rl_simtoreal.simulation.physics import model as model_api, joint_control as control
+from realman_rl_simtoreal.simulation.motion import traditional_ee_control as ee
+from realman_rl_simtoreal.simulation.physics.model import gravity_torque
+from realman_rl_simtoreal.simulation.physics.joint_control import ForceMonitor
+from realman_rl_simtoreal.simulation.motion.kinematics import Kinematics, rotation_vector
 from realman_rl_simtoreal.utils.demo_helpers import run_joint_demo, joint_result_lines
 from realman_rl_simtoreal.paths import OUTPUTS
 import mujoco

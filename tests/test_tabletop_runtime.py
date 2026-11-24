@@ -1,9 +1,9 @@
 """Read-only state facade and unchanged latest-runtime physical clock."""
 import unittest
 import numpy as np
-from realman_rl_simtoreal.simulation.tabletop_runtime import TabletopRuntime
-from realman_rl_simtoreal.simulation.gripper import LINK_X,LINK_Z,angle_to_width
-from realman_rl_simtoreal.tasks.tabletop_cartesian import CartesianTabletopConfig as Config
+from realman_rl_simtoreal.simulation.runtime.tabletop import TabletopRuntime
+from realman_rl_simtoreal.simulation.devices.mujoco_gripper import LINK_X,LINK_Z,angle_to_width
+from realman_rl_simtoreal.tasks.grasp.tabletop_cartesian import CartesianTabletopConfig as Config
 
 
 class RuntimeStateTests(unittest.TestCase):
