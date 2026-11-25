@@ -188,6 +188,14 @@ class RealManArm:
                 "tool": self._read("rm_get_current_tool_frame"),
             }
 
+    def read_kinematic_parameters(self):
+        """只读查询 DH、方向定义所用的关节限位和控制器速度配置。"""
+        with self._lock:
+            return dict(dh=self._read("rm_get_DH_data"),
+                        joint_min_deg=self._read("rm_get_joint_min_pos"),
+                        joint_max_deg=self._read("rm_get_joint_max_pos"),
+                        joint_max_speed_deg_s=self._read("rm_get_joint_max_speed"))
+
     def read_state(self):
         with self._lock:
             began = monotonic()

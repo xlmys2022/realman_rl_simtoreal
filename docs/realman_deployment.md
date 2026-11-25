@@ -1,5 +1,7 @@
 # RML63II-6FB 真机只读部署
 
+本次设备已确认三代控制器、RML63II 本体以及 `Grip_plus` 工具。现场手眼解释和仿真实机安装适配的最新记录见 [实机安装适配](realman_installation.md)。
+
 三个入口分别检查机械臂、检查 RealSense 和显示方块基座坐标。机械臂状态包含关节角、控制器当前位姿、错误码、查询的主机单调时间，以及由本次控制器 DH 和关节角计算的 `T_base_flange`。夹爪可按需通过控制器的 EG2-4C2 协议读回，`opening_raw` 为控制器原始开口量。[RealMan 连接和超时接口](https://develop.realman-robotics.com/robot/apipython/classes/roboticArm/)
 
 ## 终端命令

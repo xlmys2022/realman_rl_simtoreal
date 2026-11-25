@@ -8,6 +8,7 @@ from typing import Literal
 import numpy as np
 
 from ..paths import PROJECT_ROOT
+from ..utils.artifacts import file_sha256
 from ..utils.geometry import validate_transform
 
 
@@ -32,6 +33,10 @@ class RealCalibration:
     cube_edge_m: float
     camera_serial: str | None
 
+    def checksum(self):
+        """返回当前标定文件的内容校验值。"""
+        return file_sha256(self.path)
+
     def camera_to_base(self, T_base_flange=None):
         """获得 RealSense 彩色光学系到机械臂基座系的变换。"""
         if self.camera_parent == "base":
@@ -53,7 +58,9 @@ def _read_json(path):
     return data
 
 
-def _load_hsv(path):
+def load_hsv(path):
+    """读取现场 OpenCV HSV 区间并校验范围。"""
+    path = Path(path)
     data = _read_json(path)
     if "hsv_ranges" in data:
         ranges = data["hsv_ranges"]
@@ -112,5 +119,5 @@ def load_calibration(path=DEFAULT_CALIBRATION):
         tcp_transform = validate_transform(data["T_flange_tcp"], "T_flange_tcp")
     except ValueError as exc:
         raise CalibrationError(f"{path} · {exc}") from exc
-    return RealCalibration(path, hsv_path, _load_hsv(hsv_path), parent,
+    return RealCalibration(path, hsv_path, load_hsv(hsv_path), parent,
                            hand_eye_transform, tcp_transform, float(edge), serial)

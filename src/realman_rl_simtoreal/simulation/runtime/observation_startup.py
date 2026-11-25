@@ -2,16 +2,16 @@
 import math
 import numpy as np
 from ..physics.model import require
-from .observation_presets import OBSERVATION_POSES, startup_contract
+from .observation_presets import observation_preset, startup_contract
 
 
 def observation_orientation(kinematics, config):
-    return np.array(OBSERVATION_POSES[config.observation_pose].tool_rotation)
+    return np.array(observation_preset(config.observation_pose, config.scene_profile).tool_rotation)
 
 
 def observation_solution(runtime):
     """读取预设角并转换为 rad，校验 FK、姿态和插值路径后返回关节目标与工具姿态。"""
-    profile=OBSERVATION_POSES[runtime.config.observation_pose]
+    profile=observation_preset(runtime.config.observation_pose, runtime.config.scene_profile)
     q=np.deg2rad(profile.joints_deg)
     rotation=np.array(profile.tool_rotation)
     actual,actual_rotation=runtime.kinematics.fk(q)
@@ -55,4 +55,4 @@ def move_to_observation(runtime, tick=None):
                 simulated_seconds=float(runtime.data.time)-initial_time,cycles=cycles+index+1,
                 actual_tcp_m=runtime.tcp_pose()[0].tolist(),tool_forward=runtime.tcp_pose()[1][:,2].tolist(),
                 camera=runtime.camera_frame(),camera_calibrated=False,policy_actions=0,
-                startup_contract=startup_contract(cfg.observation_pose)),rotation
+                startup_contract=startup_contract(cfg.observation_pose, cfg.scene_profile)),rotation

@@ -93,7 +93,7 @@ def load(path,*,allow_legacy_startup=False,allow_legacy_observation=False):
     else:
         cfg=Config(**config['environment'])
         # 新机型的观察位关节角和动力学不同。旧权重只通过显式迁移入口加载。
-        if config['startup_contract']!=startup_contract(cfg.observation_pose) and not allow_legacy_startup:
+        if config['startup_contract']!=startup_contract(cfg.observation_pose, cfg.scene_profile) and not allow_legacy_startup:
             raise ValueError(f'Checkpoint startup contract does not match {ROBOT_MODEL}. '
                              'Use a checkpoint validated on this scene or transfer weights with --init-model.')
         expected_action,expected_fields=action_contract(cfg),observation_fields(cfg)
@@ -122,13 +122,15 @@ def deterministic_action(model,observation):
         return model.policy.get_distribution(tensor).get_actions(deterministic=True).cpu().numpy().reshape(model.action_space.shape)
 
 
-def evaluate(model,config,seeds,*,full=False,tick=None,environment=None,observation_pose=None,object_radius=None):
+def evaluate(model,config,seeds,*,full=False,tick=None,environment=None,observation_pose=None,object_radius=None,
+             scene_profile=None,hand_eye_file=None,detailed_metrics=False,compact=False):
     """Keep the PPO API and JSON contract while sharing task evaluation."""
     def fingerprint():
         return (hashes(model),model.num_timesteps,model._n_updates,optimizer_steps(model),optimizer_state_hash(model))
     return evaluation.evaluate(lambda obs:deterministic_action(model,obs),config,seeds,
         action_shape=model.action_space.shape,full=full,tick=tick,environment=environment,
         observation_pose=observation_pose,object_radius=object_radius,
+        scene_profile=scene_profile,hand_eye_file=hand_eye_file,detailed_metrics=detailed_metrics,compact=compact,
         state_fingerprint=fingerprint,sources=provenance,algorithm='PPO')
 
 

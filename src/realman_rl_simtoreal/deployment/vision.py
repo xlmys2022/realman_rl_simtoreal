@@ -8,7 +8,7 @@ import numpy as np
 
 from ..hardware import HardwareError
 from ..hardware.realsense import RgbdSample
-from ..perception.rgbd import OrangeCubeDetector, VisualTracker
+from ..perception.rgbd import OrangeCubeDetector, UprightCubeDetector, VisualTracker
 from .calibration import RealCalibration
 
 
@@ -19,20 +19,26 @@ class CubeObservation:
     mask: np.ndarray
     tracking: dict | None
     arm_timestamps_s: tuple[float, float] | None
+    T_base_flange: np.ndarray | None = None
+    T_base_tcp: np.ndarray | None = None
+    controller_pose_m_rad: np.ndarray | None = None
 
 
 class RealCubeLocalizer:
     """静止腕部或固定外置相机的只读定位。状态失效时清空跟踪。"""
 
-    def __init__(self, calibration: RealCalibration, *, max_pose_window_s=0.25, timeout_s=0.25):
+    def __init__(self, calibration: RealCalibration, *, max_pose_window_s=0.25, timeout_s=0.25,
+                 estimator="upright"):
         if not isfinite(max_pose_window_s) or max_pose_window_s <= 0:
             raise ValueError("机械臂与相机的最大配对时间窗必须为有限正数")
         if not isfinite(timeout_s) or timeout_s <= 0:
             raise ValueError("视觉时限必须为有限正数")
         self.calibration = calibration
         self.max_pose_window_s = max_pose_window_s
-        self.detector = OrangeCubeDetector(edge_m=calibration.cube_edge_m,
-                                           hsv_ranges=calibration.hsv_ranges)
+        if estimator not in ("upright", "legacy"):
+            raise ValueError("定位算法必须为 upright 或 legacy")
+        detector = UprightCubeDetector if estimator == "upright" else OrangeCubeDetector
+        self.detector = detector(edge_m=calibration.cube_edge_m, hsv_ranges=calibration.hsv_ranges)
         self.tracker = VisualTracker(self.detector, timeout=timeout_s)
 
     def _capture_wrist(self, camera, arm):
@@ -59,7 +65,7 @@ class RealCubeLocalizer:
             raise HardwareError("腕部曝光与机械臂采样未落在允许的时间窗内")
         if np.max(np.abs(after.joint_deg - before.joint_deg)) > 0.05:
             raise HardwareError("腕部采样期间关节变化超过 0.05°，请待机械臂静止后复测")
-        return sample, before.T_base_flange, (before.timestamp_s, after.timestamp_s)
+        return sample, before, (before.timestamp_s, after.timestamp_s)
 
     def capture(self, camera, arm=None):
         try:
@@ -67,9 +73,10 @@ class RealCubeLocalizer:
             if serial is not None and (camera.info is None or camera.info.get("serial") != serial):
                 raise HardwareError(f"RealSense 序列号和标定不匹配 · 需要 {serial}")
             if self.calibration.camera_parent == "base":
-                sample, flange, arm_times = camera.capture(), None, None
+                sample, arm_state, arm_times = camera.capture(), None, None
             else:
-                sample, flange, arm_times = self._capture_wrist(camera, arm)
+                sample, arm_state, arm_times = self._capture_wrist(camera, arm)
+            flange = arm_state.T_base_flange if arm_state is not None else None
             extrinsics = self.calibration.camera_to_base(flange)
             frame = sample.to_frame(extrinsics)
             interval = sample.timing.host_capture_interval_s
@@ -84,7 +91,9 @@ class RealCubeLocalizer:
             if now - oldest > self.tracker.timeout:
                 self.tracker.reset()
                 tracking = None
-            return CubeObservation(sample, extrinsics, self.detector.mask, tracking, arm_times)
+            return CubeObservation(sample, extrinsics, self.detector.mask, tracking, arm_times, flange,
+                                   flange @ self.calibration.T_flange_tcp if flange is not None else None,
+                                   arm_state.controller_pose_m_rad if arm_state is not None else None)
         except (HardwareError, ValueError):
             self.tracker.reset()
             raise

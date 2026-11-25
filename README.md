@@ -37,7 +37,9 @@ FK 报告保留名义 SDK 的差异，并独立比较同一组关节角下的控
 
 ## 真机只读部署
 
-从 `scripts/diagnostics/check_realman_arm.py` 读取机械臂及可选夹爪状态，从 `scripts/diagnostics/check_realsense.py` 检查彩色、深度、相机内参与时间戳。补齐实测手眼外参、TCP 和方块尺寸后，`scripts/demos/locate_real_cube.py` 显示 RGB、深度、HSV Mask 和基座系 XYZ。[运行命令与现场验收](docs/realman_deployment.md)
+从 `scripts/diagnostics/check_realman_arm.py` 读取机械臂及可选夹爪状态，从 `scripts/diagnostics/check_realsense.py` 检查彩色、深度、相机内参与时间戳。`scripts/demos/locate_real_cube.py` 读取本地实测配置，显示 RGB、深度、HSV Mask 和基座系 XYZ。现场定位精度和手眼解释的验证记录见安装适配文档。[运行命令与现场验收](docs/realman_deployment.md)
+
+桌面抓取可显式选择 `--scene-profile realman_nominal`，使用 40 mm 基座垫高、256 mm TCP、独立连接件代理与 D435 内参。实测手眼矩阵可用 `realman_hand_eye` 单独试验。[安装依据、冻结权重评估与训练命令](docs/realman_installation.md)
 
 ## 腕部 RGB-D 视觉完整抓取
 

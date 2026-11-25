@@ -87,8 +87,8 @@ class OrangeCubeDetector:
             raise ValueError('At least one HSV range is required')
         self.mask=None
 
-    def detect(self,frame):
-        """从一帧对齐 RGB-D 估计立方体中心、法向和置信度。"""
+    def _component(self, frame):
+        """返回最大 HSV 连通域的像素和图像质心。"""
         import cv2
         ranges = iter(self.hsv_ranges or ((self.low, self.high),))
         low, high = next(ranges)
@@ -102,6 +102,14 @@ class OrangeCubeDetector:
         selected=labels==which;self.mask[selected]=255
         v,u=np.nonzero(selected)
         if len(u)<self.minimum_pixels:return None
+        return v, u, tuple(centroids[which])
+
+    def detect(self,frame):
+        """从一帧对齐 RGB-D 估计立方体中心、法向和置信度。"""
+        component = self._component(frame)
+        if component is None:
+            return None
+        v, u, centroid = component
         points=backproject(frame,np.c_[u,v]);depth=frame.depth_m[v,u]
         valid=np.isfinite(points).all(axis=1)&np.isfinite(depth)&(depth>.02)&(depth<3.)
         points=points[valid]
@@ -129,7 +137,47 @@ class OrangeCubeDetector:
                 if fitted[2]<0:fitted=-fitted
                 if fitted[2]>.85:normal=fitted;plane_confidence=1.
         confidence=float(min(1.,len(points)/40)*(.7+.3*plane_confidence))
-        return CubeMeasurement(position,normal,confidence,len(points),tuple(centroids[which]),frame.timestamp)
+        return CubeMeasurement(position,normal,confidence,len(points),centroid,frame.timestamp)
+
+
+class UprightCubeDetector(OrangeCubeDetector):
+    """由基座系顶面估计正立方块，支持桌面内旋转和斜视。"""
+
+    def detect(self, frame):
+        import cv2
+
+        component = self._component(frame)
+        if component is None:
+            return None
+        v, u, centroid = component
+        depth = frame.depth_m[v, u]
+        valid = np.isfinite(depth) & (depth > .02) & (depth < 3.)
+        if valid.sum() < self.minimum_pixels:
+            return None
+        # 排除轮廓处误对齐的远处深度，再在基座 Z 轴寻找水平面的稠密支持。
+        median = np.median(depth[valid])
+        valid &= abs(depth - median) < 2 * self.edge_m
+        points = backproject(frame, np.c_[u[valid], v[valid]])
+        if len(points) < self.minimum_pixels:
+            return None
+        band = max(.0015, .08 * self.edge_m)
+        heights = np.sort(points[:, 2])
+        end = np.searchsorted(heights, heights + 2 * band, side='right')
+        counts = end - np.arange(len(heights))
+        strong = np.flatnonzero(counts >= max(self.minimum_pixels, .75 * np.max(counts), .17 * len(points)))
+        if not len(strong):
+            return None
+        # 选高处有充分支持的薄层，减少把侧面下部误作水平顶面的情况。
+        above = heights[strong[-1]]
+        top = points[(points[:, 2] >= above) & (points[:, 2] <= above + 2 * band)]
+        xy, sides, _ = cv2.minAreaRect(top[:, :2].astype(np.float32))
+        # 斜视或遮挡导致有效顶面太窄时保留 HSV Mask，不输出未经几何约束的位置。
+        if min(sides) < .55 * self.edge_m or max(sides) > 1.30 * self.edge_m:
+            return None
+        center = np.r_[xy, np.median(top[:, 2]) - self.edge_m / 2]
+        confidence = min(1., len(top) / 40) * min(1., min(sides) / (0.85 * self.edge_m))
+        return CubeMeasurement(center, np.array([0., 0., 1.]), float(confidence), len(top),
+                               centroid, frame.timestamp)
 
 
 class VisualTracker:

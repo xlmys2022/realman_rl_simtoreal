@@ -2,8 +2,10 @@
 import copy
 import mujoco
 import numpy as np
-from ..devices.camera_geometry import camera_rotation
-from ...paths import TABLETOP_CARTESIAN_SCENE as DEFAULT_SCENE
+from ..devices.camera_geometry import OPTICAL_TO_MUJOCO, camera_rotation
+from ...paths import TABLETOP_CARTESIAN_SCENE as DEFAULT_SCENE, TABLETOP_CARTESIAN_REALMAN_SCENE
+from ...deployment.calibration import DEFAULT_CALIBRATION, load_calibration
+from ...hardware.realman_config import REALMAN_TABLETOP
 from ..physics.model import load_model,initialize,require
 from ..devices.mujoco_gripper import Gripper,SIGNS,MAX_WIDTH,width_to_angle
 from ..physics.grasp_contact import ContactPolicy,ContactRecorder,PAD_PENETRATION,SUPPORT_PENETRATION,UNEXPECTED_PENETRATION
@@ -21,20 +23,48 @@ class TabletopRuntime:
     """
     def __init__(self,config):
         self.config=config
-        self.model,self.joint_ids,self.actuator_ids=load_model(DEFAULT_SCENE,gravity_compensation=True)
+        self.scene_path = DEFAULT_SCENE if config.scene_profile == "legacy" else TABLETOP_CARTESIAN_REALMAN_SCENE
+        self.model,self.joint_ids,self.actuator_ids=load_model(self.scene_path,gravity_compensation=True)
         self.model.opt.timestep=self.config.physics_timestep
-        camera=self.model.camera('wrist_rgb').id
-        mujoco.mju_mat2Quat(self.model.cam_quat[camera],camera_rotation(self.config.camera_forward_local,self.config.camera_up_local).ravel())
-        self.model.cam_fovy[camera]=self.config.camera_fovy_deg
+        self._camera_source = self._configure_camera()
         self.kinematics=ToolKinematics(self.model,tcp_site="grasp_site")
         self.contact_policy=ContactPolicy(self.model)
         self.object_qadr=int(self.model.joint('target_free').qposadr[0])
         self.object_vadr=int(self.model.joint('target_free').dofadr[0])
         self.object_body=self.model.body('target_object').id
+        self.cube_half_edge = float(self.model.geom('target_box').size[2])
         self.table_height=float(self.model.body_pos[self.model.body('support').id,2]+
                                 self.model.geom_size[self.model.geom('support_top').id,2])
         self.base_position=self.model.body_pos[self.model.body('base_link').id].copy()
         self._probe=mujoco.MjData(self.model);self._cache=None;self._prepared=False
+
+    def _configure_camera(self):
+        camera = self.model.camera('wrist_rgb').id
+        rotation = camera_rotation(self.config.camera_forward_local, self.config.camera_up_local)
+        mujoco.mju_mat2Quat(self.model.cam_quat[camera], rotation.ravel())
+        if self.config.scene_profile == "legacy":
+            self.model.cam_fovy[camera] = self.config.camera_fovy_deg
+            return {}
+        source = {"intrinsics": "RealSense D435 640×480", "extrinsics": "legacy_mount"}
+        if self.config.scene_profile == "realman_hand_eye":
+            calibrated = load_calibration(self.config.hand_eye_file or DEFAULT_CALIBRATION)
+            expected_tcp = np.eye(4)
+            expected_tcp[2, 3] = REALMAN_TABLETOP.flange_tcp_m
+            if (calibrated.camera_parent == "base"
+                    or not np.allclose(calibrated.T_flange_tcp, expected_tcp, atol=1e-7, rtol=0)):
+                raise ValueError("RealMan wrist scene requires the measured Grip_plus TCP and a flange/TCP parent")
+            if calibrated.camera_serial not in (None, REALMAN_TABLETOP.camera_serial):
+                raise ValueError("手眼标定的序列号与场景 D435 内参的来源不符")
+            # 相机局部 +Y/+Z 与 OpenCV 光学轴相反。先拼接一次 TCP，再换轴。
+            flange_color = calibrated.camera_to_base(np.eye(4))
+            body = self.model.body('camera_link').id
+            self.model.body_pos[body] = flange_color[:3, 3]
+            mujoco.mju_mat2Quat(self.model.body_quat[body],
+                                (flange_color[:3, :3] @ OPTICAL_TO_MUJOCO).ravel())
+            self.model.cam_quat[camera] = [1, 0, 0, 0]
+            source.update(extrinsics="hand_eye_candidate", parent_frame=calibrated.camera_parent,
+                          calibration_sha256=calibrated.checksum())
+        return source
 
     rotation_error=staticmethod(rotation_vector)
 
@@ -88,7 +118,7 @@ class TabletopRuntime:
         camera=self.model.camera('wrist_rgb').id
         rotation=self.data.cam_xmat[camera].reshape(3,3)
         return dict(position_m=self.data.cam_xpos[camera].tolist(),forward=(-rotation[:,2]).tolist(),
-                    up=rotation[:,1].tolist(),optical_frame_calibrated=False)
+                    up=rotation[:,1].tolist(),optical_frame_calibrated=False, **self._camera_source)
 
     def forces(self):
         """返回左、右夹指向内夹持力与桌面支撑力（N）的副本。"""

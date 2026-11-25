@@ -59,14 +59,22 @@ def train(args):
     selected_pose=getattr(args,'observation_pose',None) or saved_environment.get('observation_pose','table_down')
     selected_control=getattr(args,'control_mode',None) or saved_environment.get('control_mode','auto')
     selected_jaw=getattr(args,'jaw_control',None) or saved_environment.get('jaw_control','delta' if init_reach else 'absolute')
+    scene_profile = getattr(args, 'scene_profile', None) or saved_environment.get('scene_profile', 'legacy')
+    hand_eye_file = getattr(args, 'hand_eye_file', None)
+    if hand_eye_file is None and scene_profile == saved_environment.get('scene_profile'):
+        hand_eye_file = saved_environment.get('hand_eye_file')
     jaw_scale=getattr(args,'jaw_delta_scale',None)
     if jaw_scale is None:jaw_scale=saved_environment.get('jaw_delta_scale',.002)
     cfg=environment_config(args.stage,observation_pose=selected_pose,control_mode=selected_control,
                            cache_startup=getattr(args,'cache_startup',False),jaw_control=selected_jaw,jaw_delta_scale=jaw_scale,
-                           observation_source=selected_source)
-    structured=bool(init_reach or isinstance(getattr(source,'policy',None),ReachGraspPPOPolicy))
+                           observation_source=selected_source, scene_profile=scene_profile,
+                           hand_eye_file=str(Path(hand_eye_file).resolve()) if hand_eye_file else None)
+    if getattr(args, 'object_radius', None) is not None:
+        cfg = replace(cfg, object_radius=args.object_radius)
     vision=cfg.observation_source=='rgbd_hsv'
-    if vision and not structured:raise ValueError('Initialize RGB-D PPO from --init-reach-model or a Cartesian Reach/grasp checkpoint')
+    visual_scratch = vision and source is None and init_reach is None
+    structured=bool(init_reach or isinstance(getattr(source,'policy',None),ReachGraspPPOPolicy) or visual_scratch)
+    if vision and not structured:raise ValueError('RGB-D transfer requires an initialized Cartesian Reach/grasp checkpoint')
     if source is not None and isinstance(source.policy,VisualReachGraspPPOPolicy) and not vision:
         raise ValueError('A visual policy cannot be silently transferred back to truth-state observations')
     visual_transfer=bool(vision and source is not None and saved_environment.get('observation_source','state')!='rgbd_hsv')
@@ -88,11 +96,11 @@ def train(args):
     capture_sources(folder)
     dev=make_tabletop_cartesian_env(cfg)
     goal_features=None
-    if init_reach:
+    if init_reach or visual_scratch:
         import mujoco
         from ...paths import DEFAULT_SCENE as REACH_SCENE
         from ...simulation.motion.kinematics import Kinematics
-        if reach_saved['environment']['control_period']!=cfg.control_period:
+        if init_reach and reach_saved['environment']['control_period']!=cfg.control_period:
             dev.close();raise ValueError('Reach transfer requires the same physical control period')
         home=Kinematics(mujoco.MjModel.from_xml_path(str(REACH_SCENE))).home_position
         goal_features=dict(source_home=home.tolist(),
@@ -131,7 +139,7 @@ def train(args):
                       source_contact_measurement=saved.get('contact_measurement','pad_normal_sum_v0'),
                       contact_observation_changed=saved.get('contact_measurement')!=CONTACT_MEASUREMENT,
                       source_environment=saved['environment'],source_exploration=saved.get('exploration'))
-    else:
+    elif not structured:
         with torch.no_grad():
             model.policy.action_net.weight.zero_();model.policy.action_net.bias.zero_()
     jaw_changed=bool(source and saved_environment.get('jaw_control','absolute')!=cfg.jaw_control)
@@ -149,6 +157,8 @@ def train(args):
         actor_before=hashes(model)['actor_mean'];reset_critic(model.policy)
         assert hashes(model)['actor_mean']==actor_before
     if transfer is not None:
+        transfer['learning_rate_schedule_reset'] = True
+        transfer['normalization'] = 'fixed_si_scaling_no_running_statistics'
         transfer['critic_reset']=critic_reset;transfer['jaw_head_reset']=jaw_reset
         transfer['jaw_control_changed']=jaw_changed
         transfer['jaw_delta_scale_changed']=bool(source and saved_environment.get('jaw_delta_scale',.002)!=cfg.jaw_delta_scale)
@@ -158,7 +168,7 @@ def train(args):
     if structured:model.policy.set_arm_trainable(freeze_arm_steps==0)
     config=dict(schema=2,algorithm='PPO',task='tabletop_cartesian',stage=args.stage,seed=args.seed,
                 environment=cfg.to_dict(),action_contract=action_contract(cfg),observation_fields=observation_fields(cfg),
-                startup_contract=startup_contract(cfg.observation_pose),
+                startup_contract=startup_contract(cfg.observation_pose, cfg.scene_profile),
                 contact_measurement=CONTACT_MEASUREMENT,adaptive_exploration=adaptive,
                 exploration=exploration,critic_reset=critic_reset,
                 jaw_head_reset=jaw_reset,jaw_initial_opening_m=cfg.initial_width if jaw_reset else None,
@@ -175,6 +185,8 @@ def train(args):
                 learning_rate=args.learning_rate,batch_size=batch,n_epochs=10,gamma=REWARD['gamma'],
                 gae_lambda=.95,clip_range=.2,entropy_coefficient=.001,target_kl=.04,reward=REWARD,
                 initial_parameter_hashes=hashes(model),sources=provenance())
+    if cfg.scene_profile != 'legacy':
+        config['scene_sha256'] = file_sha256(dev.robot.scene_path)
     write_json(folder/'config.json',config);save(model,folder/'initial',config,complete=False)
     model.set_logger(configure(str(folder/'sb3'),['csv','tensorboard']))
     audit=Audit(folder);audit.init_callback(model);stages=[];started=perf_counter();status='running';error=None

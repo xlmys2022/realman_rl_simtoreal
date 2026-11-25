@@ -33,8 +33,31 @@ OBSERVATION_POSES = MappingProxyType({
 })
 
 
-def startup_contract(profile_name):
+SCENE_PROFILES = ("legacy", "realman_nominal", "realman_hand_eye")
+REALMAN_OBSERVATION_POSES = MappingProxyType({
+    # D435 的实际视野更窄，向桌心移动俯视 TCP 后重新用 256 mm 工具逆解。
+    'table_down': ObservationPose(
+        'table_down', (.19, 0., 1.10), OBSERVATION_POSES['table_down'].tool_rotation,
+        (0., -15.6176177683, 72.9938851013, 0., 122.6237326659, 90.)),
+    # 旧前视目标的直插路径会碰桌面。上移 40 mm 保持原基座相对高度并通过预检。
+    'forward': ObservationPose(
+        'forward', (.15, 0., 1.19), OBSERVATION_POSES['forward'].tool_rotation,
+        (0., -109.6226236394, 130.0044695218, 0., 69.6181541129, 90.)),
+})
+
+
+def observation_preset(name, scene_profile="legacy"):
+    if scene_profile not in SCENE_PROFILES:
+        raise ValueError(f"Unknown tabletop scene profile: {scene_profile}")
+    presets = OBSERVATION_POSES if scene_profile == "legacy" else REALMAN_OBSERVATION_POSES
+    return presets[name]
+
+
+def startup_contract(profile_name, scene_profile="legacy"):
     """返回可写入 checkpoint 配置的固定观察位约定及策略交接标记。"""
-    return dict(version=3, robot_model=ROBOT_MODEL, initial_joints_deg=[0.] * 6,
-                observation_pose=OBSERVATION_POSES[profile_name].to_dict(),
-                object_independent=True, handoff='policy_at_observation_pose')
+    contract = dict(version=3, robot_model=ROBOT_MODEL, initial_joints_deg=[0.] * 6,
+                    observation_pose=observation_preset(profile_name, scene_profile).to_dict(),
+                    object_independent=True, handoff='policy_at_observation_pose')
+    if scene_profile != "legacy":
+        contract.update(version=4, scene_profile=scene_profile)
+    return contract

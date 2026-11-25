@@ -2,6 +2,7 @@
 import mujoco
 import numpy as np
 from ...perception.rgbd import RgbdFrame
+from .camera_geometry import OPTICAL_TO_MUJOCO, intrinsic_matrix
 
 
 class MujocoRgbdCamera:
@@ -18,8 +19,7 @@ class MujocoRgbdCamera:
         # The CAD has duplicate visual/collision meshes. Draw the collision
         # mesh copy plus the actual table/cube, retaining physical occlusion.
         self.options.geomgroup[1]=0
-        f=height/(2*np.tan(np.deg2rad(robot.model.cam_fovy[self.camera_id])/2))
-        self.intrinsics=np.array([[f,0,(width-1)/2],[0,f,(height-1)/2],[0,0,1.]])
+        self.intrinsics=intrinsic_matrix(robot.model,self.camera_id,width,height)
         self.frame=None
 
     def base_pose(self):
@@ -41,7 +41,7 @@ class MujocoRgbdCamera:
         finally:self.renderer.disable_depth_rendering()
         position,rotation=self.base_pose()
         # OpenCV 光学系向右、向下、向前。翻转 MuJoCo 的 Y/Z 轴后，再从世界系变换到机器人基座系。
-        camera_rotation=robot.data.cam_xmat[self.camera_id].reshape(3,3)@np.diag([1.,-1.,-1.])
+        camera_rotation=robot.data.cam_xmat[self.camera_id].reshape(3,3)@OPTICAL_TO_MUJOCO
         transform=np.eye(4);transform[:3,:3]=rotation.T@camera_rotation
         transform[:3,3]=rotation.T@(robot.data.cam_xpos[self.camera_id]-position)
         self.frame=RgbdFrame(rgb,depth,self.intrinsics.copy(),transform,float(robot.data.time))

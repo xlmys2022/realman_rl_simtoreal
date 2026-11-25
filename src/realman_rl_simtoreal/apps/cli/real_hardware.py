@@ -70,7 +70,11 @@ def run_rgbd_view(args, camera, *, localizer=None, arm=None):
                 tracking, mask = observation.tracking, observation.mask
                 data.update(cube_center_base_m=None, confidence=0.0,
                             T_base_color=observation.T_base_color.tolist(),
-                            arm_timestamps_s=observation.arm_timestamps_s)
+                            arm_timestamps_s=observation.arm_timestamps_s, cube_center_color_m=None)
+                if observation.T_base_flange is not None:
+                    data.update(T_base_flange=observation.T_base_flange.tolist(),
+                                T_base_tcp=observation.T_base_tcp.tolist(),
+                                controller_pose_m_rad=observation.controller_pose_m_rad.tolist())
                 if tracking is None:
                     status += "\n未检出有效方块"
                 else:
@@ -78,6 +82,8 @@ def run_rgbd_view(args, camera, *, localizer=None, arm=None):
                     centroid = tracking["centroid_px"]
                     confidence = tracking["confidence"]
                     data.update(cube_center_base_m=coordinates, confidence=confidence)
+                    T = observation.T_base_color
+                    data['cube_center_color_m'] = (T[:3, :3].T @ (coordinates - T[:3, 3])).tolist()
                     x, y, z = coordinates
                     status += (f"\n基座系方块中心  X {x:+.4f}   Y {y:+.4f}   Z {z:+.4f} m"
                                f"    置信度 {confidence:.2f}")

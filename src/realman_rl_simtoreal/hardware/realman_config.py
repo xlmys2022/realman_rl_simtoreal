@@ -86,3 +86,38 @@ REALMAN_HARDWARE = RealManHardwareConfig(
     joint_max_speed_deg_s=(180., 180., 225., 225., 225., 225.),
     packing_joints_deg=None,
 )
+
+
+@dataclass(frozen=True)
+class TabletopInstallation:
+    """现场桌面装配参数。长度统一用米，负载使用 kg。"""
+
+    base_above_table_m: float = 0.040
+    tcp_name: str = "Grip_plus"
+    flange_tcp_m: float = 0.256  # 实测 TCP 沿法兰 +Z，旋转为单位阵。
+    tool_payload_kg: float = 0.906
+    tool_center_of_mass_m: tuple[float, float, float] = (0.010, 0.044, 0.204)
+    gripper_open_feedback_raw: int = 1001
+    # 由原装配的名义夹指中心反推总长。半径沿用旧 57 mm 安装板代理。
+    gripper_mount_to_nominal_tcp_m: float = 0.147530235
+    adapter_radius_m: float = 0.0285
+    cube_edge_m: float = 0.020
+    camera_serial: str = "152122072347"
+    camera_width: int = 640
+    camera_height: int = 480
+    camera_fps: int = 30
+    vision_effective_hz: float = 15.0  # 静止时实测约 14–15 Hz，仿真取上沿。
+    camera_fx_px: float = 605.1117553710938
+    camera_fy_px: float = 605.1603393554688
+    camera_cx_px: float = 303.91363525390625
+    camera_cy_px: float = 248.02447509765625
+    camera_distortion: str = "inverse_brown_conrady"
+    camera_distortion_coeffs: tuple[float, ...] = (0., 0., 0., 0., 0.)
+    depth_unit_m: float = 0.001
+
+    @property
+    def adapter_length_m(self):
+        return self.flange_tcp_m - self.gripper_mount_to_nominal_tcp_m
+
+
+REALMAN_TABLETOP = TabletopInstallation()

@@ -26,6 +26,7 @@ class CartesianController:
         self.robot=runtime;self.orientation=np.array(orientation,dtype=float)
         self.reference=runtime.tcp_pose()[0]
         self.last_fraction=1.;self.last_reason=None
+        self.last_checks={}
 
     def execute(self,delta_position,width,observer=None,*,delta_rotation=None):
         """执行一周期的世界系平移（m）、旋转向量（rad）和夹爪开口目标（m）。
@@ -34,6 +35,7 @@ class CartesianController:
         遇到不合法输入时抛出 ValueError，无法通过预检时保留机械臂的上一参考。
         """
         robot=self.robot;c=robot.config
+        self.last_checks = dict(attempts=0, ik_failures=0, joint_limits=0, collision_rejections=0)
         delta=np.asarray(delta_position,dtype=float)
         if delta.shape!=(3,) or not np.isfinite(delta).all():raise ValueError('A finite Cartesian delta is required')
         turn=np.zeros(3) if delta_rotation is None else np.asarray(delta_rotation,dtype=float)
@@ -66,12 +68,17 @@ class CartesianController:
                 orientation=rotation_matrix(fraction*rotation_vector(candidate_rotation,self.orientation))@self.orientation
                 result=robot.kinematics.solve_ik(point,start,orientation,max_iterations=80,damping=.002,
                                                 max_step=.02,seed_weight=1e-6,position_tolerance=2e-6)
+                self.last_checks['attempts']+=1
                 if not result.success:
+                    self.last_checks['ik_failures']+=1
                     self.last_reason=result.reason;continue
                 if np.max(abs(result.q-start))>c.joint_step+1e-9:
                     self.last_reason='joint_reference_rate';continue
                 safe,reason=robot.reference_is_safe(result.q)
-                if not safe:self.last_reason=reason;continue
+                if not safe:
+                    category = 'joint_limits' if reason == 'joint_limit' else 'collision_rejections'
+                    self.last_checks[category]+=1
+                    self.last_reason=reason;continue
                 target=result.q;accepted=point;accepted_rotation=orientation
                 self.last_fraction=fraction;self.last_reason=None;break
         before=float(robot.data.time)

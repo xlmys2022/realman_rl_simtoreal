@@ -2,6 +2,7 @@
 import argparse
 import os
 from pathlib import Path
+from .tabletop_installation import add_installation_arguments
 
 
 def main(argv=None):
@@ -49,6 +50,7 @@ def main(argv=None):
     for command in (setup,train,evaluate,render):
         command.add_argument('--observation-pose',choices=['table_down','forward'],
                              help='Fixed task preset, independent of object location')
+    add_installation_arguments(setup, train, evaluate, render)
     args=parser.parse_args(argv)
     if args.command=='train':
         from ..training.tabletop_cartesian import train as execute
@@ -59,7 +61,12 @@ def main(argv=None):
         from ...rl.ppo_cartesian import load,evaluate as execute,write_json
         model,config=load(args.model)
         result=execute(model,config,range(args.seed_start,args.seed_start+args.episodes),full=not args.saved_task,
-                       observation_pose=args.observation_pose,object_radius=args.object_radius)
+                       observation_pose=args.observation_pose,object_radius=args.object_radius,
+                       scene_profile=args.scene_profile,hand_eye_file=args.hand_eye_file,
+                       detailed_metrics=args.metrics or args.compact,compact=args.compact)
+        from ...utils.artifacts import file_sha256
+        if args.metrics or args.compact:
+            result['checkpoint_sha256'] = file_sha256(args.model)
         write_json(args.json,result);print(result['summary']);return int(result['summary']['successes']!=args.episodes)
     if args.command in ('setup','render'):
         from ..visualization.tabletop_cartesian import run

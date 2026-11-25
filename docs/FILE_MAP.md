@@ -1,6 +1,6 @@
 # Python 文件地图
 
-现行 Python 文件共 172 个，包含核心包 95、脚本 42、测试和手动工具 35。
+现行 Python 文件共 177 个，包含核心包 96、脚本 45、测试和手动工具 36。
 
 模块依赖见 [架构](architecture.md)。实际目录树、迁移前后文件和回归结果见 [src 重构报告](validation/SRC_LAYOUT_REFACTOR_VALIDATION.md)。实验原版本的命令与路径见 [历史验证索引](validation/README.md)。
 
@@ -22,6 +22,7 @@
 
 ## scripts/diagnostics
 
+- `scripts/diagnostics/audit_realman_vision.py` — 记录只读 RGB-D 与真实法兰，离线对照手眼坐标链。
 - `scripts/diagnostics/check_realman_arm.py` — 只读查询机械臂和可选的内置协议夹爪。
 - `scripts/diagnostics/check_realsense.py` — 独立检查相机流和对齐深度，可逐帧输出时间戳。
 - `scripts/diagnostics/compare_controllers.py` — PD 与重力补偿对照。
@@ -31,6 +32,7 @@
 - `scripts/diagnostics/probe_ppo_goals.py` — 冻结PPO在合法reset目标下的同状态特征/动作敏感性，不执行step或训练。
 - `scripts/diagnostics/probe_reach_env.py` — 任务分布、奖励与随机探索探针，无学习器。
 - `scripts/diagnostics/smoke_reach_env.py` — 小规模无界面 Reach 交互 / Gymnasium checker。
+- `scripts/diagnostics/validate_realman_tabletop.py` — 验证实机安装场景的几何、名义惯量与传统分段抓取。
 
 ## scripts/evaluate
 
@@ -54,6 +56,7 @@
 ## scripts/plots
 
 - `scripts/plots/plot_ppo_training.py` — 只读PPO JSON；聚合及逐目标成功/距离/首动作、训练成功率/终止PNG。
+- `scripts/plots/plot_tabletop_comparison.py` — 绘制同一视觉 checkpoint 的成对安装场景评估。
 
 ## scripts/train
 
@@ -78,6 +81,7 @@
 - `apps/cli/__init__.py` — 轻量包初始化。
 - `apps/cli/real_hardware.py` — 真机检查与定位的共享参数和逐帧输出。
 - `apps/cli/tabletop_cartesian.py` — 共享笛卡尔训练、评估、启动和回放命令的参数与调度。
+- `apps/cli/tabletop_installation.py` — 安装场景、手眼候选和评估指标的附加 CLI 参数。
 
 ## src / apps/training
 
@@ -263,6 +267,7 @@
 - `tests/test_refactor_contracts.py` — JSON、来源、现行 CLI、退役模块、策略类、物理方法、奖励及七类历史模型的精确回归。
 - `tests/test_real_calibration_vision.py` — 实测配置处理、绿色方块定位和腕部配对。
 - `tests/test_realman_hardware.py` — 用 SDK 替身验证真机只读边界、运动限值和异常停止。
+- `tests/test_realman_installation.py` — 安装几何、实机 DH、TCP、路径碰撞与投影验证。
 - `tests/test_realsense_hardware.py` — 用离线帧验证 RealSense 对齐、单位、时钟及启动配对。
 - `tests/test_rgbd_vision.py` — Camera geometry, true-state isolation, lost-target handling and visual PPO。
 - `tests/test_sequence_reach.py` — 随机起点、连续目标、奖励上下文与状态交接。

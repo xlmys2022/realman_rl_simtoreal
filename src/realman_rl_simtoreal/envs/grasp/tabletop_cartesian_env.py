@@ -117,7 +117,7 @@ class TabletopCartesianEnv(gym.Env):
         joints=r.get_joint_state()
         position=data.qpos[r.object_qadr:r.object_qadr+3].copy()
         object_rotation=data.xmat[r.object_body].reshape(3,3)
-        bottom_radius=.01*np.sum(abs(object_rotation[2,:]))
+        bottom_radius=r.cube_half_edge*np.sum(abs(object_rotation[2,:]))
         tcp,rotation=r.tcp_pose()
         orientation_error=r.rotation_error(self.grasp_orientation,rotation)
         tracking_error=r.rotation_error(self.controller.orientation,rotation)

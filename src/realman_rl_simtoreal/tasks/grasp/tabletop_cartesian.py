@@ -1,7 +1,9 @@
 """定义桌面笛卡尔抓取的观察位、动作与传感器参数，以及课程完成门槛。"""
 from dataclasses import asdict, dataclass, replace
 import math
-from ...simulation.runtime.observation_presets import OBSERVATION_POSES
+from ...deployment.calibration import EXAMPLE_CALIBRATION, load_hsv
+from ...hardware.realman_config import REALMAN_TABLETOP
+from ...simulation.runtime.observation_presets import OBSERVATION_POSES, SCENE_PROFILES, observation_preset
 
 
 @dataclass(frozen=True)
@@ -16,12 +18,12 @@ class CartesianTabletopConfig:
     observation_source: str = 'state'
     vision_width: int = 640
     vision_height: int = 480
-    vision_period: float = .1
+    vision_period: float | None = None
     vision_timeout: float = .25
     vision_hold_margin: float = 1.
     vision_cube_size: float = .02
-    vision_hsv_low: tuple = (3,175,50)
-    vision_hsv_high: tuple = (25,255,255)
+    vision_hsv_low: tuple | None = None
+    vision_hsv_high: tuple | None = None
     # camera_link 是仿真法兰附件。光轴取其局部 +Z，图像上方取局部 +X。
     # 手眼标定后才由真实的法兰到相机变换替换这些约定。
     camera_forward_local: tuple = (0., 0., 1.)
@@ -52,9 +54,27 @@ class CartesianTabletopConfig:
     # TCP clearance for the complete open/closed gripper envelope above the desk.
     workspace_low: tuple = (-.15, -.3, .755)
     workspace_high: tuple = (.65, .3, 1.5)
+    scene_profile: str = "legacy"
+    hand_eye_file: str | None = None
 
     def __post_init__(self):
         import numpy as np
+        if self.scene_profile not in SCENE_PROFILES:
+            raise ValueError(f"Unknown tabletop scene profile: {self.scene_profile}")
+        nominal = self.scene_profile != "legacy"
+        if self.hand_eye_file is not None and self.scene_profile != "realman_hand_eye":
+            raise ValueError("hand_eye_file requires realman_hand_eye")
+        if self.vision_period is None:
+            object.__setattr__(self, 'vision_period', 1 / REALMAN_TABLETOP.vision_effective_hz if nominal else .1)
+        if self.vision_hsv_low is None or self.vision_hsv_high is None:
+            if nominal:
+                bounds, = load_hsv(EXAMPLE_CALIBRATION.with_name("cube_hsv.json"))
+            else:
+                bounds = ((3, 175, 50), (25, 255, 255))
+            if self.vision_hsv_low is None:
+                object.__setattr__(self, 'vision_hsv_low', bounds[0])
+            if self.vision_hsv_high is None:
+                object.__setattr__(self, 'vision_hsv_high', bounds[1])
         if self.observation_source not in ('state','rgbd_hsv'):raise ValueError('Select state or rgbd_hsv observations')
         if (not isinstance(self.vision_width,int) or not isinstance(self.vision_height,int)
                 or not 160<=self.vision_width<=1280 or not 120<=self.vision_height<=960
@@ -107,7 +127,7 @@ class CartesianTabletopConfig:
 
     @property
     def observation_tcp(self):
-        return OBSERVATION_POSES[self.observation_pose].tcp_m
+        return observation_preset(self.observation_pose, self.scene_profile).tcp_m
 
     @property
     def uses_orientation_actions(self):
@@ -116,7 +136,18 @@ class CartesianTabletopConfig:
     def to_dict(self):
         values=asdict(self)
         values['control_mode']='pose' if self.uses_orientation_actions else 'position'
+        if self.scene_profile == "legacy":
+            del values['scene_profile']
+        if self.hand_eye_file is None:
+            del values['hand_eye_file']
         return values
+
+    def with_scene(self, scene_profile, *, hand_eye_file=None):
+        """显式跨场景评估时，使用目标场景的传感器默认配置和原动作契约。"""
+        if scene_profile == self.scene_profile:
+            return self if hand_eye_file is None else replace(self, hand_eye_file=str(hand_eye_file))
+        return replace(self, scene_profile=scene_profile, hand_eye_file=hand_eye_file and str(hand_eye_file),
+                       vision_period=None, vision_hsv_low=None, vision_hsv_high=None)
 
 
 # Curriculum changes completion criteria only; startup and action authority are unchanged.
@@ -125,10 +156,12 @@ STAGES=dict(easy=dict(EASY),pinch=dict(EASY),approach=dict(EASY),lift=dict(),ful
 
 
 def environment_config(stage,*,observation_pose='table_down',control_mode='auto',cache_startup=False,
-                       jaw_control='absolute',jaw_delta_scale=.002,observation_source='state'):
+                       jaw_control='absolute',jaw_delta_scale=.002,observation_source='state',
+                       scene_profile='legacy',hand_eye_file=None):
     """应用课程门槛及显式控制选项，校验观察位与动作模式是否兼容。"""
     cfg=replace(CartesianTabletopConfig(observation_pose=observation_pose,control_mode=control_mode,
-                       jaw_control=jaw_control,jaw_delta_scale=jaw_delta_scale,observation_source=observation_source),
+                       jaw_control=jaw_control,jaw_delta_scale=jaw_delta_scale,observation_source=observation_source,
+                       scene_profile=scene_profile,hand_eye_file=hand_eye_file),
                 **STAGES[stage],cache_startup=cache_startup)
     if cfg.observation_pose=='forward' and not cfg.uses_orientation_actions:
         raise ValueError('A forward tabletop grasp start requires pose control so PPO can turn the gripper')

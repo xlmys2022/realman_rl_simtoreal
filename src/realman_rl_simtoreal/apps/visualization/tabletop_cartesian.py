@@ -34,7 +34,7 @@ class Recorder:
             images[2]=Image.fromarray(debug['frame'].rgb).resize((300,220))
         frame=images[0];frame.paste(images[1],(652,98));frame.paste(images[2],(652,340))
         draw=ImageDraw.Draw(frame);draw.rectangle((0,0,960,90),fill=(18,23,28))
-        draw.text((10,7),'RealMan EE | traditional startup + Cartesian PPO | simulation 4x',fill='white',font=self.font)
+        draw.text((10,7),f'RealMan tabletop | {robot.config.scene_profile} | simulation 4x',fill='white',font=self.font)
         draw.text((10,34),f'pose={robot.config.observation_pose} | phase={phase} | t={now:.2f}s',fill='white',font=self.font)
         p=robot.tcp_pose()[0];caption=f'TCP=({p[0]:.3f}, {p[1]:.3f}, {p[2]:.3f}) m'
         if debug:
@@ -59,7 +59,10 @@ def run(args):
     tick=recorder.tick if recorder else None
     try:
         if args.command=='setup':
-            cfg=Config(observation_pose=getattr(args,'observation_pose',None) or 'table_down')
+            hand_eye_file = getattr(args, 'hand_eye_file', None)
+            cfg=Config(observation_pose=getattr(args,'observation_pose',None) or 'table_down',
+                       scene_profile=getattr(args, 'scene_profile', None) or 'legacy',
+                       hand_eye_file=str(hand_eye_file) if hand_eye_file else None)
             robot=Runtime(cfg);report,rotation=robot.prepare(cfg.object_xy,tick=tick)
             result=dict(startup=report,physics=robot.gripper.statistics(),task_actions=0,
                         desired_tcp_m=list(cfg.observation_tcp),camera_optical_frame_calibrated=False)
@@ -69,7 +72,9 @@ def run(args):
             model,config=load(args.model)
             result=evaluate(model,config,[args.seed],full=not args.saved_task,tick=tick,
                             observation_pose=getattr(args,'observation_pose',None),
-                            object_radius=getattr(args,'object_radius',None))
+                            object_radius=getattr(args,'object_radius',None),
+                            scene_profile=getattr(args,'scene_profile',None),
+                            hand_eye_file=getattr(args,'hand_eye_file',None))
             result['model_sha256']=file_sha256(args.model)
             path=output.with_suffix('.json')
         if path.exists():raise ValueError('Choose a new JSON output path')

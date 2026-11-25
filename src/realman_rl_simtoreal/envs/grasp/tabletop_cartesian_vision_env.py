@@ -59,7 +59,7 @@ class VisionTabletopCartesianEnv(TabletopCartesianEnv):
         self.camera=MujocoRgbdCamera(self.robot,width=config.vision_width,height=config.vision_height)
         self.tracker=VisualTracker(OrangeCubeDetector(edge_m=config.vision_cube_size,
             hsv_low=config.vision_hsv_low,hsv_high=config.vision_hsv_high),timeout=config.vision_timeout)
-        self._visual_goal=None;self._last_capture=-np.inf;self._last_observation_time=None
+        self._visual_goal=None;self._last_capture=-np.inf;self._next_capture=-np.inf;self._last_observation_time=None
         self._visual_hold=0.;self._visual_grip=0.;self.visual_state=None
 
     def reset(self,*,seed=None,options=None):
@@ -71,8 +71,17 @@ class VisionTabletopCartesianEnv(TabletopCartesianEnv):
     def _observation(self,info):
         # 用首次相机测量建立抬升目标。TCP、夹爪和参考量来自本体读数，物体估计来自检测与跟踪。
         robot=self.robot;now=float(robot.data.time)
-        if now-self._last_capture>=self.config.vision_period-1e-8:
+        if self.config.scene_profile != "legacy" and not np.isfinite(self._last_capture):
+            self._next_capture = now
+        capture_due = (now-self._last_capture>=self.config.vision_period-1e-8
+                       if self.config.scene_profile == "legacy" else now+1e-8 >= self._next_capture)
+        if capture_due:
             self.tracker.update(self.camera.capture());self._last_capture=now
+            # 新场景用相位截止时间，在 20 Hz 控制循环上维持约 15 Hz 的平均观测率。
+            if self.config.scene_profile != "legacy":
+                if self._next_capture < now - self.config.vision_period:
+                    self._next_capture = now
+                self._next_capture += self.config.vision_period
         visual=self.tracker.state(now);self.visual_state=visual
         if self._visual_goal is None:
             self._visual_goal=visual['position_m']+np.array([0.,0.,self.config.lift_height])

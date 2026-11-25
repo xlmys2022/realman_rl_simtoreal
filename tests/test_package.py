@@ -140,12 +140,20 @@ for constructor in (lambda:RealManFK(),lambda:RealManIK(kin.limits)):
         requires = installed.get_all('Requires-Dist')
         self.assertEqual({r for r in requires if ';' not in r}, requirements('requirements.txt'))
         all_optional = [r for r in requires if ';' in r]
-        optional = [r for r in all_optional if 'extra == "vendor"' in r]
-        self.assertEqual({r.split(';')[0].strip() for r in optional}, requirements('requirements-vendor.txt'))
-        self.assertTrue(all('extra == "vendor"' in r for r in optional))
-        rl_optional = [r for r in all_optional if 'extra == "rl"' in r]
-        self.assertEqual({r.split(';')[0].strip() for r in rl_optional}, requirements('requirements-rl.txt'))
-        self.assertEqual(len(optional)+len(rl_optional), len(all_optional))
+        extras = {
+            'vendor': requirements('requirements-vendor.txt'),
+            'rl': requirements('requirements-rl.txt'),
+            'vision': requirements('requirements-vision.txt'),
+            'hardware': (requirements('requirements-hardware.txt') | requirements('requirements-vendor.txt')
+                         | requirements('requirements-vision.txt')),
+        }
+        self.assertEqual(set(installed.get_all('Provides-Extra')), set(extras))
+        expected_optional = {
+            (requirement, f'extra == "{name}"') for name, values in extras.items() for requirement in values
+        }
+        self.assertEqual({tuple(piece.strip() for piece in row.split(';', 1)) for row in all_optional},
+                         expected_optional)
+        self.assertEqual(len(all_optional), len(expected_optional))
         direct = json.loads(metadata.distribution('realman_rl_simtoreal').read_text('direct_url.json'))
         self.assertTrue(direct['dir_info']['editable'])
         from setuptools import find_packages

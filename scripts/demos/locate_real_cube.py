@@ -21,6 +21,8 @@ def main():
     parser.add_argument("--validate-calibration", action="store_true", help="仅验证本地标定文件")
     parser.add_argument("--pose-window-ms", type=float, default=250,
                         help="腕部图像和前后关节查询的最大配对时间窗（ms）")
+    parser.add_argument("--estimator", choices=("upright", "legacy"), default="upright",
+                        help="选择顶面拟合或原中心算法")
     add_arm_arguments(parser, required=False)
     add_camera_arguments(parser)
     args = parser.parse_args()
@@ -31,7 +33,8 @@ def main():
                     "camera_serial": calibration.camera_serial})
         if args.validate_calibration:
             return 0
-        localizer = RealCubeLocalizer(calibration, max_pose_window_s=args.pose_window_ms / 1000)
+        localizer = RealCubeLocalizer(calibration, max_pose_window_s=args.pose_window_ms / 1000,
+                                     estimator=args.estimator)
         camera = camera_from_args(args, calibrated_serial=calibration.camera_serial)
         with ExitStack() as stack:
             arm = None

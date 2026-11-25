@@ -13,6 +13,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     add_arm_arguments(parser, required=True)
     parser.add_argument("--gripper", action="store_true", help="查询控制器内置 EG2-4C2 状态")
+    parser.add_argument("--kinematics", action="store_true", help="同时记录控制器 DH 和关节限位")
     args = parser.parse_args()
     try:
         with RealManArm(args.ip, port=args.port, timeout_ms=args.arm_timeout_ms) as arm:
@@ -28,6 +29,8 @@ def main():
                 "request_interval_s": [state.request_start_s, state.request_end_s],
             }
             healthy = not any(state.error_codes)
+            if args.kinematics:
+                data["kinematics"] = arm.read_kinematic_parameters()
             if args.gripper:
                 gripper = RealManGripper(arm).read_state()
                 data["gripper"] = asdict(gripper)
