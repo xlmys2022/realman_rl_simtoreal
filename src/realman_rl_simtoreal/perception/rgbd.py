@@ -1,4 +1,4 @@
-"""根据对齐的 RGB-D 图像、相机内参和外参估计橙色立方体的位置。
+"""根据对齐的 RGB-D 图像、相机内参和外参估计有色立方体的位置。
 
 仿真与相机测量共用 RgbdFrame，检测和跟踪仅消费传感器数据与物体尺寸先验。
 """
@@ -75,18 +75,26 @@ def backproject(frame,pixels_xy):
 class OrangeCubeDetector:
     """使用 edge_m 指定的边长、HSV 阈值和最小连通域像素数检测直立立方体。
 
-    detect 选择橙色连通域并结合米制点云估计表面和中心，返回 CubeMeasurement，
-    信息不足时返回 None。mask 保存最新候选连通域供调试显示。
+    可由 hsv_ranges 提供多个 HSV 区间，支持色相跨过 179/0。
+    detect 结合最大连通域和米制点云估计表面和中心。mask 保存最新候选连通域。
     """
-    def __init__(self,*,edge_m=.02,hsv_low=(3,175,50),hsv_high=(25,255,255),minimum_pixels=8):
+    def __init__(self,*,edge_m=.02,hsv_low=(3,175,50),hsv_high=(25,255,255),minimum_pixels=8,
+                 hsv_ranges=None):
         if not .005<=edge_m<=.1 or minimum_pixels<4:raise ValueError('Invalid cube or component size')
         self.edge_m=edge_m;self.low=tuple(hsv_low);self.high=tuple(hsv_high);self.minimum_pixels=minimum_pixels
+        self.hsv_ranges = None if hsv_ranges is None else tuple(hsv_ranges)
+        if self.hsv_ranges == ():
+            raise ValueError('At least one HSV range is required')
         self.mask=None
 
     def detect(self,frame):
         """从一帧对齐 RGB-D 估计立方体中心、法向和置信度。"""
         import cv2
-        mask=orange_mask(frame.rgb,self.low,self.high)
+        ranges = iter(self.hsv_ranges or ((self.low, self.high),))
+        low, high = next(ranges)
+        mask = orange_mask(frame.rgb, low, high)
+        for low, high in ranges:
+            mask |= orange_mask(frame.rgb, low, high)
         n,labels,stats,centroids=cv2.connectedComponentsWithStats(mask)
         self.mask=np.zeros_like(mask)
         if n<=1:return None

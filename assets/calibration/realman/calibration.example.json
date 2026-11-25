@@ -1,0 +1,10 @@
+{
+  "hsv_file": "cube_hsv.json",
+  "camera_serial": null,
+  "hand_eye": {
+    "parent_frame": null,
+    "T_parent_color": null
+  },
+  "T_flange_tcp": null,
+  "cube_edge_m": null
+}

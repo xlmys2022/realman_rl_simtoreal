@@ -11,6 +11,7 @@ import hashlib
 import numpy as np
 
 from ..hardware.realman_config import REALMAN_HARDWARE
+from ..utils.geometry import euler_matrix
 
 MODELS = {"II": "RM_MODEL_RM_63_II_E", "III": "RM_MODEL_RM_63_III_E"}
 SENSORS = {name: f"RM_MODEL_RM_{name}_E" for name in ("B", "ZF", "SF", "ISF", "BV", "ISFV")}
@@ -32,19 +33,6 @@ def quaternion_matrix(wxyz):
     return np.array([[1-2*(y*y+z*z), 2*(x*y-z*w), 2*(x*z+y*w)],
                      [2*(x*y+z*w), 1-2*(x*x+z*z), 2*(y*z-x*w)],
                      [2*(x*z-y*w), 2*(y*z+x*w), 1-2*(x*x+y*y)]])
-
-
-def euler_matrix(rpy):
-    """Fixed-axis XYZ roll/pitch/yaw: Rz(yaw) @ Ry(pitch) @ Rx(roll)."""
-    values = np.asarray(rpy, dtype=float)
-    if values.shape != (3,) or not np.isfinite(values).all():
-        raise ValueError("Expected three finite Euler angles in radians")
-    r, p, y = values
-    cr, cp, cy = np.cos([r, p, y])
-    sr, sp, sy = np.sin([r, p, y])
-    return np.array([[cy*cp, cy*sp*sr-sy*cr, cy*sp*cr+sy*sr],
-                     [sy*cp, sy*sp*sr+cy*cr, sy*sp*cr-cy*sr],
-                     [-sp, cp*sr, cp*cr]])
 
 
 class RealManFK:

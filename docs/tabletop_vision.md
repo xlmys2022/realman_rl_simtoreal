@@ -102,7 +102,7 @@ python -I scripts/train/train_ppo_tabletop_cartesian.py --stage full \
 
 ## 真机接口准备
 
-部署设备已确认是 **RML63II-6FB**。实机法兰到夹爪和法兰到腕部相机的外参待标定。[实机本体](../assets/robots/rml63/SOURCE.md)
+部署设备已确认是 **RML63II-6FB**。实机检查、标定输入和基座系方块定位已有独立入口。[真机运行命令和现场验收](realman_deployment.md) · [实机本体](../assets/robots/rml63/SOURCE.md)
 
 ### 标定实物方块的 HSV
 
@@ -128,6 +128,6 @@ python -I scripts/demos/calibrate_cube_hsv.py
 3. 使用真实采集时间和匹配的机器人位姿，提供实际夹爪开口/参考等机器人自身状态。
 4. 按实际方块尺寸和光照校准尺寸先验、HSV 阈值；目标丢失时停止，禁止补入模拟器物体状态。
 
-当前使用 MuJoCo 的相机内参与仿真安装变换。实机只读查询核实了本体型号和运动学参数。真实相机的内参、手眼外参、噪声和时间同步仍待验证。
+实机入口以 RealSense 读取的内参与本机标定文件计算基座坐标。手眼外参、夹爪 TCP 和实际方块边长需要现场测量。[实测标定格式](realman_deployment.md#实测标定文件)
 
 接口依据：[OpenCV HSV 分割](https://docs.opencv.org/4.x/da/d97/tutorial_threshold_inRange.html)、[OpenCV 相机投影约定](https://docs.opencv.org/4.x/d5/d1f/calib3d_solvePnP.html)、[MuJoCo 相机约定](https://mujoco.readthedocs.io/en/stable/XMLreference.html#body-camera)。

@@ -35,6 +35,10 @@ FK 报告保留名义 SDK 的差异，并独立比较同一组关节角下的控
 
 `table_down` 在新场景从零位安全到达，世界系 TCP 目标仍为 `(0.10, 0, 1.10)` m，启动耗时 22.70 s。真实夹爪安装、抓取 TCP、相机手眼外参和打包关节角仍需实测或标定。[模型来源及坐标系](assets/robots/rml63/SOURCE.md) · [新版观察位记录](outputs/validation/rml63ii_6fb/startup_down.json)
 
+## 真机只读部署
+
+从 `scripts/diagnostics/check_realman_arm.py` 读取机械臂及可选夹爪状态，从 `scripts/diagnostics/check_realsense.py` 检查彩色、深度、相机内参与时间戳。补齐实测手眼外参、TCP 和方块尺寸后，`scripts/demos/locate_real_cube.py` 显示 RGB、深度、HSV Mask 和基座系 XYZ。[运行命令与现场验收](docs/realman_deployment.md)
+
 ## 腕部 RGB-D 视觉完整抓取
 
 已在现有 `tabletop_cartesian` 中加入 `--observation-source rgbd_hsv`。相机沿用原 `camera_link/wrist_rgb` 的位置，读取对齐 RGB/深度，HSV 分割橙色方块，输出白色目标、黑色背景的 Mask，并恢复基座坐标。策略输入中的物体位置、速度、夹持置信度、目标及保持进度均由相机数据生成；真实接触力、物体真值和真值保持时间退出策略输入，仅用于仿真物理、安全、训练奖励及独立验收。零位到固定观测姿态仍使用传统控制，交接后的 XYZ 和夹爪增量由 PPO 网络输出，FK/IK 独立执行。
@@ -506,7 +510,7 @@ BC 使用 `scripts/evaluate/evaluate_bc_reach.py`。评估读取保存的环境�
 - `rl/` 管理 PPO 模型、网络、分布、checkpoint 和采样回调，`imitation/` 保留 BC。
 - `apps/{cli,training,visualization}/` 组织命令、训练流程、Viewer 与回放。
 - `evaluation/` 负责独立回合和原统计口径，`perception/` 负责 RGB-D 数据与检测、反投影和跟踪。
-- `hardware/` 记录真实机械臂型号和版本，`deployment/` 预留真机观测、模型推理与执行。
+- `hardware/` 封装 RealMan 机械臂、夹爪和 RealSense，`deployment/` 加载实测标定并输出基座系方块观测。
 - `vendor/` 提供厂家离线 FK/IK，`utils/` 提供共享几何、演示、统计及产物工具。
 - `scripts/{train,evaluate,demos,models,diagnostics,plots}/` 保留现行命令的位置。模型和实验结果按 [outputs 导航](outputs/README.md) 查找。
 
@@ -519,6 +523,7 @@ BC 使用 `scripts/evaluate/evaluate_bc_reach.py`。评估读取保存的环境�
 - [六阶段重构及回归验证](docs/validation/STRUCTURE_REFACTOR_VALIDATION.md)
 - [工程架构与依赖边界](docs/architecture.md)
 - [RGB-D 视觉抓取与复现](docs/tabletop_vision.md)
+- [RML63II-6FB 真机只读部署](docs/realman_deployment.md)
 - [完整 Python 文件地图](docs/FILE_MAP.md)
 - [Evaluation 层重构与兼容性验证](docs/validation/EVALUATION_REFACTOR_VALIDATION.md)
 - [输出目录、主要模型与路径迁移](docs/OUTPUTS.md)
@@ -529,4 +534,4 @@ BC 使用 `scripts/evaluate/evaluate_bc_reach.py`。评估读取保存的环境�
 
 ## 已知限制
 
-历史局部 PPO 的默认 20 mm 起点尚未通过。视觉当前依赖已知 20 mm 正立方块、理想对齐深度及仿真标定。真实光照、深度噪声、手眼外参和工具 TCP 待验证。已完成控制器只读查询，项目尚无真机动作执行入口。训练入口支持权重迁移并重建优化器，尚无跨进程完整续训。新版模型沿用官方 CAD 惯量和碰撞几何，真机动力学待标定。历史实验细节和失败结论保存在文档中。
+历史局部 PPO 的默认 20 mm 起点尚未通过。仿真视觉使用已知 20 mm 正立方块。实物基座定位需要本机手眼、TCP 和边长标定，精度需现场验收。训练入口支持权重迁移并重建优化器，尚无跨进程完整续训。新版模型沿用官方 CAD 惯量和碰撞几何，真机动力学待标定。历史实验细节和失败结论保存在文档中。

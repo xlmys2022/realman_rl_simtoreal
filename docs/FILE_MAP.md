@@ -1,6 +1,6 @@
 # Python 文件地图
 
-现行 Python 文件共 159 个，包含核心包 88、脚本 39、测试和手动工具 32。
+现行 Python 文件共 172 个，包含核心包 95、脚本 42、测试和手动工具 35。
 
 模块依赖见 [架构](architecture.md)。实际目录树、迁移前后文件和回归结果见 [src 重构报告](validation/SRC_LAYOUT_REFACTOR_VALIDATION.md)。实验原版本的命令与路径见 [历史验证索引](validation/README.md)。
 
@@ -12,6 +12,7 @@
 - `scripts/demos/demo_gripper.py` — 夹爪开合、带载保持演示。
 - `scripts/demos/demo_vision_grasp.py` — 解析交互视觉演示参数，调用 apps.visualization.vision_grasp。
 - `scripts/demos/detect_tabletop_cube.py` — Capture existing wrist RGB-D, HSV mask and a cube position in robot base。
+- `scripts/demos/locate_real_cube.py` — 验证实测标定并显示彩色、深度、HSV Mask 和基座系方块坐标。
 - `scripts/demos/move_to_observation_pose.py` — setup the Cartesian tabletop task in the existing realman_rl project。
 - `scripts/demos/render_ppo_tabletop.py` — 解析关节桌面回放与输出路径，调用 apps.visualization.tabletop_joint。
 - `scripts/demos/render_ppo_tabletop_cartesian.py` — render the Cartesian tabletop task in the existing realman_rl project。
@@ -21,6 +22,8 @@
 
 ## scripts/diagnostics
 
+- `scripts/diagnostics/check_realman_arm.py` — 只读查询机械臂和可选的内置协议夹爪。
+- `scripts/diagnostics/check_realsense.py` — 独立检查相机流和对齐深度，可逐帧输出时间戳。
 - `scripts/diagnostics/compare_controllers.py` — PD 与重力补偿对照。
 - `scripts/diagnostics/compare_fk.py` — 厂家 / MuJoCo FK 对照。
 - `scripts/diagnostics/compare_ik.py` — 厂家离线 IK 自模型与跨模型验证。
@@ -73,6 +76,7 @@
 ## src / apps/cli
 
 - `apps/cli/__init__.py` — 轻量包初始化。
+- `apps/cli/real_hardware.py` — 真机检查与定位的共享参数和逐帧输出。
 - `apps/cli/tabletop_cartesian.py` — 共享笛卡尔训练、评估、启动和回放命令的参数与调度。
 
 ## src / apps/training
@@ -86,6 +90,7 @@
 ## src / apps/visualization
 
 - `apps/visualization/__init__.py` — 轻量包初始化。
+- `apps/visualization/real_rgbd.py` — Tk 实机 RGB-D 预览与定位叠加。
 - `apps/visualization/tabletop_cartesian.py` — Actual MuJoCo replay: overview, top view, and the wrist camera。
 - `apps/visualization/tabletop_joint.py` — 回放关节桌面 PPO，生成全景与夹爪近景 GIF、PNG 和评估记录。
 - `apps/visualization/viewer.py` — 延迟初始化 MuJoCo Viewer，统一演示程序的渲染后端和线程收尾。
@@ -94,6 +99,8 @@
 ## src / deployment
 
 - `deployment/__init__.py` — 轻量包初始化。
+- `deployment/calibration.py` — 校验本地实测 HSV、手眼、TCP 和方块尺寸。
+- `deployment/vision.py` — 配对腕部姿态和新鲜 RGB-D，定位基座系方块。
 
 ## src / envs
 
@@ -126,7 +133,10 @@
 ## src / hardware
 
 - `hardware/__init__.py` — 轻量包初始化。
+- `hardware/realman.py` — 读取实机和夹爪状态，提供显式启用的受限直线平移接口。
 - `hardware/realman_config.py` — RML63-6FB 实机型号、示教器与控制器版本及 SDK 类型。
+- `hardware/realsense.py` — 读取设备内参、配对帧时间戳和对齐后的米制深度。
+- `hardware/safety.py` — 实测 TCP 工作空间、速度与单次位移约束。
 
 ## src / imitation
 
@@ -251,6 +261,9 @@
 - `tests/test_reach_task.py` — 随机可达目标、奖励一致性、基线及 CLI。
 - `tests/test_reach_transform.py` — Reach 原始与包装观测空间、固定编码和模型输入校验。
 - `tests/test_refactor_contracts.py` — JSON、来源、现行 CLI、退役模块、策略类、物理方法、奖励及七类历史模型的精确回归。
+- `tests/test_real_calibration_vision.py` — 实测配置处理、绿色方块定位和腕部配对。
+- `tests/test_realman_hardware.py` — 用 SDK 替身验证真机只读边界、运动限值和异常停止。
+- `tests/test_realsense_hardware.py` — 用离线帧验证 RealSense 对齐、单位、时钟及启动配对。
 - `tests/test_rgbd_vision.py` — Camera geometry, true-state isolation, lost-target handling and visual PPO。
 - `tests/test_sequence_reach.py` — 随机起点、连续目标、奖励上下文与状态交接。
 - `tests/test_tabletop_cartesian.py` — Exercise the policy/controller boundary and real MuJoCo dynamics。

@@ -22,7 +22,7 @@ simulation/devices/mujoco_rgbd_camera ──→ perception/RgbdFrame
 - `rl` 持有 PPO 网络、分布、模型工厂、checkpoint 和完整 rollout 审计。`apps/training` 管理四类训练的任务配置、评估间隔及输出生命周期。局部与关节桌面向量环境共用 `rl.common.env_factory.grasp_training_vector`。
 - `evaluation` 接收策略或动作 callable，由独立环境执行回合。无需加载 PyTorch 或 SB3。Reach 和 BC 共用 `rl.common.observation` 固定编码，后者依赖 Gymnasium/NumPy。
 - `perception/rgbd.py` 通过 `RgbdFrame` 提供对齐图像、米制深度、内外参与时间戳。目标检测和跟踪消费此契约。
-- `hardware/realman_config.py` 记录已核实的 6FB 型号、版本、控制器 DH 和关节限位。生成器读取同一份配置并写出运动学场景。厂家离线 FK/IK 位于 `vendor`，`deployment` 预留真机观测、推理和执行流程。
+- `hardware/realman_config.py` 记录已核实的 6FB 型号、版本、控制器 DH 和关节限位。生成器读取同一份配置并写出运动学场景。厂家离线 FK/IK 位于 `vendor`。真机适配器位于 `hardware`，实测标定加载和只读 RGB-D 定位位于 `deployment`。
 - `utils/metrics.py` 提供运动统计，`utils/artifacts.py` 提供通用产物 I/O、SHA256 和源码归档。局部抓取的来源集合定义在 `evaluation.grasp_lift.experiment_metadata`。
 
 `apps/cli/tabletop_cartesian.py` 统一四个笛卡尔命令的参数与调度。`apps/visualization` 负责 MuJoCo Viewer、关节/笛卡尔回放和视觉交互。
@@ -210,7 +210,7 @@ PPO 使用官方 SB3 保存格式，配置以 JSON 保存。历史 SAC 归档继
 
 夹取抬升任务已经由 `envs/grasp/grasp_lift_env.py`、`tasks/grasp/lift.py`、`simulation/motion/staged_grasp_controller.py` 和 `evaluation/grasp_lift.py` 实现，入口为 `scripts/demos/run_grasp_lift.py`。环境提供 41 维 Box 观测、XYZ 加绝对夹爪开口的 4 维动作，通过 `advance_synchronized_cycle` 让机械臂、夹爪和自由物体共享每步 50 次 1 ms 积分。阶段控制器只产生这个动作空间中的动作，使用双侧接触后的有界横向对中反馈；物体的运动由接触、摩擦和重力产生。
 
-成功计时在 1 ms 物理步后读取实际接触力和物体运动，要求持续离台、双侧夹持、低速度及有限滑移。`ContactRecorder` 可选择仅保留最近采样或保存完整物理历史，读取力缓存后才刷新实时几何；数值失败返回明确标记的最近有效观测。抓取评估保存在独立的 `outputs/grasp/controller/`，Reach 仍复用 `rl/common` 的固定观测变换；任务行为评估统一由 Evaluation 组织。这是早期局部 GraspLift 的非视觉接口。当前桌面 RGB-D 观测已实现于独立视觉环境并有本轮逐步回归；真机适配仍未实现。
+成功计时在 1 ms 物理步后读取实际接触力和物体运动，要求持续离台、双侧夹持、低速度及有限滑移。`ContactRecorder` 可选择仅保留最近采样或保存完整物理历史，读取力缓存后才刷新实时几何；数值失败返回明确标记的最近有效观测。抓取评估保存在独立的 `outputs/grasp/controller/`，Reach 仍复用 `rl/common` 的固定观测变换；任务行为评估统一由 Evaluation 组织。这是早期局部 GraspLift 的非视觉接口。独立桌面视觉环境和真机定位共用 `perception/rgbd.py`。[真机只读部署](realman_deployment.md)
 
 早期 Evaluation 迁移、实际测试和兼容性证据见 [Evaluation 重构报告](validation/EVALUATION_REFACTOR_VALIDATION.md)。评估结果的来源路径 / 哈希随源码迁移反映新文件，物理量、指标与 JSON 协议保持。
 

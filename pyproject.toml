@@ -22,3 +22,4 @@ dependencies = {file = ["requirements.txt"]}
 vendor = {file = ["requirements-vendor.txt"]}
 rl = {file = ["requirements-rl.txt"]}
 vision = {file = ["requirements-vision.txt"]}
+hardware = {file = ["requirements-hardware.txt", "requirements-vendor.txt", "requirements-vision.txt"]}
