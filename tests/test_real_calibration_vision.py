@@ -3,6 +3,7 @@
 from dataclasses import replace
 import json
 from pathlib import Path
+from runpy import run_path
 from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import Mock, patch
@@ -16,6 +17,7 @@ from realman_rl_simtoreal.deployment.vision import RealCubeLocalizer
 from realman_rl_simtoreal.hardware import HardwareError
 from realman_rl_simtoreal.hardware.realman import ArmState
 from realman_rl_simtoreal.hardware.realsense import FrameTiming, RgbdSample
+from realman_rl_simtoreal.paths import PROJECT_ROOT
 
 
 def box_sample(center, edge_m, camera_to_base):
@@ -111,6 +113,29 @@ class CalibrationVisionTests(unittest.TestCase):
                 if parent != "base":
                     with self.assertRaisesRegex(CalibrationError, "T_base_flange"):
                         cal.camera_to_base()
+
+    def test_offline_replay_checks_capture_calibration_and_camera_serial(self):
+        audit = run_path(str(PROJECT_ROOT / "scripts/diagnostics/audit_realman_vision.py"))
+        analyze_capture = audit["analyze_capture"]
+        capture_path = self.path.with_name("capture_calibration.json")
+        flange_color = np.linalg.inv(self.base_flange) @ self.base_color
+        capture_path.write_bytes(self.write_calibration(parent="flange", parent_color=flange_color).read_bytes())
+        capture_calibration = load_calibration(capture_path)
+        tcp_color = np.linalg.inv(self.base_flange @ self.flange_tcp) @ self.base_color
+        replay_calibration = load_calibration(self.write_calibration(parent="tcp", parent_color=tcp_color))
+        sample = self.camera.capture.return_value
+        record = self.path.with_name("capture.npz")
+        metadata = {"calibration_sha256": capture_calibration.checksum(), "camera": self.camera.info}
+        np.savez(record, rgb=sample.rgb[None], depth_m=sample.depth_m[None], K=sample.intrinsics,
+                 T_base_flange=self.base_flange[None], host_received_s=[10.04], metadata=json.dumps(metadata))
+
+        with self.assertRaisesRegex(ValueError, "校验值不符"):
+            analyze_capture(record, replay_calibration)
+        result = analyze_capture(record, replay_calibration, capture_calibration=capture_calibration)
+        np.testing.assert_allclose(result["candidates"]["tcp"]["upright"]["median_base_m"], self.center, atol=.0018)
+        with self.assertRaisesRegex(ValueError, "序列号"):
+            analyze_capture(record, replace(replay_calibration, camera_serial="other-camera"),
+                            capture_calibration=capture_calibration)
 
     def test_fixed_camera_measures_real_size_green_and_hides_lost_target(self):
         cal = load_calibration(self.write_calibration())

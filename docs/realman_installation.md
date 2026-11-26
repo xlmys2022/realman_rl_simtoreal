@@ -24,17 +24,63 @@
 
 `T_A_B` 把 B 系的点变换到 A 系。法兰系由本机关节读数和控制器 DH 得到。实测 TCP 变换为 `T_flange_tcp`，组合为 `T_base_tcp = T_base_flange @ T_flange_tcp`。SDK 当前位姿是活动工具的工作系位姿，先乘 `T_base_work` 再和 `T_base_flange @ T_flange_active_tool` 对照。当前 `Base` 是单位工作系，`Grip_plus` 的 256 mm 已包含在 SDK 位姿中。
 
-压缩包的 `collect_data.py` 原样记录当时的控制器活动工具位姿，`compute_in_hand.py` 将其传入 OpenCV 求解相机到该工具系的矩阵。现用矩阵与压缩包 README 的示例逐元素相同。确认父系需要当时的采样记录，或同一静止方块在多姿态下的一致性数据。当前本地配置的 `flange` 解释和矩阵按原样保留。固定父系为法兰时使用 `T_base_flange @ T_flange_color`，父系为 TCP 时使用 `T_base_flange @ T_flange_tcp @ T_tcp_color`。
+### 2026-11-26 实机手眼标定
+
+用户提供的 `compute_in_hand.py` 输出保存在 `../hand_eye_calibration-main/hand_eye_result.txt`，对应 `eye_hand_data/data20261126` 的 20 张原图和 20 条 `poses.txt`。采集日志 `../hand_eye_calibration-main/libs/web-log` 记录了 `Base` 切换成功，逐条关节角和位姿均与图片编号对应。根据实机 DH 算出的法兰位姿乘 256 mm 的工具变换后，20 条位置与回包的最大偏差为 **0.013 mm**，直接按法兰对照的偏差为 256 mm。因此本批的输出是 `T_tcp_color`，基座系使用 `T_base_flange @ T_flange_tcp @ T_tcp_color`。组合后的相机光心在法兰系为 `[81.986, −44.596, −11.463] mm`。[2026-11-26 独立标定配置](../assets/calibration/realman/calibration.20261126.json)
+
+离线核对全部 20 组的 11×8 个内角点，按采集配置使用 30 mm 方格。将 1280×960 存档图角点换回 640×480 像素网格，用 A/B/C 的 D435 实测内参做独立 PnP，逐图重投影 RMS 中位数为 0.28 px，最大为 0.56 px。使用原手眼矩阵将各图棋盘中心变换到基座系，相对批次平均中心的偏移 RMS 为 8.78 mm，最大为 14.90 mm。新部署配置绑定 A/B/C 记录中的 D435 `152122072347`。旧标定采集器没有单独记录设备序列号。
+
+同一绿方块的 A、B、C 静止采样以 `tcp` 正方向回放。顶部算法检出分别为 10/12、12/12、8/12，A→B、A→C、B→C 的基座中心差分别为 **1.82、3.64、1.95 mm**。三组中心 Z 为 −17.56、−17.08、−17.47 mm，距各自拟合的局部支撑面约 9.4–9.8 mm。与水平名义台面对应的中心 Z −30 mm 相比仍高 12.4–12.9 mm。[新标定 A/B/C 回放](../outputs/validation/realman_installation/hand_eye_20261126_abc.json)
+
+在方块周边拟合的支撑面沿基座 +X 每米升高约 25–30 mm，外推到基座 XY 原点得到 Z 约 −37.6 至 −40.1 mm。在目标约 `X=0.438 m` 处，这个坡度对应约 11–13 mm 的高度差。该拟合及外推使用现有手眼外参与 RGB-D 深度。抓取高度验收还需在基座和目标附近独立实测支撑面高度及倾斜量。
+
+新矩阵用于显式选择的只读视觉复测或 `realman_hand_eye` 仿真。仿真两次俯视和平移后的 15° 斜视均能识别已知方块，最大已知点反投影误差 0.38 mm，中心相对首姿态最大变化 0.40 mm。固定俯视下，50 mm 随机采样半径的 8 个边界点均检出，最大三维中心误差 0.36 mm。EGL 模式下 535 项完整离线回归全部通过，其中 28 项为真机接口、定位和安装场景相关测试。原始标定日志和采样配置分别用于数据来源和历史回放核对。
+
+```bash
+CALIB=assets/calibration/realman/calibration.20261126.json
+SAMPLES=outputs/validation/realman_installation
+
+python -I scripts/demos/locate_real_cube.py --calibration "$CALIB" --validate-calibration
+python -I scripts/demos/locate_real_cube.py --calibration "$CALIB" --ip 192.168.1.18
+python -I scripts/diagnostics/audit_realman_vision.py compare \
+  "$SAMPLES/overhead_A.npz" "$SAMPLES/overhead_B.npz" "$SAMPLES/oblique_C.npz" \
+  --calibration "$CALIB" --capture-calibration assets/calibration/realman/calibration.local.json \
+  --output "$SAMPLES/hand_eye_20261126_replay.json"
+
+MUJOCO_GL=egl python -I scripts/demos/move_to_observation_pose.py \
+  --scene-profile realman_hand_eye --hand-eye-file "$CALIB" \
+  --json "$SAMPLES/hand_eye_20261126_sim_setup.json" --output "$SAMPLES/hand_eye_20261126_sim_setup.gif"
+```
+
+### 历史标定对照与相机坐标约定
+
+压缩包的 `collect_data.py` 在启动时请求切换到工作系 `Base`，把控制器返回的活动工具位姿保存为米和弧度。`save_poses.py` 以 `Rz @ Ry @ Rx` 生成旋转矩阵，`compute_in_hand.py` 将这些位姿传入 OpenCV，求解彩色光学系到采样时活动工具系的变换。父系为法兰时使用 `T_base_flange @ T_flange_color`，父系为 TCP 时使用 `T_base_flange @ T_flange_tcp @ T_tcp_color`。[原始压缩包](../hand_eye_calibration-main.zip) · [睿尔曼手眼标定说明](https://develop.realman-robotics.com/AI/developerGuide/hand/)
+
+包内有真机采集照片、棋盘图拼图和求解截图。`picture/image-20241015220058689.png` 显示 2024-10-15 的 `compute_deal` 运行读取了 `data2024101507` 中编号 1–15 的图像。按包内的米制约定，从截图转录的数值如下。截图四元数转成旋转矩阵后，与转录矩阵的逐元素最大差小于 `1e-8`。当前 `calibration.local.json` 使用的是包内 README 第 689、750、878、929 行四个代码示例复用的同一组数值，旋转与这张截图中的记录相差 27.71°。
+
+```python
+R_screenshot = [
+    [0.44170218, 0.88423338, -0.15175808],
+    [-0.89688561, 0.43939957, -0.05024154],
+    [0.02225719, 0.15830144, 0.98713995],
+]
+t_screenshot_m = [-0.09335965, -0.05514401, -0.23786894]
+```
+
+`picture/image-20241025135921401.png` 的示教器画面显示 `Base / Arm_Tip`，同期日志截图 `picture/image-20241025140042676.png` 记录的是 2024-10-25 的 `data20241025` 批次。`data2024101507` 的单张原图和配对 `poses.txt` 未随包提供，截图的求解方向、当时活动工具及 D435 序列号仍待对应批次的记录确认。当前 A/B/C 的活动工具为 `Grip_plus`，采样相机序列号为 `152122072347`。
 
 RealSense 彩色光学系和 OpenCV 一致，X 向右、Y 向下、Z 沿视线向前。MuJoCo 的相机局部 Y 向上、视线沿 −Z。导入 MJCF 候选时旋转右乘 `diag(1,-1,-1)`，反投影再换回光学系。D435 的 `K` 为 `fx=605.111755`、`fy=605.160339`、`cx=303.913635`、`cy=248.024475` px，640×480 彩色与深度均为 30 FPS。畸变模型为 `inverse_brown_conrady` 且五项为零。测量深度尺度约 0.001 m，MuJoCo 直接生成米制光轴深度。新场景在 20 Hz 策略周期上以相位累加采样，平均约 15 Hz。渲染器按已知点验证视锥偏移和反投影。[MuJoCo 相机内参](https://mujoco.readthedocs.io/en/stable/XMLreference.html#body-camera) · [仿真投影证据](../outputs/validation/realman_installation/sim_rgbd_geometry.json)
 
 真机定位默认在基座系寻找有足够点支持的水平顶面，用其平面包围矩形估计 XY，并从顶面 Z 下移半个边长。几何信息不足时不输出中心。`--estimator legacy` 可用同一数据复查原算法。逐帧日志包含相机系中心、基座系中心、法兰、TCP、相机和控制器位姿。名义仿真 PPO 保留原估计器，便于比较更换装配与传感器参数对冻结权重的影响。
 
-由操作员固定方块，用示教器完成 A→B 平移。两位置各只读采集 12 组，约 15 Hz。法兰平移 `[47.39, −82.79, 4.63]` mm，旋转差 0.0041°。两位置的 `FK @ Grip_plus` 与控制器 XYZ 的最大差为 0.0161 mm。现有法兰方向解释下，顶面算法的静止方块坐标变化 189.49 mm，原算法为 189.08 mm。取逆只用于离线对照时，顶面算法的变化降至 3.56 mm，但 A、B 绝对中心高度分别比预期高 31.20 和 27.98 mm。把同一矩阵直接视作 TCP 外参时，两位置的绝对高度均偏低约 285–292 mm。这组数据把主要差异定位到当前导入的旋转解释，同时保留绝对平移和来源待核实。[实机 A/B 诊断](../outputs/validation/realman_installation/overhead_audit.json)
+由操作员固定方块，用示教器完成 A→B 平移。两位置各只读采集 12 组，约 15 Hz。法兰平移 `[47.39, −82.79, 4.63]` mm，旋转差 0.0041°。两位置的 `FK @ Grip_plus` 与控制器 XYZ 的最大差为 0.0161 mm。历史配置按法兰解释，顶面算法的静止方块坐标变化 189.49 mm，原算法为 189.08 mm。取逆只用于离线对照时，顶面算法的变化降至 3.56 mm，但 A、B 绝对中心高度分别比预期高 31.20 和 27.98 mm。把同一矩阵直接视作 TCP 外参时，两位置的绝对高度均偏低约 285–292 mm。[历史配置 A/B 诊断](../outputs/validation/realman_installation/overhead_audit.json)
 
-同一静止方块还采集了 12 组斜视 C。C 的工具轴偏离竖直向下 25.25°，从 A 到 C 的法兰旋转差 37.54°。A/C 的中心差在现有解释下为 170.49 mm，取逆候选仍有 97.43 mm。当前解释的顶面估计输出为 A 10/12、B 12/12、C 8/12，三个静止组的各轴标准差在约 1.14 mm 内。静态重复性和当前 FK 精度均可复现，绝对高度及跨姿态一致性仍未通过。标定原文件保持原始内容，手眼候选继续单独使用。[A/B/C 全部诊断](../outputs/validation/realman_installation/three_pose_audit.json)
+同一静止方块还采集了 12 组斜视 C。C 的工具轴偏离竖直向下 25.25°，从 A 到 C 的法兰旋转差 37.54°。A/C 的中心差在历史配置下为 170.49 mm，取逆候选仍有 97.43 mm。按历史配置的顶面估计输出为 A 10/12、B 12/12、C 8/12，三个静止组的各轴标准差在约 1.14 mm 内。历史配置的绝对高度及跨姿态一致性均未通过。[历史配置 A/B/C 全部诊断](../outputs/validation/realman_installation/three_pose_audit.json)
+
+用同一批 A/B/C 深度帧和顶面算法离线回放 2024-10-15 截图矩阵，父系取法兰时 A→B、A→C 分别相差 183.95、222.81 mm，父系取 `Grip_plus` 时分别相差 183.97、173.21 mm。把截图矩阵取逆后接法兰，A→B 仍相差 45.91 mm，A→C 相差 182.48 mm。截图矩阵的四种父系和方向组合均未同时满足静止方块位置一致和中心 Z 约 −30 mm 的实物几何条件。
 
 ```bash
+# 11 月 25 日历史配置的采样和回放命令
 python -I scripts/diagnostics/check_realman_arm.py --ip 192.168.1.18 --gripper --kinematics
 python -I scripts/demos/locate_real_cube.py --validate-calibration
 python -I scripts/demos/locate_real_cube.py --ip 192.168.1.18 --no-preview --frames 60

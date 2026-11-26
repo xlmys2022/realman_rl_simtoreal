@@ -14,7 +14,7 @@ from realman_rl_simtoreal.hardware.realman import RealManArm, RealManGripper
 from realman_rl_simtoreal.hardware.realman_config import REALMAN_TABLETOP
 from realman_rl_simtoreal.hardware.realsense import RealSenseCamera
 from realman_rl_simtoreal.perception.rgbd import OrangeCubeDetector, RgbdFrame, UprightCubeDetector
-from realman_rl_simtoreal.utils.artifacts import file_sha256, write_json
+from realman_rl_simtoreal.utils.artifacts import write_json
 from realman_rl_simtoreal.utils.geometry import euler_matrix, inverse, transform
 
 
@@ -31,7 +31,7 @@ def capture(args, calibration):
             robot['camera'] = camera.info
         if arm.read_frames() != before:
             raise RuntimeError("采样期间控制器活动坐标系变化")
-    robot['calibration_sha256'] = file_sha256(calibration.path)
+    robot['calibration_sha256'] = calibration.checksum()
     args.output.parent.mkdir(parents=True, exist_ok=True)
     with args.output.open('xb') as stream:
         np.savez_compressed(
@@ -68,14 +68,19 @@ def summarize_centers(centers, camera_centers, expected_z):
                 center_z_error_mm=1000 * float(median[2] - expected_z))
 
 
-def analyze_capture(path, calibration):
+def analyze_capture(path, calibration, *, capture_calibration=None):
     with np.load(path, allow_pickle=False) as source:
         rgb, depth, K, flanges = (source[k] for k in ("rgb", "depth_m", "K", "T_base_flange"))
         stamps = source['host_received_s']
         metadata = json.loads(source['metadata'].item()) if 'metadata' in source else {}
         reported = source['controller_pose_m_rad'] if 'controller_pose_m_rad' in source else None
-    if metadata.get('calibration_sha256') not in (None, file_sha256(calibration.path)):
-        raise ValueError(f"{path} 的标定文件校验值已变化")
+    # 离线替换外参时仍按采样原配置验证哈希，报告同时记录实际回放的配置。
+    original = capture_calibration or calibration
+    if metadata.get('calibration_sha256') not in (None, original.checksum()):
+        raise ValueError(f"{path} 与采样标定文件校验值不符，使用 --capture-calibration 指定原配置")
+    serial = metadata.get('camera', {}).get('serial')
+    if calibration.camera_serial is not None and serial not in (None, calibration.camera_serial):
+        raise ValueError(f"{path} 的采样相机序列号 {serial} 与回放标定不符")
     H = calibration.T_parent_color
     tcp = calibration.T_flange_tcp
     alternatives = dict(flange=H, tcp=tcp @ H, flange_inverse=inverse(H), tcp_inverse=tcp @ inverse(H))
@@ -115,7 +120,8 @@ def analyze_capture(path, calibration):
 
 
 def compare(args, calibration):
-    runs = [analyze_capture(path, calibration) for path in args.samples]
+    original = load_calibration(args.capture_calibration) if args.capture_calibration else calibration
+    runs = [analyze_capture(path, calibration, capture_calibration=original) for path in args.samples]
     pairs = []
     for other in runs[1:]:
         first = runs[0]
@@ -131,7 +137,8 @@ def compare(args, calibration):
         pairs.append(dict(first=first['file'], second=other['file'], flange_translation_mm=(1000 * arm_delta).tolist(),
                           flange_rotation_delta_deg=angle, cube_center_delta_mm=delta))
     report = dict(calibration=str(calibration.path), configured_parent=calibration.camera_parent,
-                  calibration_sha256=file_sha256(calibration.path), samples=runs, comparisons=pairs)
+                  calibration_sha256=calibration.checksum(), capture_calibration=str(original.path),
+                  capture_calibration_sha256=original.checksum(), samples=runs, comparisons=pairs)
     write_json(args.output, report, ensure_ascii=False)
     print(json.dumps(dict(output=str(args.output), comparisons=pairs), ensure_ascii=False))
 
@@ -144,6 +151,8 @@ def main():
     live.add_argument("--frames", type=int, default=8)
     audit = commands.add_parser("compare", help="离线比较已有 RGB-D 采样")
     audit.add_argument("samples", type=Path, nargs="+")
+    audit.add_argument("--capture-calibration", type=Path,
+                       help="采样时使用的原标定 JSON，用于核对保存的校验值")
     for command in (live, audit):
         command.add_argument("--output", type=Path, required=True)
         command.add_argument("--calibration", type=Path, default=DEFAULT_CALIBRATION)

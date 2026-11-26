@@ -25,6 +25,8 @@ python -I scripts/diagnostics/check_realsense.py --no-preview --frames 30
 
 ## 实测标定文件
 
+2026-11-26 实机手眼矩阵的父系是 `Grip_plus` TCP。只读验收使用 `--calibration assets/calibration/realman/calibration.20261126.json` 显式加载。静止方块跨视角一致性已复核，抓取高度仍需用实测支撑面完成验收。[新批次证据和回放命令](realman_installation.md#2026-11-26-实机手眼标定)
+
 模板位于 [assets/calibration/realman](../assets/calibration/realman/)。其中的 `cube_hsv.json` 是 `cube_hsv_20261124_210413_368026/hsv.json` 的副本，绿色阈值为 `[49, 80, 66]` 到 `[84, 255, 255]`。复制模板后填写现场值，`hsv_file` 支持相对配置文件的路径。
 
 ```bash
@@ -32,7 +34,7 @@ cp -i assets/calibration/realman/calibration.example.json assets/calibration/rea
 python -I scripts/demos/locate_real_cube.py --validate-calibration
 ```
 
-[手眼标定压缩包](../hand_eye_calibration-main.zip) 中包含标定程序、棋盘格规格和说明。实机求解需要本机成对采集的标定板图像与位姿。可以用 `unzip -p hand_eye_calibration-main.zip hand_eye_calibration-main/README.md` 直接查看采样步骤。
+压缩包包含标定程序、棋盘格规格、真机采集照片和求解截图。截图中可读出一组外参，使用现场样本的离线复核结果见实机安装文档。追溯该批次需要与原图逐张对应的 `poses.txt`、当时的工具系记录及相机标识。可用 `unzip -p hand_eye_calibration-main.zip hand_eye_calibration-main/README.md` 查看采样步骤。[手眼标定压缩包](../hand_eye_calibration-main.zip) · [截图外参与 A/B/C 回放](realman_installation.md#手眼矩阵与视觉诊断)
 
 - `hand_eye.parent_frame` 填 `flange`、`tcp` 或 `base`。腕部相机用手眼求解时实际采样的末端坐标系，固定相机用 `base`。采集时记录活动工具系、工作系和相机序列号，一一对应保留角点识别成功的图像与位姿。
 - `hand_eye.T_parent_color` 填实际彩色光学系到指定父坐标系的齐次矩阵。压缩包的 `compute_in_hand.py` 输出相机到采样末端的旋转和平移，`compute_to_hand.py` 输出相机到基座的旋转和平移。把实测 `R` 和以米为单位的 `t` 放入前三行，第四行为 `[0, 0, 0, 1]`。
@@ -42,15 +44,17 @@ python -I scripts/demos/locate_real_cube.py --validate-calibration
 `T_A_B` 把 B 系坐标变换到 A 系。腕部相机的外参拼接为 `T_base_flange @ T_flange_color` 或 `T_base_flange @ T_flange_tcp @ T_tcp_color`。固定相机直接使用 `T_base_color`。缺少 HSV、手眼、TCP 或方块实测尺寸时，定位入口在打开设备前退出并列出缺项。
 
 ```bash
+CALIB=assets/calibration/realman/calibration.20261126.json
 # 腕部相机
-python -I scripts/demos/locate_real_cube.py --ip "$ARM_IP"
+python -I scripts/demos/locate_real_cube.py --calibration "$CALIB" --ip "$ARM_IP"
 
-# 固定相机，配置中的 parent_frame 为 base
-python -I scripts/demos/locate_real_cube.py
+# 固定相机可另行运行下列命令，FIXED_CAMERA_CALIB 为该相机的实测 parent_frame=base 配置
+# python -I scripts/demos/locate_real_cube.py --calibration "$FIXED_CAMERA_CALIB"
 
 # 腕部相机的无界面采样
 mkdir -p outputs/calibration
-python -I scripts/demos/locate_real_cube.py --ip "$ARM_IP" --no-preview --frames 60 > outputs/calibration/real_cube_samples.jsonl
+python -I scripts/demos/locate_real_cube.py --calibration "$CALIB" --ip "$ARM_IP" \
+  --no-preview --frames 60 > outputs/calibration/real_cube_samples.jsonl
 ```
 
 预览显示 RGB、深度、HSV 最大连通域和基座系方块中心 XYZ（m）。腕部模式先等 RGB-D 启动配对稳定，再用前后关节查询夹住相机采样，默认窗口 250 ms、关节最大变化 0.05°。当 RGB 和深度时间戳与主机墙钟同域时，窗口按曝光区间校验。设备硬件时钟模式使用新帧的主机收包时刻做静止采样配对，报告中保留设备原始时间戳。
