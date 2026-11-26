@@ -14,6 +14,7 @@ def main():
     add_arm_arguments(parser, required=True)
     parser.add_argument("--gripper", action="store_true", help="查询控制器内置 EG2-4C2 状态")
     parser.add_argument("--kinematics", action="store_true", help="同时记录控制器 DH 和关节限位")
+    parser.add_argument("--collision", action="store_true", help="查询动力学碰撞等级与末端线速度上限")
     args = parser.parse_args()
     try:
         with RealManArm(args.ip, port=args.port, timeout_ms=args.arm_timeout_ms) as arm:
@@ -31,6 +32,10 @@ def main():
             healthy = not any(state.error_codes)
             if args.kinematics:
                 data["kinematics"] = arm.read_kinematic_parameters()
+            if args.collision:
+                data["collision_stage"] = arm.read_collision_stage()
+                data["max_line_speed_m_s"] = arm.read_max_line_speed()
+                healthy = healthy and data["collision_stage"] > 0
             if args.gripper:
                 gripper = RealManGripper(arm).read_state()
                 data["gripper"] = asdict(gripper)

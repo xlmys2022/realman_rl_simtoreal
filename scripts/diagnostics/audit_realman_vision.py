@@ -13,7 +13,7 @@ from realman_rl_simtoreal.deployment.vision import RealCubeLocalizer
 from realman_rl_simtoreal.hardware.realman import RealManArm, RealManGripper
 from realman_rl_simtoreal.hardware.realman_config import REALMAN_TABLETOP
 from realman_rl_simtoreal.hardware.realsense import RealSenseCamera
-from realman_rl_simtoreal.perception.rgbd import OrangeCubeDetector, RgbdFrame, UprightCubeDetector
+from realman_rl_simtoreal.perception.rgbd import OrangeCubeDetector, RgbdFrame, UprightCubeDetector, backproject
 from realman_rl_simtoreal.utils.artifacts import write_json
 from realman_rl_simtoreal.utils.geometry import euler_matrix, inverse, transform
 
@@ -68,7 +68,43 @@ def summarize_centers(centers, camera_centers, expected_z):
                 center_z_error_mm=1000 * float(median[2] - expected_z))
 
 
-def analyze_capture(path, calibration, *, capture_calibration=None):
+def measure_local_support(frame, mask, box, edge_m, expected_table_z):
+    """拟合方块周围点云，仅诊断 Z 斜率与偏差，不在抓取或仿真中使用拟合面。"""
+    import cv2
+
+    u0, v0 = np.rint(box.centroid_px).astype(int)
+    height, width = frame.depth_m.shape
+    v, u = np.mgrid[max(0, v0 - 65):min(height, v0 + 66):3, max(0, u0 - 65):min(width, u0 + 66):3]
+    depth = frame.depth_m[v, u]
+    excluded = cv2.dilate(mask, np.ones((19, 19), np.uint8))[v, u] != 0
+    valid = (depth > 0.02) & (depth < 3.0) & ~excluded
+    if valid.sum() < 80:
+        return None
+    cloud = backproject(frame, np.c_[u[valid], v[valid]])
+    z = cloud[:, 2]
+    center_z = box.position_m[2]
+    nearby = cloud[(z < center_z - 0.2 * edge_m) & (z > center_z - 2 * edge_m)]
+    if len(nearby) < 80:
+        return None
+    xy = np.c_[nearby[:, :2] - box.position_m[:2], np.ones(len(nearby))]
+    point_z = nearby[:, 2]
+    selected = np.ones(len(point_z), dtype=bool)
+    for _ in range(4):
+        coeff, _, rank, _ = np.linalg.lstsq(xy[selected], point_z[selected], rcond=None)
+        if rank != 3:
+            return None
+        error = xy @ coeff - point_z
+        selected = abs(error) < 0.002
+        if selected.sum() < max(80, 0.7 * len(point_z)):
+            return None
+    support_z = coeff[2]
+    return dict(z_at_cube_m=float(support_z), support_z_error_mm=1000 * float(support_z - expected_table_z),
+                cube_center_above_support_mm=1000 * float(center_z - support_z),
+                apparent_dz_dx=float(coeff[0]), apparent_dz_dy=float(coeff[1]),
+                inlier_residual_mm=1000 * float(np.sqrt(np.mean(error[selected] ** 2))))
+
+
+def analyze_capture(path, calibration, *, capture_calibration=None, table_z_base_m=None):
     with np.load(path, allow_pickle=False) as source:
         rgb, depth, K, flanges = (source[k] for k in ("rgb", "depth_m", "K", "T_base_flange"))
         stamps = source['host_received_s']
@@ -84,8 +120,10 @@ def analyze_capture(path, calibration, *, capture_calibration=None):
     H = calibration.T_parent_color
     tcp = calibration.T_flange_tcp
     alternatives = dict(flange=H, tcp=tcp @ H, flange_inverse=inverse(H), tcp_inverse=tcp @ inverse(H))
-    expected_z = -REALMAN_TABLETOP.base_above_table_m + calibration.cube_edge_m / 2
-    report = dict(file=str(path), frames=len(stamps), expected_cube_center_z_base_m=expected_z,
+    table_z = -REALMAN_TABLETOP.base_above_table_m if table_z_base_m is None else table_z_base_m
+    expected_z = table_z + calibration.cube_edge_m / 2
+    report = dict(file=str(path), frames=len(stamps), expected_table_z_base_m=table_z,
+                  expected_cube_center_z_base_m=expected_z,
                   mean_flange_position_base_m=flanges[:, :3, 3].mean(axis=0).tolist(),
                   T_base_flange=flanges[0].tolist(), T_base_tcp=(flanges[0] @ tcp).tolist(),
                   median_rate_hz=float(1 / np.median(np.diff(stamps))) if len(stamps) > 1 else None,
@@ -107,21 +145,33 @@ def analyze_capture(path, calibration, *, capture_calibration=None):
         candidate = dict(T_base_color=T[0].tolist())
         for detector_type, estimator in ((OrangeCubeDetector, "legacy"), (UprightCubeDetector, "upright")):
             detector = detector_type(edge_m=calibration.cube_edge_m, hsv_ranges=calibration.hsv_ranges)
-            base_points, color_points = [], []
+            base_points, color_points, support = [], [], []
+            audit_height = table_z_base_m is not None and name == calibration.camera_parent and estimator == "upright"
             for pixels, distances, optical, stamp in zip(rgb, depth, T, stamps):
-                measurement = detector.detect(RgbdFrame(pixels, distances, K, optical, float(stamp)))
+                frame = RgbdFrame(pixels, distances, K, optical, float(stamp))
+                measurement = detector.detect(frame)
                 if measurement is not None:
                     p = measurement.position_m
                     base_points.append(p)
                     color_points.append(optical[:3, :3].T @ (p - optical[:3, 3]))
+                    if audit_height:
+                        fitted = measure_local_support(frame, detector.mask, measurement, calibration.cube_edge_m, table_z)
+                        if fitted is not None:
+                            support.append(fitted)
             candidate[estimator] = summarize_centers(base_points, color_points, expected_z)
+            if audit_height:
+                candidate[estimator]["support_frames"] = len(support)
+                candidate[estimator]["support_median"] = (
+                    {key: float(np.median([record[key] for record in support])) for key in support[0]}
+                    if support else None)
         report['candidates'][name] = candidate
     return report
 
 
 def compare(args, calibration):
     original = load_calibration(args.capture_calibration) if args.capture_calibration else calibration
-    runs = [analyze_capture(path, calibration, capture_calibration=original) for path in args.samples]
+    runs = [analyze_capture(path, calibration, capture_calibration=original, table_z_base_m=args.table_z_base_m)
+            for path in args.samples]
     pairs = []
     for other in runs[1:]:
         first = runs[0]
@@ -153,12 +203,15 @@ def main():
     audit.add_argument("samples", type=Path, nargs="+")
     audit.add_argument("--capture-calibration", type=Path,
                        help="采样时使用的原标定 JSON，用于核对保存的校验值")
+    audit.add_argument("--table-z-base-m", type=float, help="实测水平桌面的基座 Z（m），用于离线诊断")
     for command in (live, audit):
         command.add_argument("--output", type=Path, required=True)
         command.add_argument("--calibration", type=Path, default=DEFAULT_CALIBRATION)
     args = parser.parse_args()
     if args.output.exists() or (args.command == "capture" and not 2 <= args.frames <= 100):
         parser.error("需要新的输出路径，采样帧数为 2–100")
+    if args.command == "compare" and args.table_z_base_m is not None and not np.isfinite(args.table_z_base_m):
+        parser.error("--table-z-base-m 必须为有限数值")
     calibration = load_calibration(args.calibration)
     if calibration.camera_parent not in ("flange", "tcp"):
         parser.error("当前诊断针对眼在手上相机")

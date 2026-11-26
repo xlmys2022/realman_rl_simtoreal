@@ -68,7 +68,7 @@ python -I scripts/demos/locate_real_cube.py --calibration "$CALIB" --ip "$ARM_IP
 
 ## 运动保护与离线回归
 
-三个终端入口使用只读会话。硬件 API 的 `move_linear_tcp` 仅在调用者同时显式传入 `enable_motion=True` 和现场 `MotionLimits` 后可用。限值包括基座系 TCP 工作空间、单次位移、速度百分比、线速度（m/s）、运动时限以及实测 `T_flange_tcp`。接口仅做保持姿态的单次直线平移，要求控制器活动工作系和工具系分别对应真实基座与法兰。运动过程中检查实测 TCP、相邻回包的平均线速度、关节限位、姿态、轨迹类型及错误码。工作空间边界针对 TCP，整机避障由现场设施与控制器负责。[RealMan 直线规划接口](https://develop.realman-robotics.com/en/robot/apipython/classes/movePlan/) · [控制器末端速度读回](https://develop.realman-robotics.com/en/robot/apipython/classes/tipVelocityParameters/)
+设备检查和定位入口使用只读会话。直线和夹爪调试需要 `enable_motion=True`、现场限值以及逐条人工确认。固定姿态的 TCP 直线支持 `Base` 工作系与已核对的 `Arm_Tip` 或 `Grip_plus` 工具系。运动过程中检查实测 TCP、路径偏离、相邻回包的平均线速度、关节限位、姿态、轨迹类型、碰撞防护及错误码。现场的验收步骤和维护要求见传统抓取文档。[真机传统视觉抓取验收](realman_visual_grasp.md) · [RealMan 直线规划接口](https://develop.realman-robotics.com/en/robot/apipython/classes/movePlan/)
 
 下发后若通信、状态或时限异常，接口尝试 `rm_set_arm_stop`，并锁定该对象的后续运动。停止未确认时应立即使用现场硬件急停，再复核状态。停止回执表示控制器接受轨迹停止指令。[RealMan 轨迹停止](https://develop.realman-robotics.com/en/robot/apipython/classes/motionControl/)
 

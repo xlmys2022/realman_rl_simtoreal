@@ -1,0 +1,34 @@
+{
+  "motion": {
+    "workspace_min_m": null,
+    "workspace_max_m": null,
+    "max_speed_pct": null,
+    "max_linear_speed_m_s": null,
+    "max_step_m": null,
+    "completion_timeout_s": null,
+    "max_path_error_m": null
+  },
+  "gripper": {
+    "open_speed_raw": null,
+    "close_speed_raw": null,
+    "close_force_raw": null,
+    "open_feedback_raw": null,
+    "held_feedback_raw": null,
+    "empty_closed_feedback_raw": null,
+    "held_force_g": null,
+    "completion_timeout_s": null
+  },
+  "grasp": {
+    "table_z_base_m": -0.04,
+    "grasp_tcp_z_base_m": null,
+    "jaw_open_gap_m": null,
+    "pregrasp_clearance_m": null,
+    "lift_height_m": null,
+    "closing_axis_tcp": null,
+    "max_tool_tilt_deg": null,
+    "max_jaw_yaw_error_deg": null,
+    "max_visual_z_error_m": null,
+    "max_target_shift_m": null,
+    "speed_pct": null
+  }
+}

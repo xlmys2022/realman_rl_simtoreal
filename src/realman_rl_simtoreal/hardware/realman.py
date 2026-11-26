@@ -13,8 +13,8 @@ import numpy as np
 from ..paths import ROBOT_MODEL
 from ..utils.geometry import euler_matrix, modified_dh_transform, transform
 from . import HardwareError, HardwareTimeout
-from .realman_config import REALMAN_HARDWARE
-from .safety import MotionLimits, MotionSafetyError
+from .realman_config import REALMAN_HARDWARE, REALMAN_TABLETOP
+from .safety import GripperLimits, MotionLimits, MotionSafetyError
 
 
 @dataclass(frozen=True)
@@ -42,6 +42,16 @@ class GripperState:
     mode: int
     error: int
     timestamp_s: float
+
+
+@dataclass(frozen=True)
+class _MotionSnapshot:
+    state: ArmState
+    tcp: np.ndarray
+    rotation: np.ndarray
+    controller_tool: np.ndarray
+    joint_low: np.ndarray
+    joint_high: np.ndarray
 
 
 def _check_status(operation, status):
@@ -73,12 +83,12 @@ def _six(values, label):
 
 
 class RealManArm:
-    """with 块管理只读连接。运动须显式启用并提供现场 MotionLimits。"""
+    """with 块管理连接。动作须显式启用、提供现场限值并逐条人工确认。"""
 
     # SDK 的返回超时是进程级设置，一个进程只维护一个受管连接。
     _session_lock = Lock()
 
-    def __init__(self, ip, *, port=8080, timeout_ms=500, enable_motion=False, limits=None):
+    def __init__(self, ip, *, port=8080, timeout_ms=500, enable_motion=False, limits=None, confirm=None):
         self.ip = str(IPv4Address(ip))
         if type(port) is not int or not 1 <= port <= 65535:
             raise ValueError("控制器端口必须为 1–65535")
@@ -90,6 +100,7 @@ class RealManArm:
         self.timeout_ms = timeout_ms
         self._motion_enabled = enable_motion is True
         self._limits = limits
+        self._confirm = confirm
         self._lock = RLock()
         self._owns_session = False
         self._connected = False
@@ -224,73 +235,160 @@ class RealManArm:
         _check_status("rm_get_arm_current_trajectory", data["return_code"])
         return data["trajectory_type"]
 
-    def _check_motion_state(self, state, joint_low, joint_high):
+    def _require_motion_enabled(self):
+        if not self._motion_enabled or self._faulted:
+            raise MotionSafetyError("运动已禁用或当前连接已因运动异常锁定")
+
+    def _confirm_motion(self, action, details):
+        if not callable(self._confirm) or self._confirm(action, details) is not True:
+            raise MotionSafetyError(f"未获人工确认 · {action}")
+
+    def _controller_tool(self):
+        frames = self.read_frames()
+        work, tool = frames["work"], frames["tool"]
+        work_pose = _six(work.get("pose"), "活动工作系")
+        if work.get("name") != "Base" or not np.allclose(work_pose, 0, atol=1e-6, rtol=0):
+            raise MotionSafetyError("直线及夹爪调试要求控制器工作系为 Base")
+        active = _six(tool.get("pose"), "活动工具系")
+        T_flange_active = transform(active[:3], euler_matrix(active[3:]))
+        if tool.get("name") == "Arm_Tip" and np.allclose(T_flange_active, np.eye(4), atol=1e-6, rtol=0):
+            return T_flange_active
+        if (tool.get("name") == REALMAN_TABLETOP.tcp_name
+                and np.allclose(T_flange_active, self._limits.T_flange_tcp, atol=1e-6, rtol=0)):
+            return T_flange_active
+        raise MotionSafetyError("活动工具系必须为法兰 Arm_Tip 或与实测 TCP 一致的 Grip_plus")
+
+    def read_collision_stage(self):
+        """只读查询控制器的动力学碰撞等级，0 表示关闭。"""
+        with self._lock:
+            stage = self._read("rm_get_collision_stage")
+            if type(stage) is not int or not 0 <= stage <= 8:
+                raise HardwareError("控制器碰撞防护等级回包无效")
+            return stage
+
+    def read_max_line_speed(self):
+        """控制器末端线速度上限，单位 m/s。"""
+        with self._lock:
+            return self._read("rm_get_arm_max_line_speed")
+
+    def read_joint_bounds(self):
+        """当前控制器的关节限位，单位度。"""
+        with self._lock:
+            low = _six(self._read("rm_get_joint_min_pos"), "控制器关节下限")
+            high = _six(self._read("rm_get_joint_max_pos"), "控制器关节上限")
+            if np.any(low >= high):
+                raise MotionSafetyError("控制器关节限位无效")
+            return low, high
+
+    def _require_collision_protection(self):
+        if self.read_collision_stage() == 0:
+            raise MotionSafetyError("控制器的动力学碰撞防护关闭")
+
+    def _check_motion_state(self, state, joint_low, joint_high, controller_tool):
         if any(state.error_codes):
             raise MotionSafetyError(f"机械臂报错 · {state.error_codes}")
         if np.any(state.joint_deg < joint_low) or np.any(state.joint_deg > joint_high):
             raise MotionSafetyError("实测关节角超出控制器关节限位")
         pose = state.controller_pose_m_rad
         rotation = euler_matrix(pose[3:])
-        # 实际运行必须使用同一基座和法兰，交叉核对控制器位姿与实时 FK。
-        if (np.linalg.norm(pose[:3] - state.T_base_flange[:3, 3]) > 0.001
-                or not np.allclose(rotation, state.T_base_flange[:3, :3], atol=0.005, rtol=0)):
-            raise MotionSafetyError("控制器位姿与实时基座系法兰位姿不一致，请检查坐标系")
-        tcp = (transform(pose[:3], rotation) @ self._limits.T_flange_tcp)[:3, 3]
-        self._limits.require_in_workspace(tcp, "实测 TCP")
-        return tcp, rotation
+        # 先用当前工具系核对控制器回包，再从法兰 FK 计算真正要控制的 Grip_plus TCP。
+        expected = state.T_base_flange @ controller_tool
+        if (np.linalg.norm(pose[:3] - expected[:3, 3]) > 0.001
+                or not np.allclose(rotation, expected[:3, :3], atol=0.005, rtol=0)):
+            raise MotionSafetyError("控制器活动工具位姿与实时基座系 FK 不一致，请检查坐标系")
+        tcp = state.T_base_flange @ self._limits.T_flange_tcp
+        self._limits.require_in_workspace(tcp[:3, 3], "实测 TCP")
+        return tcp[:3, 3], tcp[:3, :3]
 
-    def move_linear_tcp(self, target_xyz_m, *, speed_pct):
+    def _motion_snapshot(self):
+        if not isinstance(self._limits, MotionLimits):
+            raise MotionSafetyError("检查运动条件需要现场 MotionLimits")
+        self._require_real_mode()
+        tool = self._controller_tool()
+        self._require_collision_protection()
+        low, high = self.read_joint_bounds()
+        if self._trajectory() != 0:  # RM_NO_PLANNING_E
+            raise MotionSafetyError("控制器已有活动轨迹")
+        state = self.read_state()
+        tcp, rotation = self._check_motion_state(state, low, high, tool)
+        return _MotionSnapshot(state, tcp, rotation, tool, low, high)
+
+    def check_motion_ready(self):
+        """读取并核对有待人工确认的运动条件，不向控制器发送动作。"""
+        with self._lock:
+            return self._motion_snapshot().state
+
+    @staticmethod
+    def _require_same_start(preview, live):
+        if (not np.allclose(preview.controller_tool, live.controller_tool, atol=1e-6, rtol=0)
+                or np.max(np.abs(preview.state.joint_deg - live.state.joint_deg)) > 0.05
+                or np.linalg.norm(preview.tcp - live.tcp) > 0.001):
+            raise MotionSafetyError("人工确认期间关节、TCP 或活动工具系变化，请重新规划")
+
+    def move_linear_tcp(self, target_xyz_m, *, speed_pct, action="move", preflight=None, interlock=None):
         """显式的、小范围 TCP 直线平移，保持当前姿态，等待到位并监测状态。"""
         with self._lock:
-            if not self._motion_enabled or self._faulted:
-                raise MotionSafetyError("运动已禁用或当前连接已因运动异常锁定")
+            self._require_motion_enabled()
             limits = self._limits
             target = limits.require_in_workspace(target_xyz_m, "目标 TCP")
-            self._require_real_mode()
-            for frame in self.read_frames().values():
-                if not np.allclose(_six(frame.get("pose"), "活动坐标系"), 0, atol=1e-6, rtol=0):
-                    raise MotionSafetyError("直线平移要求控制器工作系为 Base、工具系为法兰")
-            limits.require_speed(speed_pct, self._read("rm_get_arm_max_line_speed"))
-            joint_low = _six(self._read("rm_get_joint_min_pos"), "控制器关节下限")
-            joint_high = _six(self._read("rm_get_joint_max_pos"), "控制器关节上限")
-            if np.any(joint_low >= joint_high):
-                raise MotionSafetyError("控制器关节限位无效")
-            if self._trajectory() != 0:  # RM_NO_PLANNING_E
-                raise MotionSafetyError("控制器已有活动轨迹")
-            start = self.read_state()
-            initial_tcp, initial_rotation = self._check_motion_state(start, joint_low, joint_high)
-            delta = target - initial_tcp
-            distance = np.linalg.norm(delta)
-            if distance > limits.max_step_m:
-                raise MotionSafetyError("单次 TCP 位移超出现场限幅")
+            preview = self._motion_snapshot()
+            limits.require_speed(speed_pct, self.read_max_line_speed())
+            if limits.require_segment(preview.tcp, target) <= 0.001:
+                return preview.state
+            self._confirm_motion(action, {"start_tcp_m": preview.tcp.tolist(), "target_tcp_m": target.tolist(),
+                                          "speed_pct": speed_pct, "max_linear_speed_m_s": limits.max_linear_speed_m_s})
+            if preflight is not None:
+                preflight()
+            if interlock is not None:
+                interlock()
+            start = self._motion_snapshot()
+            self._require_same_start(preview, start)
+            limits.require_speed(speed_pct, self.read_max_line_speed())
+            distance = limits.require_segment(start.tcp, target)
             if distance <= 0.001:
-                return start
-            pose = start.controller_pose_m_rad.copy()
-            pose[:3] += delta
+                return start.state
+            delta = target - start.tcp
+            direction = delta / distance
+            pose = start.state.controller_pose_m_rad.copy()
+            # rm_movel 的目标是活动工具。Grip_plus 活动时这里的差为零，法兰活动时仅换算一次。
+            tool_delta = start.controller_tool[:3, 3] - limits.T_flange_tcp[:3, 3]
+            pose[:3] = target + start.state.T_base_flange[:3, :3] @ tool_delta
             deadline = monotonic() + limits.completion_timeout_s
-            previous_tcp, previous_started = initial_tcp, start.request_start_s
+            previous_tcp, previous_started = start.tcp, start.state.request_start_s
             try:
                 # 发送开始即视为可能已执行。丢失回执时也要尝试轨迹停止。
                 _check_status("rm_movel", self._client.rm_movel(pose.tolist(), speed_pct, 0, 0, 0))
                 while monotonic() < deadline:
                     state = self.read_state()
-                    tcp, rotation = self._check_motion_state(state, joint_low, joint_high)
+                    tcp, rotation = self._check_motion_state(state, start.joint_low, start.joint_high,
+                                                             start.controller_tool)
                     # 以两次查询的最长可能间隔作保守比较，0.1 mm 留给回包量化和抖动。
                     sample_span = state.request_end_s - previous_started
                     travel_m = np.linalg.norm(tcp - previous_tcp)
                     if sample_span <= 0 or travel_m > limits.max_linear_speed_m_s * sample_span + 0.0001:
                         raise MotionSafetyError("相邻回包检测到实测 TCP 线速度超限")
                     previous_tcp, previous_started = tcp, state.request_start_s
-                    if not np.allclose(rotation, initial_rotation, atol=0.005, rtol=0):
+                    if not np.allclose(rotation, start.rotation, atol=0.005, rtol=0):
                         raise MotionSafetyError("直线平移中检测到法兰姿态变化")
+                    reach = tcp - start.tcp
+                    nearest = direction * np.clip(reach @ direction, 0., distance)
+                    if np.linalg.norm(reach - nearest) > limits.max_path_error_m:
+                        raise MotionSafetyError("实测 TCP 偏离已确认的直线段")
                     trajectory = self._trajectory()
                     if trajectory not in (0, 2):  # 无规划、直线规划
                         raise MotionSafetyError("运动中检测到非预期轨迹")
+                    self._require_collision_protection()
+                    if interlock is not None:
+                        interlock()
+                    if trajectory == 0 and np.linalg.norm(target - tcp) <= 0.001:
+                        self._require_real_mode()
+                        if not np.allclose(self._controller_tool(), start.controller_tool, atol=1e-6, rtol=0):
+                            raise MotionSafetyError("运动期间活动工具系变化")
+                        if monotonic() < deadline:
+                            return state
                     remaining = deadline - monotonic()
                     if remaining <= 0:
                         break
-                    if trajectory == 0 and np.linalg.norm(target - tcp) <= 0.001:
-                        return state
                     sleep(min(0.03, remaining))
                 raise HardwareTimeout("直线平移超时")
             except BaseException as exc:
@@ -305,10 +403,11 @@ class RealManArm:
 
 
 class RealManGripper:
-    """通过同一个 RealMan 连接读取内置协议返回的 EG2-4C2 状态。"""
+    """EG2-4C2 内置协议，复用机械臂连接、会话锁和人工确认。"""
 
-    def __init__(self, arm: RealManArm):
+    def __init__(self, arm: RealManArm, *, limits=None):
         self._arm = arm
+        self._limits = limits
 
     def read_state(self):
         with self._arm._lock:
@@ -325,3 +424,97 @@ class RealManGripper:
                                 int(raw["mode"]), int(raw["error"]), (began + ended) / 2)
         except (KeyError, ValueError, TypeError) as exc:
             raise HardwareError("夹爪回包缺少有效状态字段") from exc
+
+    def _require_calibrated(self):
+        if not isinstance(self._limits, GripperLimits):
+            raise MotionSafetyError("夹爪动作需要现场实测的 GripperLimits")
+        return self._limits
+
+    def _require_healthy(self):
+        state = self.read_state()
+        if not state.online or not state.enabled or state.error or state.mode not in range(1, 7):
+            raise MotionSafetyError(f"夹爪状态异常 · {state}")
+        return state
+
+    def _at_open(self, state):
+        lo, hi = self._limits.open_feedback_raw
+        return state.mode == 1 and lo <= state.opening_raw <= hi
+
+    def _has_grip(self, state):
+        lo, hi = self._limits.held_feedback_raw
+        force_lo, force_hi = self._limits.held_force_g
+        return state.mode == 6 and lo <= state.opening_raw <= hi and force_lo <= state.force_g <= force_hi
+
+    def require_open(self):
+        """复核张满的原始位置值和厂商空闲状态。"""
+        self._require_calibrated()
+        state = self._require_healthy()
+        if not self._at_open(state):
+            raise MotionSafetyError(f"夹爪未张满至已验收的状态 · {state}")
+        return state
+
+    def require_holding(self):
+        """力控停止、夹指开口和力反馈须同时匹配实物夹持。"""
+        self._require_calibrated()
+        state = self._require_healthy()
+        if not self._has_grip(state):
+            raise MotionSafetyError(f"夹爪回读未确认实物夹持 · {state}")
+        return state
+
+    def open_max(self, *, preflight=None):
+        with self._arm._lock:
+            self._arm._require_motion_enabled()
+            limits = self._require_calibrated()
+            return self._act("open", "rm_set_gripper_release", (limits.open_speed_raw,), self._at_open,
+                             preflight)
+
+    def close_on_object(self, *, preflight=None):
+        with self._arm._lock:
+            self._arm._require_motion_enabled()
+            limits = self._require_calibrated()
+            # 单次力控闭合在力阈值处停止，后续抬升持续检查实际开口和力回读。
+            return self._act("close", "rm_set_gripper_pick", (limits.close_speed_raw, limits.close_force_raw),
+                             self._has_grip, preflight)
+
+    def _act(self, action, sdk_command, command_args, reached, preflight):
+        arm, limits = self._arm, self._limits
+        preview = arm._motion_snapshot()
+        jaw = self._require_healthy()
+        if action == "open" and reached(jaw):
+            return jaw
+        if jaw.mode in (4, 5) or (action == "close" and not self._at_open(jaw)):
+            raise MotionSafetyError("夹爪必须静止，夹取前须确认已张满")
+        details = {"tcp_m": preview.tcp.tolist(), "opening_raw": jaw.opening_raw,
+                   "speed_raw": command_args[0]}
+        if action == "close":
+            details["force_command_raw"] = command_args[1]
+        arm._confirm_motion(action, details)
+        if preflight is not None:
+            preflight()
+        start = arm._motion_snapshot()
+        arm._require_same_start(preview, start)
+        fresh = self._require_healthy()
+        if fresh.mode != jaw.mode or fresh.opening_raw != jaw.opening_raw:
+            raise MotionSafetyError("人工确认期间夹爪状态变化")
+        deadline = monotonic() + limits.completion_timeout_s
+        try:
+            # False/1 等待设置回执，不以该回执判定动作结束。1001 一类读回值从不作为参数发送。
+            _check_status(sdk_command, getattr(arm._client, sdk_command)(*command_args, False, 1))
+            good_reads = 0
+            while monotonic() < deadline:
+                state = self._require_healthy()
+                actual = arm.read_state()
+                if (any(actual.error_codes) or np.max(np.abs(actual.joint_deg - start.state.joint_deg)) > 0.05
+                        or arm._trajectory() != 0):
+                    raise MotionSafetyError("夹爪动作期间机械臂出现运动或报错")
+                good_reads = good_reads + 1 if reached(state) else 0
+                if good_reads >= 2 and monotonic() < deadline:
+                    return state
+                if action == "close" and (state.mode == 2 or (state.mode == 6 and not reached(state))):
+                    raise MotionSafetyError(f"闭合结束时未确认实物夹持 · {state}")
+                sleep(max(0., min(0.03, deadline - monotonic())))
+            raise HardwareTimeout("夹爪动作超时")
+        except BaseException as exc:
+            arm._faulted = True
+            # 内置协议没有独立的夹爪停止指令。保持故障锁定，现场人员处理夹爪状态。
+            raise MotionSafetyError(f"夹爪动作中止且本会话已锁定，请用现场停止装置并核查夹爪 · {exc or type(exc).__name__}") from exc

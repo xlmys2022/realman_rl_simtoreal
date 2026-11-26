@@ -45,6 +45,7 @@ class CubeMeasurement:
     pixels: int
     centroid_px: tuple
     timestamp: float
+    yaw_rad: float | None = None
 
 
 def orange_mask(rgb,low=(3,175,50),high=(25,255,255)):
@@ -170,14 +171,14 @@ class UprightCubeDetector(OrangeCubeDetector):
         # 选高处有充分支持的薄层，减少把侧面下部误作水平顶面的情况。
         above = heights[strong[-1]]
         top = points[(points[:, 2] >= above) & (points[:, 2] <= above + 2 * band)]
-        xy, sides, _ = cv2.minAreaRect(top[:, :2].astype(np.float32))
+        xy, sides, angle_deg = cv2.minAreaRect(top[:, :2].astype(np.float32))
         # 斜视或遮挡导致有效顶面太窄时保留 HSV Mask，不输出未经几何约束的位置。
         if min(sides) < .55 * self.edge_m or max(sides) > 1.30 * self.edge_m:
             return None
         center = np.r_[xy, np.median(top[:, 2]) - self.edge_m / 2]
         confidence = min(1., len(top) / 40) * min(1., min(sides) / (0.85 * self.edge_m))
         return CubeMeasurement(center, np.array([0., 0., 1.]), float(confidence), len(top),
-                               centroid, frame.timestamp)
+                               centroid, frame.timestamp, float(np.deg2rad(angle_deg)))
 
 
 class VisualTracker:

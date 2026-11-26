@@ -11,7 +11,7 @@ import numpy as np
 from realman_rl_simtoreal.hardware import HardwareError, HardwareTimeout
 from realman_rl_simtoreal.hardware.realman import RealManArm, RealManGripper
 from realman_rl_simtoreal.hardware.realman_config import REALMAN_HARDWARE
-from realman_rl_simtoreal.hardware.safety import MotionLimits, MotionSafetyError
+from realman_rl_simtoreal.hardware.safety import GripperLimits, MotionLimits, MotionSafetyError
 
 
 class RobotInfo(Structure):
@@ -39,9 +39,13 @@ class ArmTests(unittest.TestCase):
         self.client.rm_get_joint_min_pos.return_value = (0, REALMAN_HARDWARE.joint_min_deg)
         self.client.rm_get_joint_max_pos.return_value = (0, REALMAN_HARDWARE.joint_max_deg)
         self.client.rm_get_arm_max_line_speed.return_value = (0, 0.5)
+        self.client.rm_get_collision_stage.return_value = (0, 4)
         self.client.rm_get_arm_current_trajectory.return_value = {"return_code": 0, "trajectory_type": 0}
         self.client.rm_movel.return_value = 0
         self.client.rm_set_arm_stop.return_value = 0
+        self.client.rm_set_gripper_release.return_value = 0
+        self.client.rm_set_gripper_pick.return_value = 0
+        self.confirm = Mock(return_value=True)
         self.robot_model = 3
 
         def identify(_handle, ptr):
@@ -61,11 +65,13 @@ class ArmTests(unittest.TestCase):
         tcp[2, 3] = 0.1
         self.limits = MotionLimits((-0.10, -0.10, 1.10), (0.10, 0.10, 1.30),
                                    tcp, 10, 0.025, 0.02, 0.5)
+        self.gripper_limits = GripperLimits(30, 40, 120, (998, 1002), (239, 243), 1,
+                                            (70, 200), .5)
         self.target = np.array([-0.012, 0., 1.1892])
 
     def arm(self, *, motion=False, limits=None):
         return RealManArm("192.0.2.1", timeout_ms=180, enable_motion=motion,
-                          limits=limits if limits is not None else self.limits)
+                          limits=limits if limits is not None else self.limits, confirm=self.confirm)
 
     def test_read_only_returns_live_dh_flange_gripper_and_time(self):
         with self.arm() as arm:
@@ -81,9 +87,13 @@ class ArmTests(unittest.TestCase):
             self.assertGreaterEqual(gripper.timestamp_s, state.timestamp_s)
             with self.assertRaises(MotionSafetyError):
                 arm.move_linear_tcp(self.target, speed_pct=3)
+            with self.assertRaises(MotionSafetyError):
+                RealManGripper(arm, limits=self.gripper_limits).open_max()
         self.client.rm_set_timeout.assert_called_once_with(180)
         self.client.rm_movel.assert_not_called()
         self.client.rm_set_arm_stop.assert_not_called()
+        self.client.rm_set_gripper_release.assert_not_called()
+        self.confirm.assert_not_called()
         self.client.rm_delete_robot_arm.assert_called_once()
 
     def test_wrong_model_and_wrong_run_mode_close_the_handle(self):
@@ -108,6 +118,29 @@ class ArmTests(unittest.TestCase):
     def test_enabling_motion_requires_site_limits(self):
         with self.assertRaisesRegex(ValueError, "MotionLimits"):
             RealManArm("192.0.2.1", enable_motion=True)
+
+    def test_enabling_motion_alone_does_not_approve_arm_or_gripper(self):
+        with RealManArm("192.0.2.1", enable_motion=True, limits=self.limits) as arm:
+            with self.assertRaisesRegex(MotionSafetyError, "未获人工确认"):
+                arm.move_linear_tcp(self.target, speed_pct=3)
+            with self.assertRaisesRegex(MotionSafetyError, "未获人工确认"):
+                RealManGripper(arm, limits=self.gripper_limits).open_max()
+        self.client.rm_movel.assert_not_called()
+        self.client.rm_set_gripper_release.assert_not_called()
+
+    def test_collision_disabled_and_changed_pose_after_confirmation_prevent_movement(self):
+        with self.arm(motion=True) as arm:
+            self.client.rm_get_collision_stage.return_value = (0, 0)
+            with self.assertRaisesRegex(MotionSafetyError, "碰撞防护关闭"):
+                arm.move_linear_tcp(self.target, speed_pct=3)
+            self.confirm.assert_not_called()
+            self.client.rm_get_collision_stage.return_value = (0, 4)
+            first = arm.read_state()
+            with patch.object(arm, "read_state", side_effect=(first, self.translated_state(first, time_offset=.3))):
+                with self.assertRaisesRegex(MotionSafetyError, "人工确认期间"):
+                    arm.move_linear_tcp(self.target, speed_pct=3)
+        self.client.rm_movel.assert_not_called()
+        self.client.rm_set_arm_stop.assert_not_called()
 
     def test_workspace_speed_increment_and_frame_reject_before_motion(self):
         with self.arm(motion=True) as arm:
@@ -138,20 +171,52 @@ class ArmTests(unittest.TestCase):
         with self.arm(motion=True) as arm:
             first = arm.read_state()
             last = self.translated_state(first, time_offset=0.3)
-            with patch.object(arm, "read_state", side_effect=(first, last)):
+            with patch.object(arm, "read_state", side_effect=(first, first, last)):
                 self.assertIs(arm.move_linear_tcp(self.target, speed_pct=3), last)
         args = self.client.rm_movel.call_args.args
-        np.testing.assert_allclose(args[0], [-0.012, 0., 1.0892, 0., 0., 0.])
+        np.testing.assert_allclose(args[0], [-0.012, 0., 1.0892, 0., 0., 0.], atol=1e-12)
         self.assertEqual(args[1:], (3, 0, 0, 0))
+        self.confirm.assert_called_once()
         self.client.rm_set_arm_stop.assert_not_called()
+
+    def test_live_grip_plus_pose_is_used_without_applying_tcp_twice(self):
+        self.client.rm_get_current_tool_frame.return_value = (0, {"name": "Grip_plus", "pose": [0, 0, .10, 0, 0, 0]})
+        raw = self.client.rm_get_current_arm_state.return_value[1]
+        raw["pose"][2] += .10
+        with self.arm(motion=True) as arm:
+            first = arm.read_state()
+            last = self.translated_state(first, time_offset=.3)
+            with patch.object(arm, "read_state", side_effect=(first, first, last)):
+                arm.move_linear_tcp(self.target, speed_pct=3)
+        np.testing.assert_allclose(self.client.rm_movel.call_args.args[0], [-.012, 0, 1.1892, 0, 0, 0], atol=1e-12)
 
     def test_measured_overspeed_attempts_stop(self):
         with self.arm(motion=True) as arm:
             first = arm.read_state()
             fast = self.translated_state(first, time_offset=0.01)
-            with patch.object(arm, "read_state", side_effect=(first, fast)):
+            with patch.object(arm, "read_state", side_effect=(first, first, fast)):
                 with self.assertRaisesRegex(MotionSafetyError, "线速度超限"):
                     arm.move_linear_tcp(self.target, speed_pct=3)
+        self.client.rm_set_arm_stop.assert_called_once()
+
+    def test_path_deviation_or_lost_hold_attempts_stop(self):
+        with self.arm(motion=True) as arm:
+            first = arm.read_state()
+            last = self.translated_state(first, time_offset=.3)
+            last.T_base_flange[1, 3] += .003
+            last.controller_pose_m_rad[1] += .003
+            with patch.object(arm, "read_state", side_effect=(first, first, last)):
+                with self.assertRaisesRegex(MotionSafetyError, "偏离"):
+                    arm.move_linear_tcp(self.target, speed_pct=3)
+        self.client.rm_set_arm_stop.assert_called_once()
+        self.client.rm_set_arm_stop.reset_mock()
+        with self.arm(motion=True) as arm:
+            first = arm.read_state()
+            last = self.translated_state(first, time_offset=.3)
+            guard = Mock(side_effect=(None, MotionSafetyError("lost grip")))
+            with patch.object(arm, "read_state", side_effect=(first, first, last)):
+                with self.assertRaisesRegex(MotionSafetyError, "lost grip"):
+                    arm.move_linear_tcp(self.target, speed_pct=3, action="lift", interlock=guard)
         self.client.rm_set_arm_stop.assert_called_once()
 
     def test_uncertain_motion_ack_stops_and_latches_guard(self):
@@ -177,10 +242,44 @@ class ArmTests(unittest.TestCase):
         with self.arm(motion=True) as arm:
             first = arm.read_state()
             unsafe = replace(first, error_codes=(5,))
-            with patch.object(arm, "read_state", side_effect=(first, unsafe)):
+            with patch.object(arm, "read_state", side_effect=(first, first, unsafe)):
                 with self.assertRaisesRegex(MotionSafetyError, "未确认轨迹停止"):
                     arm.move_linear_tcp(self.target, speed_pct=3)
         self.client.rm_set_arm_stop.assert_called_once()
+
+    def gripper_reply(self, mode, opening, force=0):
+        return 0, dict(self.client.rm_get_gripper_state.return_value[1], mode=mode,
+                       actpos=opening, current_force=force)
+
+    def test_gripper_uses_speed_and_force_commands_and_checks_readback(self):
+        closed = self.gripper_reply(3, 350)
+        opened = self.gripper_reply(1, 1001)
+        holding = self.gripper_reply(6, 241, 111)
+        self.client.rm_get_gripper_state.side_effect = (closed, closed, opened, opened,
+                                                        opened, opened, holding, holding, holding)
+        with self.arm(motion=True) as arm:
+            jaw = RealManGripper(arm, limits=self.gripper_limits)
+            self.assertEqual(jaw.open_max().opening_raw, 1001)
+            self.assertEqual(jaw.close_on_object().opening_raw, 241)
+            self.assertEqual(jaw.require_holding().force_g, 111)
+        self.assertEqual([call.args[0] for call in self.confirm.call_args_list], ["open", "close"])
+        self.client.rm_set_gripper_release.assert_called_once_with(30, False, 1)
+        self.client.rm_set_gripper_pick.assert_called_once_with(40, 120, False, 1)
+        self.client.rm_set_gripper_position.assert_not_called()
+
+    def test_empty_grip_or_lost_ack_latches_the_session_without_auto_open(self):
+        opened = self.gripper_reply(1, 1001)
+        empty = self.gripper_reply(2, 1)
+        for answer in (0, -2):
+            with self.subTest(sdk_answer=answer), self.arm(motion=True) as arm:
+                self.client.rm_get_gripper_state.side_effect = (opened, opened, empty)
+                self.client.rm_set_gripper_pick.return_value = answer
+                with self.assertRaisesRegex(MotionSafetyError, "本会话已锁定"):
+                    RealManGripper(arm, limits=self.gripper_limits).close_on_object()
+                with self.assertRaisesRegex(MotionSafetyError, "锁定"):
+                    arm.move_linear_tcp(self.target, speed_pct=3)
+        self.client.rm_set_gripper_release.assert_not_called()
+        self.client.rm_movel.assert_not_called()
 
 
 if __name__ == "__main__":

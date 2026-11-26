@@ -70,7 +70,8 @@ def run_rgbd_view(args, camera, *, localizer=None, arm=None):
                 tracking, mask = observation.tracking, observation.mask
                 data.update(cube_center_base_m=None, confidence=0.0,
                             T_base_color=observation.T_base_color.tolist(),
-                            arm_timestamps_s=observation.arm_timestamps_s, cube_center_color_m=None)
+                            arm_timestamps_s=observation.arm_timestamps_s, cube_center_color_m=None,
+                            cube_edge_direction_deg=None)
                 if observation.T_base_flange is not None:
                     data.update(T_base_flange=observation.T_base_flange.tolist(),
                                 T_base_tcp=observation.T_base_tcp.tolist(),
@@ -87,6 +88,10 @@ def run_rgbd_view(args, camera, *, localizer=None, arm=None):
                     x, y, z = coordinates
                     status += (f"\n基座系方块中心  X {x:+.4f}   Y {y:+.4f}   Z {z:+.4f} m"
                                f"    置信度 {confidence:.2f}")
+                    if observation.yaw_rad is not None:
+                        direction = float(np.rad2deg(observation.yaw_rad) % 90.)
+                        data["cube_edge_direction_deg"] = direction
+                        status += f"    边方向 {direction:.1f}°（模 90°）"
             if preview is None:
                 print_json(data)
             else:

@@ -22,6 +22,19 @@ class CubeObservation:
     T_base_flange: np.ndarray | None = None
     T_base_tcp: np.ndarray | None = None
     controller_pose_m_rad: np.ndarray | None = None
+    yaw_rad: float | None = None
+
+
+@dataclass(frozen=True)
+class StationaryCube:
+    """一批静止腕部图像的方块中心、各帧边方向和采样姿态。"""
+
+    center_m: np.ndarray
+    yaw_rad: tuple[float, ...]
+    T_base_tcp: np.ndarray
+    detections: int
+    frames: int
+    spread_m: float
 
 
 class RealCubeLocalizer:
@@ -93,7 +106,32 @@ class RealCubeLocalizer:
                 tracking = None
             return CubeObservation(sample, extrinsics, self.detector.mask, tracking, arm_times, flange,
                                    flange @ self.calibration.T_flange_tcp if flange is not None else None,
-                                   arm_state.controller_pose_m_rad if arm_state is not None else None)
+                                   arm_state.controller_pose_m_rad if arm_state is not None else None,
+                                   found.yaw_rad if tracking is not None else None)
         except (HardwareError, ValueError):
             self.tracker.reset()
             raise
+
+    def estimate_stationary(self, camera, arm, *, max_spread_m, frames=8, min_detections=5):
+        """重新采集静止腕部样本。可见性或一致性不足时不使用上一次跟踪值。"""
+        if (type(frames) is not int or type(min_detections) is not int or not 3 <= min_detections <= frames <= 100
+                or not isfinite(max_spread_m) or max_spread_m <= 0):
+            raise ValueError("静止定位需要至少三帧检测和有限正数的中心离散限值")
+        self.tracker.reset()
+        observations = [self.capture(camera, arm) for _ in range(frames)]
+        anchor = observations[0].T_base_tcp
+        if anchor is None or any(row.T_base_tcp is None
+                                 or np.linalg.norm(row.T_base_tcp[:3, 3] - anchor[:3, 3]) > 0.001
+                                 or not np.allclose(row.T_base_tcp[:3, :3], anchor[:3, :3], atol=0.003, rtol=0)
+                                 for row in observations):
+            raise HardwareError("批量定位期间 TCP 不静止")
+        accepted = [row for row in observations if row.tracking is not None and row.yaw_rad is not None]
+        if len(accepted) < min_detections:
+            raise HardwareError(f"静止批次仅有 {len(accepted)}/{frames} 帧提供中心和边方向")
+        positions = np.asarray([row.tracking["position_m"] for row in accepted])
+        center = np.median(positions, axis=0)
+        spread = float(np.max(np.linalg.norm(positions - center, axis=1)))
+        if not np.isfinite(spread) or spread > max_spread_m:
+            raise HardwareError(f"静止方块定位离散程度超限 · {spread * 1000:.2f} mm")
+        return StationaryCube(center, tuple(row.yaw_rad for row in accepted),
+                              observations[-1].T_base_tcp, len(accepted), frames, spread)
