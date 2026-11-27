@@ -11,8 +11,11 @@ class MujocoRgbdCamera:
     intrinsics 为像素内参，frame 为最新采样。capture 返回包含相机到基座变换的帧，
     close 释放惰性创建的渲染器。
     """
-    def __init__(self,robot,*,width=640,height=480):
+    def __init__(self,robot,*,width=640,height=480,depth_unit_m=None):
         self.robot=robot;self.width=width;self.height=height;self.renderer=None
+        if depth_unit_m is not None and (not np.isfinite(depth_unit_m) or depth_unit_m <= 0):
+            raise ValueError('Depth quantization requires a finite positive unit in metres')
+        self.depth_unit_m=depth_unit_m
         self.camera_id=robot.model.camera('wrist_rgb').id
         self.base_id=robot.model.body('base_link').id
         self.options=mujoco.MjvOption()
@@ -39,6 +42,10 @@ class MujocoRgbdCamera:
         self.renderer.enable_depth_rendering()
         try:depth=self.renderer.render().copy()
         finally:self.renderer.disable_depth_rendering()
+        if self.depth_unit_m is not None:
+            # 只模拟 D435 Z16 的深度分辨率，保留缺测值。噪声及彩色对齐误差另行评估。
+            valid = np.isfinite(depth) & (depth > 0)
+            depth[valid] = np.rint(depth[valid] / self.depth_unit_m) * self.depth_unit_m
         position,rotation=self.base_pose()
         # OpenCV 光学系向右、向下、向前。翻转 MuJoCo 的 Y/Z 轴后，再从世界系变换到机器人基座系。
         camera_rotation=robot.data.cam_xmat[self.camera_id].reshape(3,3)@OPTICAL_TO_MUJOCO

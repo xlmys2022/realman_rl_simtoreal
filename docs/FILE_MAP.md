@@ -33,6 +33,7 @@
 - `scripts/diagnostics/probe_reach_env.py` — 任务分布、奖励与随机探索探针，无学习器。
 - `scripts/diagnostics/smoke_reach_env.py` — 小规模无界面 Reach 交互 / Gymnasium checker。
 - `scripts/diagnostics/validate_realman_tabletop.py` — 验证实机安装场景的几何、名义惯量与传统分段抓取。
+- `scripts/diagnostics/validate_realman_transfer.py` — 回放真实 RGB-D，并在相同 TCP 位姿下对照仿真夹爪装配与可见性。
 
 ## scripts/evaluate
 
@@ -104,6 +105,8 @@
 
 - `deployment/__init__.py` — 轻量包初始化。
 - `deployment/calibration.py` — 校验本地实测 HSV、手眼、TCP 和方块尺寸。
+- `deployment/policy_io.py` — 结合真机 RGB-D 和显式本体量编码影子策略观测，解码米制动作请求。
+- `deployment/rgbd_recording.py` — 读取离线 RGB-D 采样及标定来源。
 - `deployment/vision.py` — 配对腕部姿态和新鲜 RGB-D，定位基座系方块。
 
 ## src / envs
@@ -186,6 +189,7 @@
 
 - `simulation/motion/__init__.py` — 轻量包初始化。
 - `simulation/motion/cartesian_controller.py` — 将桌面抓取环境给出的 TCP 增量转为受工作空间、关节速率和碰撞约束的关节参考值。
+- `simulation/motion/cartesian_request.py` — 定义仿真和影子接口共用的笛卡尔请求及合成位移限幅。
 - `simulation/motion/kinematics.py` — 基于 MuJoCo site 的法兰正运动学、雅可比和阻尼最小二乘逆运动学。
 - `simulation/motion/staged_grasp_controller.py` — 局部夹取与抬升的传统分段控制器，供演示、抓取评估基线和物理对照使用。
 - `simulation/motion/tool_kinematics.py` — 为抓取 TCP 及腕部附件提供显式工具坐标系，复用法兰 FK/IK 的数值实现。
@@ -215,6 +219,7 @@
 - `tasks/grasp/__init__.py` — 轻量包初始化。
 - `tasks/grasp/lift.py` — 局部夹取抬升的场景、课程参数和按折扣势差计算的奖励。
 - `tasks/grasp/tabletop_cartesian.py` — 定义桌面笛卡尔抓取的观察位、动作与传感器参数，以及课程完成门槛。
+- `tasks/grasp/tabletop_policy_io.py` — 定义桌面策略的观测字段、米制输入、视觉进度和动作契约。
 - `tasks/grasp/tabletop_cartesian_reward.py` — 计算笛卡尔桌面的接近、围拢、夹持、抬升等奖励项，评估诊断可复用同一计算。
 - `tasks/grasp/tabletop_joint.py` — 关节空间桌面抓取的任务、课程和奖励定义，含接近子目标与夹爪开口正则。
 

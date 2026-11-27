@@ -12,7 +12,7 @@ from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv, VecChec
 
 from ...envs.factory import make_tabletop_cartesian_env
 from ...envs.grasp.tabletop_cartesian_env import action_contract, observation_fields
-from ...envs.grasp.tabletop_cartesian_vision_env import VISION_CONTRACT
+from ...tasks.grasp.tabletop_policy_io import vision_contract
 from ...rl.cartesian_policy import reset_critic, reset_jaw_head
 from ...rl.cartesian_reach_policy import (
     ReachGraspPPOPolicy, branch_hashes, initialize_reach_arm, validate_reach_policy,
@@ -24,7 +24,7 @@ from ...rl.ppo_cartesian import (
 from ...rl.vision_policy import VisualReachGraspPPOPolicy, transfer_visual_observation_inputs
 from ...simulation.devices.mujoco_gripper import MAX_WIDTH
 from ...simulation.physics.grasp_metrics import CONTACT_MEASUREMENT
-from ...simulation.runtime.observation_presets import startup_contract
+from ...simulation.runtime.observation_presets import REALMAN_TRANSFER_PROFILE, startup_contract
 from ...tasks.grasp.tabletop_cartesian import STAGES, environment_config
 from ...tasks.grasp.tabletop_cartesian_reward import REWARD
 from ...utils.artifacts import file_sha256
@@ -55,11 +55,12 @@ def train(args):
             raise ValueError('Reach initialization requires a completed goal_relative_v3 PPO update')
         validate_reach_policy(reach_source.policy)
     saved_environment=saved.get('environment',{}) if saved and saved.get('schema',1)>=2 else {}
-    selected_source=getattr(args,'observation_source',None) or saved_environment.get('observation_source','state')
+    scene_profile = getattr(args, 'scene_profile', None) or saved_environment.get('scene_profile', 'legacy')
+    default_source = 'rgbd_hsv' if scene_profile == REALMAN_TRANSFER_PROFILE else saved_environment.get('observation_source','state')
+    selected_source=getattr(args,'observation_source',None) or default_source
     selected_pose=getattr(args,'observation_pose',None) or saved_environment.get('observation_pose','table_down')
     selected_control=getattr(args,'control_mode',None) or saved_environment.get('control_mode','auto')
     selected_jaw=getattr(args,'jaw_control',None) or saved_environment.get('jaw_control','delta' if init_reach else 'absolute')
-    scene_profile = getattr(args, 'scene_profile', None) or saved_environment.get('scene_profile', 'legacy')
     hand_eye_file = getattr(args, 'hand_eye_file', None)
     if hand_eye_file is None and scene_profile == saved_environment.get('scene_profile'):
         hand_eye_file = saved_environment.get('hand_eye_file')
@@ -78,7 +79,8 @@ def train(args):
     if source is not None and isinstance(source.policy,VisualReachGraspPPOPolicy) and not vision:
         raise ValueError('A visual policy cannot be silently transferred back to truth-state observations')
     visual_transfer=bool(vision and source is not None and saved_environment.get('observation_source','state')!='rgbd_hsv')
-    vision_contract_changed=bool(vision and source is not None and saved.get('vision_contract')!=VISION_CONTRACT)
+    sensor_contract=vision_contract(cfg) if vision else None
+    vision_contract_changed=bool(vision and source is not None and saved.get('vision_contract')!=sensor_contract)
     if structured and (cfg.uses_orientation_actions or cfg.observation_pose!='table_down'):
         raise ValueError('Reach warm start supports table_down position control; use ordinary Cartesian PPO for pose control')
     if freeze_arm_steps and not structured:raise ValueError('Arm freezing requires the Reach-initialized policy')
@@ -134,7 +136,7 @@ def train(args):
         transfer=dict(model=str(Path(args.init_model).resolve()),sha256=file_sha256(args.init_model),
                       source_steps=source.num_timesteps,source_parameter_hashes=hashes(source),optimizer_reset=True,
                       source_startup_contract=saved.get('startup_contract'),
-                      startup_changed=saved.get('startup_contract')!=startup_contract(cfg.observation_pose),
+                      startup_changed=saved.get('startup_contract')!=startup_contract(cfg.observation_pose, cfg.scene_profile),
                       source_reward=saved.get('reward'),reward_changed=saved.get('reward')!=REWARD,
                       source_contact_measurement=saved.get('contact_measurement','pad_normal_sum_v0'),
                       contact_observation_changed=saved.get('contact_measurement')!=CONTACT_MEASUREMENT,
@@ -165,6 +167,8 @@ def train(args):
         transfer['goal_gate_reset']=goal_gate_reset
         transfer['visual_observation_transfer']=visual_transfer
         transfer['vision_contract_changed']=vision_contract_changed
+        if source is not None:
+            transfer['action_contract_changed']=saved.get('action_contract')!=action_contract(cfg)
     if structured:model.policy.set_arm_trainable(freeze_arm_steps==0)
     config=dict(schema=2,algorithm='PPO',task='tabletop_cartesian',stage=args.stage,seed=args.seed,
                 environment=cfg.to_dict(),action_contract=action_contract(cfg),observation_fields=observation_fields(cfg),
@@ -174,7 +178,7 @@ def train(args):
                 jaw_head_reset=jaw_reset,jaw_initial_opening_m=cfg.initial_width if jaw_reset else None,
                 policy_type='visual_reach_grasp' if vision else 'reach_grasp' if structured else 'cartesian',cartesian_goal_features=goal_features,
                 observation_source=cfg.observation_source,object_state_in_policy='rgbd_hsv' if vision else 'simulator_state',
-                vision_contract=VISION_CONTRACT if vision else None,
+                vision_contract=sensor_contract,
                 privileged_reward_and_success_audit=vision,
                 freeze_arm_steps=freeze_arm_steps,
                 goal_gate_reset=goal_gate_reset,

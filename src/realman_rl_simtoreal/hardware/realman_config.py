@@ -98,6 +98,10 @@ class TabletopInstallation:
     tool_payload_kg: float = 0.906
     tool_center_of_mass_m: tuple[float, float, float] = (0.010, 0.044, 0.204)
     gripper_open_feedback_raw: int = 1001
+    gripper_measured_open_gap_m: float = 0.071  # 张满时夹指内侧净距，独立于 raw 反馈。
+    gripper_closing_axis_tcp: str = "y"  # 两个夹指深度区域回投到 Grip_plus 后实测。
+    onsite_guarded_tcp_speed_m_s: float = 0.005  # 现场分段直线动作的监测上限。
+    onsite_observed_cube_xy_m: tuple[float, float] = (0.33423, -0.00965)
     # 由原装配的名义夹指中心反推总长。半径沿用旧 57 mm 安装板代理。
     gripper_mount_to_nominal_tcp_m: float = 0.147530235
     adapter_radius_m: float = 0.0285
@@ -118,6 +122,11 @@ class TabletopInstallation:
     @property
     def adapter_length_m(self):
         return self.flange_tcp_m - self.gripper_mount_to_nominal_tcp_m
+
+    @property
+    def camera_intrinsics(self):
+        return ((self.camera_fx_px, 0., self.camera_cx_px),
+                (0., self.camera_fy_px, self.camera_cy_px), (0., 0., 1.))
 
 
 REALMAN_TABLETOP = TabletopInstallation()

@@ -9,36 +9,20 @@ from ...tasks.grasp.tabletop_cartesian import CartesianTabletopConfig as Config
 from ...simulation.runtime.tabletop import TabletopRuntime as Runtime
 from ...simulation.motion.cartesian_controller import CartesianController
 from ...simulation.devices.mujoco_gripper import MAX_WIDTH
+from ...tasks.grasp.tabletop_policy_io import (
+    ACTION_CONTRACT, DELTA_JAW_ACTION_CONTRACT, POSE_ACTION_CONTRACT, POSE_DELTA_JAW_ACTION_CONTRACT,
+    VISION_OBSERVATION_FIELDS, action_contract,
+)
 from ...tasks.grasp.tabletop_cartesian_reward import calculate,potential
-from ...simulation.runtime.observation_presets import OBSERVATION_POSES
+from ...simulation.runtime.observation_presets import OBSERVATION_POSES, REALMAN_TRANSFER_PROFILE, observation_preset
 from ...simulation.physics.grasp_metrics import CONTACT_MEASUREMENT
 
 OBSERVATION_FIELDS=(
     ('tcp_base_relative',3),('tcp_velocity',3),('object_tcp_relative',3),('goal_object_relative',3),
     ('object_velocity',3),('object_angular_velocity',3),('gripper_width_velocity_reference',3),
     ('pad_and_support_forces',3),('hold_progress',1),('cartesian_tracking_error',3),('ik_fraction',1))
-ACTION_CONTRACT=dict(name='world_tcp_delta_and_absolute_jaw_v1',shape=4,
-                     components=['delta_x','delta_y','delta_z','absolute_gripper_opening'])
 POSE_OBSERVATION_FIELDS=OBSERVATION_FIELDS+(
     ('grasp_orientation_error',3),('tcp_angular_velocity',3),('angular_tracking_error',3))
-POSE_ACTION_CONTRACT=dict(name='world_tcp_pose_delta_and_absolute_jaw_v1',shape=7,
-    components=['delta_x','delta_y','delta_z','delta_rx','delta_ry','delta_rz','absolute_gripper_opening'])
-DELTA_JAW_ACTION_CONTRACT=dict(name='world_tcp_delta_and_incremental_jaw_v1',shape=4,
-    components=['delta_x','delta_y','delta_z','delta_gripper_opening'])
-POSE_DELTA_JAW_ACTION_CONTRACT=dict(name='world_tcp_pose_delta_and_incremental_jaw_v1',shape=7,
-    components=['delta_x','delta_y','delta_z','delta_rx','delta_ry','delta_rz','delta_gripper_opening'])
-VISION_OBSERVATION_FIELDS=(
-    ('tcp_base_relative',3),('tcp_velocity',3),('rgbd_object_tcp_relative',3),('rgbd_goal_object_relative',3),
-    ('rgbd_object_velocity',3),('rgbd_surface_normal',3),('gripper_width_velocity_reference',3),
-    ('visual_grip_confidence',1),('rgbd_detection_confidence',1),('rgbd_measurement_age',1),
-    ('visual_hold_progress',1),('cartesian_tracking_error',3),('ik_fraction',1))
-
-
-def action_contract(config):
-    """从控制配置生成动作维度和语义，供环境、训练和 checkpoint 校验共用。"""
-    if config.jaw_control=='delta':
-        return POSE_DELTA_JAW_ACTION_CONTRACT if config.uses_orientation_actions else DELTA_JAW_ACTION_CONTRACT
-    return POSE_ACTION_CONTRACT if config.uses_orientation_actions else ACTION_CONTRACT
 
 
 def observation_fields(config):
@@ -66,7 +50,9 @@ class TabletopCartesianEnv(gym.Env):
         self.robot=Runtime(self.config);self.startup_tick=startup_tick
         self.action_space=spaces.Box(-1.,1.,(action_contract(self.config)['shape'],),dtype=np.float32)
         self.observation_space=spaces.Box(-np.inf,np.inf,(sum(n for _,n in observation_fields(self.config)),),dtype=np.float32)
-        self.grasp_orientation=np.array(OBSERVATION_POSES['table_down'].tool_rotation)
+        transfer = self.config.scene_profile == REALMAN_TRANSFER_PROFILE
+        grasp_pose = observation_preset('table_down', self.config.scene_profile) if transfer else OBSERVATION_POSES['table_down']
+        self.grasp_orientation=np.array(grasp_pose.tool_rotation)
         self._done=True;self._closed=False
 
     def reset(self,*,seed=None,options=None):

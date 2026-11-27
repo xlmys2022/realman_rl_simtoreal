@@ -1,9 +1,11 @@
 """真值与视觉桌面抓取共用的评估循环，接收调用者提供的动作预测与状态指纹。"""
+from dataclasses import replace
+
 import numpy as np
 from ..utils.artifacts import file_sha256
 from ..envs.factory import make_tabletop_cartesian_env as TabletopEnv
 from ..envs.grasp.tabletop_cartesian_env import action_contract
-from ..envs.grasp.tabletop_cartesian_vision_env import VISION_CONTRACT
+from ..tasks.grasp.tabletop_policy_io import vision_contract
 from ..tasks.grasp.tabletop_cartesian import CartesianTabletopConfig as Config
 from ..simulation.runtime.observation_presets import startup_contract
 from ..simulation.physics.grasp_metrics import CONTACT_MEASUREMENT
@@ -135,12 +137,14 @@ def evaluate(predict,config,seeds,*,action_shape,full=False,tick=None,environmen
         default=Config()
         for key in ('initial_width','success_height','lift_height','height_tolerance','hold_seconds','max_steps','object_radius','axis_scale'):
             values[key]=getattr(default,key)
-    # Explicit evaluation randomization follows the full-task defaults. Otherwise
-    # full=True silently restores radius zero and repeats the training position.
-    if object_radius is not None:values['object_radius']=object_radius
+    # 按最终场景的可见范围校验显式采样半径，避免用源场景的边界拦截跨场景评估。
+    radius = values.pop('object_radius', saved.object_radius)
+    if object_radius is not None:
+        radius = object_radius
     target = Config(**values)
     if scene_profile is not None or hand_eye_file is not None:
         target = target.with_scene(scene_profile or target.scene_profile, hand_eye_file=hand_eye_file)
+    target = replace(target, object_radius=radius)
     if tuple(action_shape)!=(action_contract(target)['shape'],):
         raise ValueError('The checkpoint cannot control this observation pose; use pose control to turn from a forward start')
     own=environment is None
@@ -154,7 +158,7 @@ def evaluate(predict,config,seeds,*,action_shape,full=False,tick=None,environmen
         assert state_fingerprint()==before, 'Evaluation changed the supplied policy state'
     result = dict(task='tabletop_cartesian',algorithm=algorithm,full_task=full,environment=env.config.to_dict(),
                 observation_source=env.config.observation_source,
-                vision_contract=VISION_CONTRACT if env.config.observation_source=='rgbd_hsv' else None,
+                vision_contract=vision_contract(env.config) if env.config.observation_source=='rgbd_hsv' else None,
                 startup_contract=startup_contract(env.config.observation_pose, env.config.scene_profile),
                 parameters_unchanged=True if state_fingerprint is not None else None,scripted_task_actions=False,ik_joint_targets_in_policy=False,
                 summary=dict(episodes=len(episodes),successes=sum(e['success'] for e in episodes),
@@ -165,4 +169,6 @@ def evaluate(predict,config,seeds,*,action_shape,full=False,tick=None,environmen
         result['summary'].update(summarize_metrics(episodes, env.config.observation_source == 'rgbd_hsv'))
         result.update(scene_profile=env.config.scene_profile, scene_sha256=file_sha256(env.robot.scene_path),
                       normalization='fixed_si_scaling_no_running_statistics')
+        if env.config.scene_profile != saved.scene_profile:
+            result['action_contract_changed']=action_contract(env.config)!=action_contract(saved)
     return result

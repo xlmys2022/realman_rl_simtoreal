@@ -96,9 +96,9 @@ PPO 指纹覆盖全体参数、num_timesteps、_n_updates、Adam 每参数 step�
 
 ## 视觉职责与组合边界
 
-`VisionTabletopCartesianEnv` 继续复用基类的物理动作执行和独立物理审计，组合原 RGB-D Camera / Detector / Tracker。`_observation` 只从机器人本体和传感器读取允许数据；在同一模块内组合两个纯函数：`visual_grip_and_hold` 计算相机夹持置信度 / 连续保持，`encode_visual_observation` 编码原 29 维视觉通道；姿态模式沿用原额外 9 维。函数参数显式限定为相机测量与机器人状态，不传整个特权 info 或 simulator 对象。
+`VisionTabletopCartesianEnv` 继续复用基类的物理动作执行和独立物理审计，组合原 RGB-D Camera / Detector / Tracker。`tasks/grasp/tabletop_policy_io.py` 接收明确的 RGB-D 跟踪值与本体数据，计算视觉夹持进度并编码原 29 维视觉通道。`deployment/policy_io.py` 用同一编码构造真机影子观测。姿态模式沿用原额外 9 维，特权信息用于既有奖励与独立验收。
 
-物理执行、传感器跟踪、观测编码、视觉进度和最终物理验收由不同现有职责承担；不为单个实现新增 ObservationProvider / CompletionChecker 类或独立文件。视觉环境的 step / reset、vision_lost、visual_false_success、settling margin 和禁止特权成功提前结束的规则保持原实现。真值与视觉观测即便维数相同，也保留各自模型契约和特征类。相机几何、深度单位、坐标变换、RGB-D 检测和 Policy 类保持原有计算与序列化语义。
+`simulation/motion/cartesian_request.py` 定义米制 TCP 和夹爪请求，两端以同一函数限制合成位移。`realman_transfer` 读取实测握持方向、手眼及 D435 参数，沿用视觉策略网络和编码字段。视觉环境的 step / reset、vision_lost、visual_false_success、settling margin 和禁止特权成功提前结束的规则保持原实现。真值与视觉观测分别使用各自的模型契约与特征类。[迁移场景说明](realman_ppo_transfer.md)
 
 ## 最新机器人运行时的最小接口
 

@@ -33,7 +33,10 @@ OBSERVATION_POSES = MappingProxyType({
 })
 
 
-SCENE_PROFILES = ("legacy", "realman_nominal", "realman_hand_eye")
+REALMAN_TRANSFER_PROFILE = "realman_transfer"
+# 固定姿态下对 D435 图像扫描通过的采样半径。超出会有启动时不可见的方块。
+REALMAN_TRANSFER_MAX_OBJECT_RADIUS_M = .020
+SCENE_PROFILES = ("legacy", "realman_nominal", "realman_hand_eye", REALMAN_TRANSFER_PROFILE)
 REALMAN_OBSERVATION_POSES = MappingProxyType({
     # D435 的实际视野更窄，向桌心移动俯视 TCP 后重新用 256 mm 工具逆解。
     'table_down': ObservationPose(
@@ -45,10 +48,24 @@ REALMAN_OBSERVATION_POSES = MappingProxyType({
         (0., -109.6226236394, 130.0044695218, 0., 69.6181541129, 90.)),
 })
 
+# 20261127 固定俯视录像的 Base/Grip_plus 位姿。世界系相对 Base 高 0.79 m。
+# 关节角由已核对的 FK 反解，J6 采用等效的 -95.506°，避免仿真启动时多转一圈。
+REALMAN_TRANSFER_OBSERVATION = ObservationPose(
+    'table_down', (.3165687011, -.0091145948, .8359635610),
+    ((.0473561487, -.9988748890, .0025201766),
+     (-.9987720545, -.0473142144, .0146883714),
+     (-.0145526052, -.0032126667, -.9998889441)),
+    (-2.688, 1.259, 95.733, .854, 82.904, -95.506),
+)
+
 
 def observation_preset(name, scene_profile="legacy"):
     if scene_profile not in SCENE_PROFILES:
         raise ValueError(f"Unknown tabletop scene profile: {scene_profile}")
+    if scene_profile == REALMAN_TRANSFER_PROFILE:
+        if name != 'table_down':
+            raise ValueError('realman_transfer requires the fixed table_down pose')
+        return REALMAN_TRANSFER_OBSERVATION
     presets = OBSERVATION_POSES if scene_profile == "legacy" else REALMAN_OBSERVATION_POSES
     return presets[name]
 

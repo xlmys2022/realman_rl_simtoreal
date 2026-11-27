@@ -1,9 +1,11 @@
 """定义桌面笛卡尔抓取的观察位、动作与传感器参数，以及课程完成门槛。"""
 from dataclasses import asdict, dataclass, replace
 import math
-from ...deployment.calibration import EXAMPLE_CALIBRATION, load_hsv
+from ...deployment.calibration import DEFAULT_CALIBRATION, EXAMPLE_CALIBRATION, load_calibration, load_hsv
 from ...hardware.realman_config import REALMAN_TABLETOP
-from ...simulation.runtime.observation_presets import OBSERVATION_POSES, SCENE_PROFILES, observation_preset
+from ...simulation.runtime.observation_presets import (
+    OBSERVATION_POSES, REALMAN_TRANSFER_MAX_OBJECT_RADIUS_M, REALMAN_TRANSFER_PROFILE, SCENE_PROFILES, observation_preset,
+)
 
 
 @dataclass(frozen=True)
@@ -15,7 +17,7 @@ class CartesianTabletopConfig:
     """
     observation_pose: str = 'table_down'
     control_mode: str = 'auto'
-    observation_source: str = 'state'
+    observation_source: str | None = None
     vision_width: int = 640
     vision_height: int = 480
     vision_period: float | None = None
@@ -29,7 +31,7 @@ class CartesianTabletopConfig:
     camera_forward_local: tuple = (0., 0., 1.)
     camera_up_local: tuple = (1., 0., 0.)
     camera_fovy_deg: float = 90.
-    object_xy: tuple = (.4, 0.)
+    object_xy: tuple | None = None
     object_radius: float = 0.
     lift_height: float = .03
     success_height: float | None = None
@@ -62,8 +64,29 @@ class CartesianTabletopConfig:
         if self.scene_profile not in SCENE_PROFILES:
             raise ValueError(f"Unknown tabletop scene profile: {self.scene_profile}")
         nominal = self.scene_profile != "legacy"
-        if self.hand_eye_file is not None and self.scene_profile != "realman_hand_eye":
-            raise ValueError("hand_eye_file requires realman_hand_eye")
+        transfer = self.scene_profile == REALMAN_TRANSFER_PROFILE
+        if self.observation_source is None:
+            object.__setattr__(self, 'observation_source', 'rgbd_hsv' if transfer else 'state')
+        if self.object_xy is None:
+            object.__setattr__(self, 'object_xy', REALMAN_TABLETOP.onsite_observed_cube_xy_m if transfer else (.4, 0.))
+        if self.hand_eye_file is not None and self.scene_profile not in ('realman_hand_eye', REALMAN_TRANSFER_PROFILE):
+            raise ValueError("hand_eye_file requires realman_hand_eye or realman_transfer")
+        if transfer:
+            if (self.observation_source != 'rgbd_hsv' or self.observation_pose != 'table_down'
+                    or self.uses_orientation_actions):
+                raise ValueError('realman_transfer requires rgbd_hsv with fixed table_down position control')
+            calibration = load_calibration(self.hand_eye_file or DEFAULT_CALIBRATION)
+            if (self.vision_width, self.vision_height) != (REALMAN_TABLETOP.camera_width, REALMAN_TABLETOP.camera_height):
+                raise ValueError('realman_transfer uses the measured D435 RGB-D resolution')
+            if self.vision_cube_size != calibration.cube_edge_m or calibration.cube_edge_m != REALMAN_TABLETOP.cube_edge_m:
+                raise ValueError('The calibrated cube size must match the simulated physical cube')
+            if len(calibration.hsv_ranges) != 1:
+                raise ValueError('realman_transfer expects one measured HSV range for the green cube')
+            for field, bound in zip(('vision_hsv_low', 'vision_hsv_high'), calibration.hsv_ranges[0]):
+                value = getattr(self, field)
+                if value is not None and tuple(value) != bound:
+                    raise ValueError(f'{field} does not match the active realman_transfer calibration')
+                object.__setattr__(self, field, bound)
         if self.vision_period is None:
             object.__setattr__(self, 'vision_period', 1 / REALMAN_TABLETOP.vision_effective_hz if nominal else .1)
         if self.vision_hsv_low is None or self.vision_hsv_high is None:
@@ -104,6 +127,9 @@ class CartesianTabletopConfig:
         if not (.005 <= required <= self.lift_height <= .08 and 0 < self.height_tolerance < required/2
                 and .1 <= self.hold_seconds <= 5 and 0 <= self.object_radius <= .05):
             raise ValueError("Invalid task parameters")
+        if transfer and self.object_radius > REALMAN_TRANSFER_MAX_OBJECT_RADIUS_M:
+            raise ValueError(f'realman_transfer supports a sampling radius of at most '
+                             f'{REALMAN_TRANSFER_MAX_OBJECT_RADIUS_M:g} m at the fixed D435 observation pose')
         if not isinstance(self.max_steps, int) or isinstance(self.max_steps, bool) or self.max_steps <= 0:
             raise ValueError("A positive episode step budget is required")
         vectors = (self.observation_tcp,self.object_xy,self.camera_forward_local,self.camera_up_local,self.axis_scale,
@@ -133,6 +159,11 @@ class CartesianTabletopConfig:
     def uses_orientation_actions(self):
         return self.control_mode == 'pose' or (self.control_mode == 'auto' and self.observation_pose == 'forward')
 
+    @property
+    def tcp_request_speed_limit_m_s(self):
+        # 仅限制仿真与离线策略请求。实机连续执行及速度反馈尚未验收。
+        return REALMAN_TABLETOP.onsite_guarded_tcp_speed_m_s if self.scene_profile == REALMAN_TRANSFER_PROFILE else None
+
     def to_dict(self):
         values=asdict(self)
         values['control_mode']='pose' if self.uses_orientation_actions else 'position'
@@ -143,11 +174,16 @@ class CartesianTabletopConfig:
         return values
 
     def with_scene(self, scene_profile, *, hand_eye_file=None):
-        """显式跨场景评估时，使用目标场景的传感器默认配置和原动作契约。"""
+        """显式跨场景评估时使用该场景的传感器和目标区域。"""
         if scene_profile == self.scene_profile:
-            return self if hand_eye_file is None else replace(self, hand_eye_file=str(hand_eye_file))
+            if hand_eye_file is None:
+                return self
+            hsv_defaults = dict(vision_hsv_low=None, vision_hsv_high=None) if scene_profile == REALMAN_TRANSFER_PROFILE else {}
+            return replace(self, hand_eye_file=str(hand_eye_file), **hsv_defaults)
+        reset_xy = REALMAN_TRANSFER_PROFILE in (scene_profile, self.scene_profile)
         return replace(self, scene_profile=scene_profile, hand_eye_file=hand_eye_file and str(hand_eye_file),
-                       vision_period=None, vision_hsv_low=None, vision_hsv_high=None)
+                       vision_period=None, vision_hsv_low=None, vision_hsv_high=None,
+                       object_xy=None if reset_xy else self.object_xy)
 
 
 # Curriculum changes completion criteria only; startup and action authority are unchanged.
@@ -156,7 +192,7 @@ STAGES=dict(easy=dict(EASY),pinch=dict(EASY),approach=dict(EASY),lift=dict(),ful
 
 
 def environment_config(stage,*,observation_pose='table_down',control_mode='auto',cache_startup=False,
-                       jaw_control='absolute',jaw_delta_scale=.002,observation_source='state',
+                       jaw_control='absolute',jaw_delta_scale=.002,observation_source=None,
                        scene_profile='legacy',hand_eye_file=None):
     """应用课程门槛及显式控制选项，校验观察位与动作模式是否兼容。"""
     cfg=replace(CartesianTabletopConfig(observation_pose=observation_pose,control_mode=control_mode,

@@ -11,6 +11,7 @@ from pathlib import Path
 import numpy as np
 
 from realman_rl_simtoreal.deployment.calibration import DEFAULT_CALIBRATION, load_calibration
+from realman_rl_simtoreal.deployment.rgbd_recording import load_recording
 from realman_rl_simtoreal.deployment.vision import RealCubeLocalizer
 from realman_rl_simtoreal.deployment.z_reference import (
     BoardReference, board_corners, board_pose, fit_base_leveling, measure_board, upward_normal,
@@ -108,21 +109,6 @@ def measure_local_support(frame, mask, box, edge_m, expected_table_z):
                 cube_center_above_support_mm=1000 * float(center_z - support_z),
                 apparent_dz_dx=float(coeff[0]), apparent_dz_dy=float(coeff[1]),
                 inlier_residual_mm=1000 * float(np.sqrt(np.mean(error[selected] ** 2))))
-
-
-def load_recording(path, calibration, original):
-    with np.load(path, allow_pickle=False) as source:
-        rgb, depth, K, flanges = (source[k] for k in ("rgb", "depth_m", "K", "T_base_flange"))
-        stamps = source['host_received_s']
-        metadata = json.loads(source['metadata'].item()) if 'metadata' in source else {}
-        reported = source['controller_pose_m_rad'] if 'controller_pose_m_rad' in source else None
-    # 离线替换外参时仍按采样原配置验证哈希，报告同时记录实际回放的配置。
-    if metadata.get('calibration_sha256') not in (None, original.checksum()):
-        raise ValueError(f"{path} 与采样标定文件校验值不符，使用 --capture-calibration 指定原配置")
-    serial = metadata.get('camera', {}).get('serial')
-    if calibration.camera_serial is not None and serial not in (None, calibration.camera_serial):
-        raise ValueError(f"{path} 的采样相机序列号 {serial} 与回放标定不符")
-    return rgb, depth, K, flanges, stamps, metadata, reported
 
 
 def analyze_capture(path, calibration, *, capture_calibration=None, table_z_base_m=None):

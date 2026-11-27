@@ -65,7 +65,7 @@ def run(args):
                        hand_eye_file=str(hand_eye_file) if hand_eye_file else None)
             robot=Runtime(cfg);report,rotation=robot.prepare(cfg.object_xy,tick=tick)
             result=dict(startup=report,physics=robot.gripper.statistics(),task_actions=0,
-                        desired_tcp_m=list(cfg.observation_tcp),camera_optical_frame_calibrated=False)
+                        desired_tcp_m=list(cfg.observation_tcp),camera_optical_frame_calibrated=report['camera_calibrated'])
             path=args.json
         else:
             from ...rl.ppo_cartesian import load,evaluate

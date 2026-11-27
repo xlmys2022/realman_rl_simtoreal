@@ -41,6 +41,8 @@ FK 报告保留名义 SDK 的差异，并独立比较同一组关节角下的控
 
 固定俯视抓取入口 `scripts/demos/grasp_real_cube.py` 默认只读规划，动作验收须配置现场实测限值并逐段人工确认。[真机传统视觉抓取与 Z 轴复查](docs/realman_visual_grasp.md)
 
+PPO 迁移准备可通过 `--scene-profile realman_transfer` 选择实测装配、固定俯视观察位和同源 RGB-D 感知。仿真和真机影子运行共用 29 维观测和 4 维动作请求的编解码。[PPO 迁移准备、回放和短程训练](docs/realman_ppo_transfer.md)
+
 桌面抓取可显式选择 `--scene-profile realman_nominal`，使用 40 mm 基座垫高、256 mm TCP、独立连接件代理与 D435 内参。实测手眼矩阵可用 `realman_hand_eye` 单独试验。[安装依据、冻结权重评估与训练命令](docs/realman_installation.md)
 
 ## 腕部 RGB-D 视觉完整抓取

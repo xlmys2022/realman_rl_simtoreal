@@ -50,9 +50,10 @@ def move_to_observation(runtime, tick=None):
         stable=stable+1 if good else 0
         if stable>=4:break
     require(stable>=4,'Observation pose did not settle')
+    camera = runtime.camera_frame()
     return dict(mode='simulated_traditional_control',initial_q_deg=np.rad2deg(initial_q).tolist(),
                 target_q_deg=np.rad2deg(q).tolist(),actual_q_deg=np.rad2deg(runtime.data.qpos[runtime.kinematics.qadr]).tolist(),
                 simulated_seconds=float(runtime.data.time)-initial_time,cycles=cycles+index+1,
                 actual_tcp_m=runtime.tcp_pose()[0].tolist(),tool_forward=runtime.tcp_pose()[1][:,2].tolist(),
-                camera=runtime.camera_frame(),camera_calibrated=False,policy_actions=0,
+                camera=camera,camera_calibrated=camera['optical_frame_calibrated'],policy_actions=0,
                 startup_contract=startup_contract(cfg.observation_pose, cfg.scene_profile)),rotation

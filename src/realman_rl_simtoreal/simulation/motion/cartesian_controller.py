@@ -1,6 +1,7 @@
 """将桌面抓取环境给出的 TCP 增量转为受工作空间、关节速率和碰撞约束的关节参考值。"""
 import numpy as np
 import mujoco
+from .cartesian_request import limit_tcp_request
 from .kinematics import rotation_vector
 
 
@@ -29,8 +30,9 @@ class CartesianController:
         self.last_checks={}
 
     def execute(self,delta_position,width,observer=None,*,delta_rotation=None):
-        """执行一周期的世界系平移（m）、旋转向量（rad）和夹爪开口目标（m）。
+        """执行一周期的平移（m）、旋转向量（rad）和夹爪开口目标（m）。
 
+        迁移场景的平移输入在 Base 系，其他场景沿用世界系增量。
         observer 可接收物理步记录。返回请求、实际发出的参考、IK 接受比例和物理步数。
         遇到不合法输入时抛出 ValueError，无法通过预检时保留机械臂的上一参考。
         """
@@ -38,6 +40,10 @@ class CartesianController:
         self.last_checks = dict(attempts=0, ik_failures=0, joint_limits=0, collision_rejections=0)
         delta=np.asarray(delta_position,dtype=float)
         if delta.shape!=(3,) or not np.isfinite(delta).all():raise ValueError('A finite Cartesian delta is required')
+        speed_limit=c.tcp_request_speed_limit_m_s
+        if speed_limit is not None:
+            delta=limit_tcp_request(delta,speed_limit_m_s=speed_limit,control_period_s=c.control_period)
+            delta=robot.data.body('base_link').xmat.reshape(3,3)@delta
         turn=np.zeros(3) if delta_rotation is None else np.asarray(delta_rotation,dtype=float)
         if turn.shape!=(3,) or not np.isfinite(turn).all():raise ValueError('A finite Cartesian rotation delta is required')
         actual,actual_rotation=robot.tcp_pose()

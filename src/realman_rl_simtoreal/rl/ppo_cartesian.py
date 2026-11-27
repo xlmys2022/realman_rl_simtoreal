@@ -16,7 +16,7 @@ from ..envs.grasp.tabletop_cartesian_env import (ACTION_CONTRACT,OBSERVATION_FIE
 from ..tasks.grasp.tabletop_cartesian_reward import REWARD
 from ..simulation.runtime.observation_presets import startup_contract
 from ..simulation.physics.grasp_metrics import CONTACT_MEASUREMENT
-from ..envs.grasp.tabletop_cartesian_vision_env import VISION_CONTRACT
+from ..tasks.grasp.tabletop_policy_io import vision_contract
 from .cartesian_policy import CartesianPPOPolicy
 from .cartesian_reach_policy import CartesianGoalFeatures, ReachGraspPPOPolicy
 from .vision_policy import VisualCartesianGoalFeatures, VisualReachGraspPPOPolicy
@@ -106,7 +106,7 @@ def load(path,*,allow_legacy_startup=False,allow_legacy_observation=False):
     vision=not legacy and cfg.observation_source=='rgbd_hsv'
     if vision!=isinstance(model.policy,VisualReachGraspPPOPolicy):
         raise ValueError('Checkpoint policy and camera observation contract do not match; retrain an explicit transfer')
-    if vision and config.get('vision_contract')!=VISION_CONTRACT:
+    if vision and config.get('vision_contract')!=vision_contract(cfg):
         if not (allow_legacy_observation and config.get('vision_contract',{}).get('name') in
                 ('wrist_rgbd_hsv_cube_v1','wrist_rgbd_hsv_cube_v2','wrist_rgbd_hsv_cube_v3')):
             raise ValueError('Unsupported visual sensor contract; transfer old visual weights through --init-model')
