@@ -1,0 +1,35 @@
+{
+  "max_grasp_stage": "close",
+  "motion": {
+    "workspace_min_m": [0.3270, -0.0238, -0.02755],
+    "workspace_max_m": [0.3310, -0.01965, -0.00450],
+    "max_speed_pct": 1,
+    "max_linear_speed_m_s": 0.005,
+    "max_step_m": 0.022,
+    "completion_timeout_s": 35,
+    "max_path_error_m": 0.001
+  },
+  "gripper": {
+    "open_speed_raw": 100,
+    "close_speed_raw": 100,
+    "close_force_raw": 50,
+    "open_feedback_raw": [1001, 1001],
+    "held_feedback_raw": [241, 241],
+    "empty_closed_feedback_raw": -2,
+    "held_force_g": [716, 787],
+    "completion_timeout_s": 20
+  },
+  "grasp": {
+    "table_z_base_m": -0.04,
+    "grasp_tcp_z_base_m": -0.02605,
+    "jaw_open_gap_m": 0.071,
+    "pregrasp_clearance_m": 0.020,
+    "lift_height_m": 0.010,
+    "closing_axis_tcp": "y",
+    "max_tool_tilt_deg": 3.0,
+    "max_jaw_yaw_error_deg": 12.0,
+    "max_visual_z_error_m": 0.003,
+    "max_target_shift_m": 0.003,
+    "speed_pct": 1
+  }
+}

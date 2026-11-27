@@ -19,6 +19,7 @@ def main(argv=None):
     parser.add_argument("--gripper-samples", type=int, default=1, help="静止读回次数 1–50，间隔 50 ms")
     parser.add_argument("--kinematics", action="store_true", help="同时记录控制器 DH 和关节限位")
     parser.add_argument("--collision", action="store_true", help="查询动力学碰撞等级与末端线速度上限")
+    parser.add_argument("--tool-power", action="store_true", help="只读查询控制器的末端输出电压配置")
     args = parser.parse_args(argv)
     if not 1 <= args.gripper_samples <= 50 or (args.gripper_samples > 1 and not args.gripper):
         parser.error("--gripper-samples 需要 1–50，多次采样须同时指定 --gripper")
@@ -42,6 +43,8 @@ def main(argv=None):
                 data["collision_stage"] = arm.read_collision_stage()
                 data["max_line_speed_m_s"] = arm.read_max_line_speed()
                 healthy = healthy and data["collision_stage"] > 0
+            if args.tool_power:
+                data["tool_output_voltage_v"] = arm.read_tool_voltage()
             if args.gripper:
                 gripper = RealManGripper(arm)
                 states = [gripper.read_state()]
@@ -49,7 +52,7 @@ def main(argv=None):
                     sleep(0.05)
                     states.append(gripper.read_state())
                 data["gripper"] = asdict(states[-1])
-                healthy = healthy and all(row.online and not row.error for row in states)
+                healthy = healthy and all(row.online and row.enabled and not row.error for row in states)
                 if len(states) > 1:
                     after = arm.read_state()
                     drift = float(np.max(np.abs(after.joint_deg - state.joint_deg)))

@@ -12,6 +12,43 @@ from ..perception.rgbd import OrangeCubeDetector, UprightCubeDetector, VisualTra
 from .calibration import RealCalibration
 
 
+def cube_outline_yaw(frame, mask, top_z_m, edge_m):
+    """将 HSV 外轮廓投到实测顶面，用四边共同确定固定俯视的对夹方向。"""
+    import cv2
+
+    contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    if not contours:
+        return None
+    contour = max(contours, key=cv2.contourArea)
+    # 平直边上的小角点会被栅格噪声分成多段，拟合后同时核对轮廓面积与米制尺寸。
+    polygon = cv2.approxPolyDP(contour, .035 * cv2.arcLength(contour, True), True)
+    if len(polygon) != 4 or not cv2.isContourConvex(polygon):
+        return None
+    area = cv2.contourArea(contour)
+    if not .8 * area <= cv2.contourArea(polygon) <= 1.2 * area:
+        return None
+
+    pixels = polygon.astype(np.float64)
+    distortion = np.asarray(frame.distortion) if frame.distortion else None
+    rays = cv2.undistortPoints(pixels, frame.intrinsics, distortion).reshape(-1, 2)
+    optical = frame.camera_to_base
+    rays_base = np.c_[rays, np.ones(len(rays))] @ optical[:3, :3].T
+    if not np.isfinite(top_z_m) or top_z_m >= optical[2, 3] or np.any(rays_base[:, 2] >= -1e-6):
+        return None
+    distance = (top_z_m - optical[2, 3]) / rays_base[:, 2]
+    xy = optical[:2, 3] + distance[:, None] * rays_base[:, :2]
+    sides = np.roll(xy, -1, axis=0) - xy
+    lengths = np.linalg.norm(sides, axis=1)
+    if not np.isfinite(lengths).all() or np.any(lengths < .70 * edge_m) or np.any(lengths > 1.30 * edge_m):
+        return None
+    # 四条边相隔约 90°，乘四后做圆均值可避开角度折返。边方向分散时拒绝这一帧。
+    angles = np.arctan2(sides[:, 1], sides[:, 0])
+    direction = np.mean(np.exp(4j * angles))
+    if abs(direction) < .92:
+        return None
+    return float(np.angle(direction) / 4)
+
+
 @dataclass(frozen=True)
 class CubeObservation:
     sample: RgbdSample
@@ -41,7 +78,7 @@ class RealCubeLocalizer:
     """静止腕部或固定外置相机的只读定位。状态失效时清空跟踪。"""
 
     def __init__(self, calibration: RealCalibration, *, max_pose_window_s=0.25, timeout_s=0.25,
-                 estimator="upright"):
+                 estimator="upright", outline_yaw=False):
         if not isfinite(max_pose_window_s) or max_pose_window_s <= 0:
             raise ValueError("机械臂与相机的最大配对时间窗必须为有限正数")
         if not isfinite(timeout_s) or timeout_s <= 0:
@@ -53,6 +90,7 @@ class RealCubeLocalizer:
         detector = UprightCubeDetector if estimator == "upright" else OrangeCubeDetector
         self.detector = detector(edge_m=calibration.cube_edge_m, hsv_ranges=calibration.hsv_ranges)
         self.tracker = VisualTracker(self.detector, timeout=timeout_s)
+        self.outline_yaw = outline_yaw
 
     def _capture_wrist(self, camera, arm):
         if arm is None:
@@ -104,15 +142,19 @@ class RealCubeLocalizer:
             if now - oldest > self.tracker.timeout:
                 self.tracker.reset()
                 tracking = None
+            yaw = found.yaw_rad if tracking is not None else None
+            if tracking is not None and self.outline_yaw:
+                edge = self.calibration.cube_edge_m
+                yaw = cube_outline_yaw(frame, self.detector.mask, found.position_m[2] + edge / 2, edge)
             return CubeObservation(sample, extrinsics, self.detector.mask, tracking, arm_times, flange,
                                    flange @ self.calibration.T_flange_tcp if flange is not None else None,
                                    arm_state.controller_pose_m_rad if arm_state is not None else None,
-                                   found.yaw_rad if tracking is not None else None)
+                                   yaw)
         except (HardwareError, ValueError):
             self.tracker.reset()
             raise
 
-    def estimate_stationary(self, camera, arm, *, max_spread_m, frames=8, min_detections=5):
+    def estimate_stationary(self, camera, arm, *, max_spread_m, frames=8, min_detections=5, require_yaw=True):
         """重新采集静止腕部样本。可见性或一致性不足时不使用上一次跟踪值。"""
         if (type(frames) is not int or type(min_detections) is not int or not 3 <= min_detections <= frames <= 100
                 or not isfinite(max_spread_m) or max_spread_m <= 0):
@@ -125,13 +167,15 @@ class RealCubeLocalizer:
                                  or not np.allclose(row.T_base_tcp[:3, :3], anchor[:3, :3], atol=0.003, rtol=0)
                                  for row in observations):
             raise HardwareError("批量定位期间 TCP 不静止")
-        accepted = [row for row in observations if row.tracking is not None and row.yaw_rad is not None]
+        accepted = [row for row in observations
+                    if row.tracking is not None and (row.yaw_rad is not None or not require_yaw)]
         if len(accepted) < min_detections:
-            raise HardwareError(f"静止批次仅有 {len(accepted)}/{frames} 帧提供中心和边方向")
+            fields = "中心和边方向" if require_yaw else "中心"
+            raise HardwareError(f"静止批次仅有 {len(accepted)}/{frames} 帧提供{fields}")
         positions = np.asarray([row.tracking["position_m"] for row in accepted])
         center = np.median(positions, axis=0)
         spread = float(np.max(np.linalg.norm(positions - center, axis=1)))
         if not np.isfinite(spread) or spread > max_spread_m:
             raise HardwareError(f"静止方块定位离散程度超限 · {spread * 1000:.2f} mm")
-        return StationaryCube(center, tuple(row.yaw_rad for row in accepted),
+        return StationaryCube(center, tuple(row.yaw_rad for row in accepted if row.yaw_rad is not None),
                               observations[-1].T_base_tcp, len(accepted), frames, spread)

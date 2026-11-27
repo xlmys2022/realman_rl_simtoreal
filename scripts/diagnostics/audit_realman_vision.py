@@ -30,7 +30,8 @@ def capture(args, calibration):
         robot = dict(identity=arm.identity, kinematics=arm.read_kinematic_parameters(),
                      gripper=asdict(RealManGripper(arm).read_state()), active_frames=before)
         with RealSenseCamera(serial=calibration.camera_serial, timeout_ms=4000) as camera:
-            camera.capture()
+            for _ in range(args.warmup_frames):
+                camera.capture()
             localizer = RealCubeLocalizer(calibration, estimator="legacy")
             observations = [localizer.capture(camera, arm) for _ in range(args.frames)]
             robot['camera'] = camera.info
@@ -401,6 +402,7 @@ def main():
     live = commands.add_parser("capture", help="只读采样静止姿态")
     live.add_argument("--ip", required=True)
     live.add_argument("--frames", type=int, default=8)
+    live.add_argument("--warmup-frames", type=int, default=1, help="丢弃指定数量的开流配对帧（1–300）")
     audit = commands.add_parser("compare", help="离线比较已有 RGB-D 采样")
     audit.add_argument("samples", type=Path, nargs="+")
     audit.add_argument("--capture-calibration", type=Path,
@@ -425,8 +427,10 @@ def main():
         command.add_argument("--output", type=Path, required=True)
         command.add_argument("--calibration", type=Path, default=DEFAULT_CALIBRATION, required=command in (board, hand_eye))
     args = parser.parse_args()
-    if args.output.exists() or (args.command == "capture" and not 2 <= args.frames <= 100):
-        parser.error("需要新的输出路径，采样帧数为 2–100")
+    if args.output.exists():
+        parser.error("需要新的输出路径")
+    if args.command == "capture" and (not 2 <= args.frames <= 100 or not 1 <= args.warmup_frames <= 300):
+        parser.error("采样帧数须为 2–100，开流丢弃帧数须为 1–300")
     if args.command == "compare" and args.table_z_base_m is not None and not np.isfinite(args.table_z_base_m):
         parser.error("--table-z-base-m 必须为有限数值")
     if args.command == "reference" and args.write_leveling_calibration:

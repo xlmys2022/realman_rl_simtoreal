@@ -7,6 +7,8 @@ from pathlib import Path
 
 from ..hardware.safety import GripperLimits, GripperOpeningLimits, MotionLimits
 
+GRASP_STAGES = ("open", "align", "pregrasp", "descend", "close", "lift")
+
 
 @dataclass(frozen=True)
 class GraspGeometry:
@@ -44,7 +46,7 @@ class GraspGeometry:
 @dataclass(frozen=True)
 class GraspSite:
     motion: MotionLimits
-    gripper: GripperLimits
+    gripper: GripperLimits | GripperOpeningLimits
     geometry: GraspGeometry
 
 
@@ -88,18 +90,28 @@ def gripper_opening_limits(data):
                     fields=("open_speed_raw", "open_feedback_raw", "completion_timeout_s"))
 
 
-def grasp_site(data, calibration):
+def grasp_site(data, calibration, *, until="lift"):
     if calibration.camera_parent != "tcp" or not calibration.camera_serial:
         raise ValueError("固定俯视流程需要含相机序列号的 Grip_plus TCP 手眼标定")
+    if until not in GRASP_STAGES:
+        raise ValueError("无效抓取阶段")
+    allowed_stage = data.get("max_grasp_stage", "lift")
+    if allowed_stage not in GRASP_STAGES:
+        raise ValueError("现场 max_grasp_stage 无效")
+    if GRASP_STAGES.index(until) > GRASP_STAGES.index(allowed_stage):
+        raise ValueError(f"当前现场配置只批准执行到 {allowed_stage}")
     motion = motion_limits(data, calibration)
-    gripper = gripper_limits(data)
+    gripper = gripper_limits(data) if until in ("close", "lift") else gripper_opening_limits(data)
     geometry = _section(data, "grasp", GraspGeometry)
     if (geometry.jaw_open_gap_m <= calibration.cube_edge_m
             or max(geometry.max_visual_z_error_m, geometry.max_target_shift_m) > calibration.cube_edge_m / 2):
         raise ValueError("夹指净开口须大于方块边长，视觉误差上限须在半边长内")
     if geometry.lift_height_m - geometry.max_target_shift_m <= 0.001:
         raise ValueError("最小可判定抬升高度须超过 1 mm 的 TCP 到位容差")
-    if not (geometry.table_z_base_m <= motion.workspace_min_m[2] <= geometry.grasp_tcp_z_base_m
-            <= motion.workspace_max_m[2] and geometry.speed_pct <= motion.max_speed_pct):
+    # 预抓取试验的下界按该段实际终点设定。夹持端点仅在验收范围到达下降段时检查。
+    lowest = (geometry.grasp_tcp_z_base_m + geometry.pregrasp_clearance_m
+              if until in ("open", "align", "pregrasp") else geometry.grasp_tcp_z_base_m)
+    if not (geometry.table_z_base_m <= motion.workspace_min_m[2] <= lowest <= motion.workspace_max_m[2]
+            and geometry.speed_pct <= motion.max_speed_pct):
         raise ValueError("夹持高度、现场工作空间 Z 下界或抓取限速不一致")
     return GraspSite(motion, gripper, geometry)

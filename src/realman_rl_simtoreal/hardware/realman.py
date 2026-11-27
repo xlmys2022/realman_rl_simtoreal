@@ -199,6 +199,15 @@ class RealManArm:
                 "tool": self._read("rm_get_current_tool_frame"),
             }
 
+    def read_tool_voltage(self):
+        """读取控制器配置的末端输出电压（V），供夹爪离线排查。"""
+        with self._lock:
+            code = self._read("rm_get_tool_voltage")
+        voltage_by_code = {0: 0, 1: 5, 2: 12, 3: 24}
+        if type(code) is not int or code not in voltage_by_code:
+            raise HardwareError(f"控制器末端供电枚举无效 · {code}")
+        return voltage_by_code[code]
+
     def read_kinematic_parameters(self):
         """只读查询 DH、方向定义所用的关节限位和控制器速度配置。"""
         with self._lock:
@@ -432,11 +441,15 @@ class RealManGripper:
             raise MotionSafetyError("夹爪动作需要现场实测的 GripperLimits")
         return self._limits
 
-    def _require_healthy(self):
-        state = self.read_state()
+    @staticmethod
+    def verify_ready(state):
+        """核对只读夹爪状态是否允许进入后续预检。"""
         if not state.online or not state.enabled or state.error or state.mode not in range(1, 7):
             raise MotionSafetyError(f"夹爪状态异常 · {state}")
         return state
+
+    def _require_healthy(self):
+        return self.verify_ready(self.read_state())
 
     def _at_open(self, state):
         lo, hi = self._limits.open_feedback_raw

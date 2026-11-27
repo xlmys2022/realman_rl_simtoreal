@@ -98,6 +98,17 @@ python -I scripts/diagnostics/audit_realsense_board_depth.py --serial 1521220723
 - 操作员在 C 位通过交互终端确认一次向 Base +Z 的空爪直线。设定速度 1%，现场线速度上限 5 mm/s，控制器碰撞防护为 4。停稳回读 Z 上移 4.945 mm，X/Y 分别变化 −0.029 和 −0.002 mm，TCP 距目标 0.021 mm，腕姿变化 0.004°，控制器无报错。该配置仅覆盖 C 位附近的试验空间。[验收记录](../outputs/validation/realman_installation/onsite_C_lift_verified.json) · [试验配置](../assets/calibration/realman/grasp_site.onsite_C_lift.json)
 - 操作员实测张满夹指内侧净距 71 mm，示教器开口度 1001；SDK 在 C 位连续十次返回 1001、模式 1、力反馈 0 g。[张满采样](../outputs/validation/realman_installation/onsite_open_C_20261126.json)
 - 在同一高位用示教器空夹闭合，示教器开口度为 −2；SDK 十次均返回 −2、模式 6、力反馈 702 g。空夹到端也会出现力控停止和显著力反馈，软件必须同时核对实物开口范围与力反馈。现场配置按原始有符号值记录空夹读数。[空夹采样](../outputs/validation/realman_installation/onsite_empty_closed_20261126.json)
+- 2026-11-27 开始抓取验收时，控制器为 `Base / Grip_plus`、碰撞防护 4 级、无报警。初次夹爪回包为离线。操作员恢复后，SDK 读到末端供电配置 24 V、夹爪在线且已使能、张满读回 1001。[初始只读快照](../outputs/validation/realman_installation/onsite_grasp_entry_20261127.json) · [恢复后回读](../outputs/validation/realman_installation/onsite_grasp_gripper_recovered_20261127.json)
+- 操作员观察到第五关节有轻微晃动，现场初判可继续受控验收。记录为潜在机械误差来源，以控制器报警、静止采样、姿态及路径保护的实际读回判定本次运行条件。
+- 首个观察位的 TCP 俯视倾角为 6.38°，超出 5° 的固定俯视上限。原始 RGB-D 回放显示，D435 开流时木板暂时落入绿色 HSV 范围，初批误识别的 Z 偏差为 −17.24 mm。颜色稳定后的方块相对支撑面高度为 9.68 mm，绝对中心 Z 为 −27.75 mm，局部支撑面 Z 为 −37.44 mm。抓取和 `survey` 在开流后先丢弃约四秒的配对帧，再计算固定俯视定位。原有标定和视觉联锁仍用于判定实测结果。[首次观察位回包](../outputs/validation/realman_installation/onsite_grasp_observation_survey_20261127.json) · [原始帧回放](../outputs/validation/realman_installation/onsite_grasp_observation_report_20261127.json)
+- 张满时，从 8 帧实机深度将两个可见夹指区域变换到 `Grip_plus`。两点间投影的中位差为 X −1.51 mm、Y +76.85 mm，与 TCP Y 轴最大夹角 1.49°。据此将夹紧轴填为 `y`。夹持高度与最低夹指净空另用实物量取。[夹指方向测量](../outputs/validation/realman_installation/onsite_grasp_jaw_axis_20261127.json)
+- 调整照明与姿态后的固定俯视倾角为 0.85°。稳定的 8 帧回放中，视觉中心 Z 为 −27.95 mm，中心最大离散为 1.06 mm。深度顶面子集拟合的偏角会跳到 44.25°。抓取使用 RGB 四边轮廓向实测顶面反投影计算偏角，相同回放的最大偏角为 8.88°。多边形尺寸或四边方向一致性不足时，该帧不提供抓取边方向。中心和绝对 Z 仍用原来的深度点云估计。[俯视轮廓回放](../outputs/validation/realman_installation/onsite_grasp_outline_replay_20261127.json)
+- 同姿态用更新后的入口再次只读采集，8/8 帧有效，中心 Z 为 −27.94 mm，当前绝对误差 +2.06 mm，中心最大离散 0.91 mm，TCP Y 对夹偏角最大 8.87°。当前点位先完成实际夹指高度与运动净空验收，再填写现场 Z 阈值和路径参数。[真机俯视轮廓复测](../outputs/validation/realman_installation/onsite_grasp_outline_live_20261127.json)
+- 现场高位量得张爪的最低点离桌 80 mm，两侧有效夹持面覆盖距桌 80–115 mm。按等姿垂直移动推算，预抓取最低点约 28 mm，候选夹持最低点约 8 mm、有效夹持面约 8–43 mm。操作员批准了预抓取路径及夹爪试验指令值。[实测及批准限值](../outputs/validation/realman_installation/onsite_grasp_geometry_20261127.json)
+- 初次确认 `PREGRASP` 后因二次采样仅 3/8 帧合格而中止，拦截发生在发出下降指令前。已对准位置的 20 帧记录包含完整立方体但少数 RGB 轮廓被像素噪声拆成五边。调整多边形简化，并用轮廓面积、米制边长和方向一致性校核后，同组回放 20/20 帧有效，边角偏差最大 10.92°。重连后夹爪由操作员恢复。第二次按现场确认到达预抓取，停稳 TCP 为 `[329.032, -21.709, -6.020]` mm，距计划还差 0.036 mm，夹爪 1001，碰撞防护 4 级。[首次视觉联锁](../outputs/validation/realman_installation/onsite_pregrasp_vision_interlock_20261127.log) · [重连后的执行日志](../outputs/validation/realman_installation/onsite_pregrasp_resume_execution_20261127.log) · [预抓取停稳回读](../outputs/validation/realman_installation/onsite_pregrasp_settled_20261127.json)
+- 操作员在预抓取侧视量得夹指最低点离桌约 30 mm，批准保持腕姿与 XY 下降约 20 mm 至 TCP Z −26.05 mm。下降完成，停稳 SDK Z −26.05 mm。操作员确认夹指遮挡相机且方块未移动。低位独立夹合预检的视觉偏离约 3.8 mm，超过 3 mm 联锁。恢复到预抓取后，在同一进程内验证最新方块位置、下降到位，由操作员再次确认夹合。[下降日志](../outputs/validation/realman_installation/onsite_descend_execution_20261127.log) · [返回预抓取日志](../outputs/validation/realman_installation/onsite_return_to_pregrasp_20261127.log)
+- SDK 闭合速度量 100、力控阈值 50 的承托试验中，操作员确认夹住方块。16 次稳定读回为开口 264、力 140 g、模式 6。程序按试验前的历史反馈范围拦截了后续动作。独立抬升预检在遮挡后仍得到约 8.2 mm 的视觉 XY 偏离，触发对准联锁。[夹合日志](../outputs/validation/realman_installation/onsite_close_execution_20261127.log) · [夹持稳定回包](../outputs/validation/realman_installation/onsite_grasp_held_20261127.json)
+- 方块由桌面承托时执行 SDK 松开。实际张爪后 10 次均为开口 999、模式 1（张开到最大且空闲）、力 0 g。试验文件仅接受 1001，因此出现等待超时。后续配置按两种实测最大开口反馈接受 `[999, 1001]`，仍须同时满足模式 1、设备在线及使能。随后日志记录了空爪退回预抓取。操作员报告现场任务完成，当前日志的持物抬升结果待核验。[张爪日志](../outputs/validation/realman_installation/onsite_supported_release_20261127.log) · [张开到位回包](../outputs/validation/realman_installation/onsite_release_feedback_20261127.json) · [回退日志](../outputs/validation/realman_installation/onsite_return_for_full_grasp_20261127.log)
 
 ## 现场配置
 
@@ -123,9 +134,12 @@ SITE=assets/calibration/realman/grasp_site.local.json
 1. 先核对设备、模式、碰撞防护、工具配置和相机只读定位。
 
    ```bash
-   python -I scripts/diagnostics/check_realman_arm.py --ip "$ARM_IP" --gripper --kinematics --collision
+   python -I scripts/diagnostics/check_realman_arm.py --ip "$ARM_IP" --gripper --kinematics --collision --tool-power
    python -I scripts/demos/locate_real_cube.py --ip "$ARM_IP" --calibration "$CALIB"
+   python -I scripts/demos/grasp_real_cube.py survey --ip "$ARM_IP" --site "$SITE" --calibration "$CALIB"
    ```
+
+   `survey` 只需要局部现场文件中的实测桌面高度。报告包含实际 TCP、工具倾角、视觉 Z 误差、目标相对 TCP 的 XY 以及两种工具轴对应的对夹偏角。确认实际夹紧轴后再使用该轴的偏角。主动命令的预检对离线、未使能及异常夹爪提前报错。
 
    使用已保存的 A/B/C 复查水平桌面参照下的误差。
 
@@ -153,18 +167,18 @@ SITE=assets/calibration/realman/grasp_site.local.json
    python -I scripts/demos/grasp_real_cube.py grasp --ip "$ARM_IP" --site "$SITE" --calibration "$CALIB"
    ```
 
-4. 实测和只读规划均验收后，在交互终端分段确认。首次可在 `pregrasp` 停住核对净空，再从验收过的观察位重新启动完整流程。每段有独立确认，确认后以实时关节起点复查本段路径。接近期间还会重新取图，若方块移动、遮挡、工具姿态变化或 Z 超限，立即中止后续动作。
+4. 实测和只读规划均验收后，在交互终端分段确认。首次可在 `pregrasp` 停住核对净空。用 `--from pregrasp` 从这一停稳位置续行时，重新验证工具高度、开爪和方块对准，固定实际 TCP 的 XY 与腕姿。较低位有遮挡时，可从可见的预抓取位置在同一进程依次验收下降和夹合。每段仍有独立确认，确认后以实时关节起点复查本段路径。下降前重新取图，方块移动、遮挡、工具姿态变化或 Z 超限时中止。现场配置可用 `max_grasp_stage` 限定只批准到指定阶段。
 
    ```bash
    python -I scripts/demos/grasp_real_cube.py grasp --ip "$ARM_IP" --site "$SITE" --calibration "$CALIB" \
      --execute --until pregrasp
    python -I scripts/demos/grasp_real_cube.py grasp --ip "$ARM_IP" --site "$SITE" --calibration "$CALIB" \
-     --execute --until lift
+     --from pregrasp --execute --until lift
    ```
 
 机械臂接受的工作系为 `Base`，工具系为核对过的 `Arm_Tip` 或 `Grip_plus`。实际动作前后对照实时 FK。运行中监测 TCP 工作空间、路径偏离、相邻回包速度、关节限位、姿态、错误码和碰撞防护。抬升中持续核对夹爪夹持状态。SDK 回执异常也视为命令可能已发出，机械臂会尝试发送轨迹停止并锁定本次会话。物理停止和夹爪异常由现场人员按设备流程处置，单独核查夹爪停稳和工件状态。[轨迹停止接口](https://develop.realman-robotics.com/robot/apipython/classes/motionControl/)
 
-`lift_verified` 表示机械臂、夹爪和视觉抬升位移均符合验收条件。`lift_needs_visual_confirmation` 对应遮挡或视觉位移不符，进程返回 2，由操作员现场复核。流程结束时夹爪保持当前状态，收工和释放由操作员单独确认。出错、取消或分段停止后，使用示教器检查机械臂和工件并按现场流程回到已验收的起始位置。
+`lift_verified` 表示机械臂、夹爪和视觉抬升位移均符合验收条件。视觉采样完成后再次复核夹持反馈。`lift_needs_visual_confirmation` 对应遮挡或视觉位移不符，进程返回 2，由操作员现场复核。TCP 偏离或夹持丢失按验收失败处理。流程结束时夹爪保持当前状态，收工和释放由操作员单独确认。出错、取消或分段停止后，使用示教器检查机械臂和工件并按现场流程回到已验收的起始位置。
 
 ## 离线回归
 
@@ -175,4 +189,4 @@ MUJOCO_GL=egl python -I -m unittest discover -s tests
 
 测试覆盖缺少确认、碰撞保护关闭、确认后位置变化、法兰/TCP 指令转换、越界、路径偏离、异常停止、夹爪空夹、SDK 超时、只读入口、视觉 Z 拒绝、目标移动、逐段执行以及抬升后视觉丢失。
 
-现场阶段全量回归通过 556 项。加入 Z 偏差分析后，51 项真机与视觉专项测试通过，新增用例覆盖深度飞点剔除、法向方向、手眼闭环和缩放像素中心约定。MuJoCo 渲染的 RGB-D 通过抓取规划和各段 IK 预检，A/B/C 真实回放均在 Z 校核处中止。真实机械臂的基础动作记录在本文件的现场结果小节。[上一轮软件交付的回归日志](../outputs/validation/realman_installation/full_regression_visual_grasp.log)
+水平校正后全量回归通过 560 项。本次现场专项 59 项通过，覆盖只读观察位、RGB 轮廓求角、过大掩膜拒绝、夹爪未就绪、张满开口 999、阶段上限、停稳续行与抬升后验证中丢失夹持。真实机械臂的动作记录在本文件的现场结果小节。[水平校正回归日志](../outputs/validation/realman_installation/full_regression_base_leveling_20261127.log)

@@ -40,6 +40,7 @@ class ArmTests(unittest.TestCase):
         self.client.rm_get_joint_max_pos.return_value = (0, REALMAN_HARDWARE.joint_max_deg)
         self.client.rm_get_arm_max_line_speed.return_value = (0, 0.5)
         self.client.rm_get_collision_stage.return_value = (0, 4)
+        self.client.rm_get_tool_voltage.return_value = (0, 3)
         self.client.rm_get_arm_current_trajectory.return_value = {"return_code": 0, "trajectory_type": 0}
         self.client.rm_movel.return_value = 0
         self.client.rm_set_arm_stop.return_value = 0
@@ -77,6 +78,7 @@ class ArmTests(unittest.TestCase):
         with self.arm() as arm:
             self.assertEqual(arm.identity["model"], "RML63II-6FB")
             state = arm.read_state()
+            self.assertEqual(arm.read_tool_voltage(), 24)
             np.testing.assert_allclose(state.T_base_flange[:3, 3], [-0.017, 0, 1.0892], atol=1e-9)
             np.testing.assert_allclose(state.T_base_flange[:3, :3], np.eye(3), atol=1e-9)
             self.assertLessEqual(state.request_start_s, state.timestamp_s)
@@ -93,6 +95,7 @@ class ArmTests(unittest.TestCase):
         self.client.rm_movel.assert_not_called()
         self.client.rm_set_arm_stop.assert_not_called()
         self.client.rm_set_gripper_release.assert_not_called()
+        self.client.rm_set_tool_voltage.assert_not_called()
         self.confirm.assert_not_called()
         self.client.rm_delete_robot_arm.assert_called_once()
 
@@ -269,16 +272,16 @@ class ArmTests(unittest.TestCase):
 
     def test_opening_only_requires_confirmation_and_does_not_allow_gripping(self):
         closed = self.gripper_reply(6, -2, 702)
-        opened = self.gripper_reply(1, 1001)
+        opened = self.gripper_reply(1, 999)
         self.client.rm_get_gripper_state.side_effect = (closed, closed, opened, opened)
-        limits = GripperOpeningLimits(30, (1001, 1001), .5)
+        limits = GripperOpeningLimits(30, (999, 1001), .5)
         with self.arm(motion=True) as arm:
             jaw = RealManGripper(arm, limits=limits)
             with self.assertRaisesRegex(MotionSafetyError, "GripperLimits"):
                 jaw.close_on_object()
             with self.assertRaisesRegex(MotionSafetyError, "GripperLimits"):
                 jaw.require_holding()
-            self.assertEqual(jaw.open_max().opening_raw, 1001)
+            self.assertEqual(jaw.open_max().opening_raw, 999)
         self.confirm.assert_called_once()
         self.assertEqual(self.confirm.call_args.args[0], "open")
         self.client.rm_set_gripper_release.assert_called_once_with(30, False, 1)
