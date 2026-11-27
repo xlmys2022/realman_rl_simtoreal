@@ -14,7 +14,7 @@ from ..paths import ROBOT_MODEL
 from ..utils.geometry import euler_matrix, modified_dh_transform, transform
 from . import HardwareError, HardwareTimeout
 from .realman_config import REALMAN_HARDWARE, REALMAN_TABLETOP
-from .safety import GripperLimits, MotionLimits, MotionSafetyError
+from .safety import GripperLimits, GripperOpeningLimits, MotionLimits, MotionSafetyError
 
 
 @dataclass(frozen=True)
@@ -425,7 +425,9 @@ class RealManGripper:
         except (KeyError, ValueError, TypeError) as exc:
             raise HardwareError("夹爪回包缺少有效状态字段") from exc
 
-    def _require_calibrated(self):
+    def _require_calibrated(self, *, opening_only=False):
+        if opening_only and isinstance(self._limits, GripperOpeningLimits):
+            return self._limits
         if not isinstance(self._limits, GripperLimits):
             raise MotionSafetyError("夹爪动作需要现场实测的 GripperLimits")
         return self._limits
@@ -447,7 +449,7 @@ class RealManGripper:
 
     def require_open(self):
         """复核张满的原始位置值和厂商空闲状态。"""
-        self._require_calibrated()
+        self._require_calibrated(opening_only=True)
         state = self._require_healthy()
         if not self._at_open(state):
             raise MotionSafetyError(f"夹爪未张满至已验收的状态 · {state}")
@@ -464,7 +466,7 @@ class RealManGripper:
     def open_max(self, *, preflight=None):
         with self._arm._lock:
             self._arm._require_motion_enabled()
-            limits = self._require_calibrated()
+            limits = self._require_calibrated(opening_only=True)
             return self._act("open", "rm_set_gripper_release", (limits.open_speed_raw,), self._at_open,
                              preflight)
 

@@ -11,7 +11,7 @@ import numpy as np
 from realman_rl_simtoreal.hardware import HardwareError, HardwareTimeout
 from realman_rl_simtoreal.hardware.realman import RealManArm, RealManGripper
 from realman_rl_simtoreal.hardware.realman_config import REALMAN_HARDWARE
-from realman_rl_simtoreal.hardware.safety import GripperLimits, MotionLimits, MotionSafetyError
+from realman_rl_simtoreal.hardware.safety import GripperLimits, GripperOpeningLimits, MotionLimits, MotionSafetyError
 
 
 class RobotInfo(Structure):
@@ -65,7 +65,7 @@ class ArmTests(unittest.TestCase):
         tcp[2, 3] = 0.1
         self.limits = MotionLimits((-0.10, -0.10, 1.10), (0.10, 0.10, 1.30),
                                    tcp, 10, 0.025, 0.02, 0.5)
-        self.gripper_limits = GripperLimits(30, 40, 120, (998, 1002), (239, 243), 1,
+        self.gripper_limits = GripperLimits(30, 40, 120, (998, 1002), (239, 243), -2,
                                             (70, 200), .5)
         self.target = np.array([-0.012, 0., 1.1892])
 
@@ -267,12 +267,30 @@ class ArmTests(unittest.TestCase):
         self.client.rm_set_gripper_pick.assert_called_once_with(40, 120, False, 1)
         self.client.rm_set_gripper_position.assert_not_called()
 
+    def test_opening_only_requires_confirmation_and_does_not_allow_gripping(self):
+        closed = self.gripper_reply(6, -2, 702)
+        opened = self.gripper_reply(1, 1001)
+        self.client.rm_get_gripper_state.side_effect = (closed, closed, opened, opened)
+        limits = GripperOpeningLimits(30, (1001, 1001), .5)
+        with self.arm(motion=True) as arm:
+            jaw = RealManGripper(arm, limits=limits)
+            with self.assertRaisesRegex(MotionSafetyError, "GripperLimits"):
+                jaw.close_on_object()
+            with self.assertRaisesRegex(MotionSafetyError, "GripperLimits"):
+                jaw.require_holding()
+            self.assertEqual(jaw.open_max().opening_raw, 1001)
+        self.confirm.assert_called_once()
+        self.assertEqual(self.confirm.call_args.args[0], "open")
+        self.client.rm_set_gripper_release.assert_called_once_with(30, False, 1)
+        self.client.rm_set_gripper_pick.assert_not_called()
+
     def test_empty_grip_or_lost_ack_latches_the_session_without_auto_open(self):
         opened = self.gripper_reply(1, 1001)
         empty = self.gripper_reply(2, 1)
-        for answer in (0, -2):
-            with self.subTest(sdk_answer=answer), self.arm(motion=True) as arm:
-                self.client.rm_get_gripper_state.side_effect = (opened, opened, empty)
+        empty_under_force = self.gripper_reply(6, -2, 111)
+        for answer, state in ((0, empty), (0, empty_under_force), (-2, empty)):
+            with self.subTest(sdk_answer=answer, mode=state[1]["mode"]), self.arm(motion=True) as arm:
+                self.client.rm_get_gripper_state.side_effect = (opened, opened, state)
                 self.client.rm_set_gripper_pick.return_value = answer
                 with self.assertRaisesRegex(MotionSafetyError, "本会话已锁定"):
                     RealManGripper(arm, limits=self.gripper_limits).close_on_object()

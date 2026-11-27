@@ -1,0 +1,19 @@
+{
+  "motion": {
+    "workspace_min_m": [
+      0.25423443242440846,
+      0.18207876285235142,
+      0.1732309004895841
+    ],
+    "workspace_max_m": [
+      0.25823443242440847,
+      0.18607876285235142,
+      0.1822309004895841
+    ],
+    "max_speed_pct": 1,
+    "max_linear_speed_m_s": 0.005,
+    "max_step_m": 0.005,
+    "completion_timeout_s": 8,
+    "max_path_error_m": 0.001
+  }
+}

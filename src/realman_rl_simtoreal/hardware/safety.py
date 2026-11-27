@@ -67,6 +67,27 @@ class MotionLimits:
 
 
 @dataclass(frozen=True)
+class GripperOpeningLimits:
+    """只张开验收需要的指令和读回范围，单位与 SDK 相同。"""
+
+    open_speed_raw: int
+    open_feedback_raw: tuple[int, int]
+    completion_timeout_s: float
+
+    def __post_init__(self):
+        if type(self.open_speed_raw) is not int or not 1 <= self.open_speed_raw <= 1000:
+            raise ValueError("open_speed_raw 必须为 SDK 支持的 1–1000 整数")
+        value = self.open_feedback_raw
+        if (not isinstance(value, (list, tuple)) or len(value) != 2
+                or any(type(v) is not int for v in value) or not 0 <= value[0] <= value[1]):
+            raise ValueError("open_feedback_raw 需要两个现场实测的有序整数")
+        object.__setattr__(self, "open_feedback_raw", tuple(value))
+        timeout = self.completion_timeout_s
+        if type(timeout) not in (int, float) or not np.isfinite(timeout) or timeout <= 0:
+            raise ValueError("夹爪动作时限必须为有限正数（s）")
+
+
+@dataclass(frozen=True)
 class GripperLimits:
     """限定本机试验过的指令及读回范围。夹爪开口反馈与指令采用不同字段。"""
 
@@ -80,21 +101,20 @@ class GripperLimits:
     completion_timeout_s: float
 
     def __post_init__(self):
-        for name, low, high in (("open_speed_raw", 1, 1000), ("close_speed_raw", 1, 1000),
-                                ("close_force_raw", 50, 1000)):
+        opening = GripperOpeningLimits(self.open_speed_raw, self.open_feedback_raw, self.completion_timeout_s)
+        object.__setattr__(self, "open_feedback_raw", opening.open_feedback_raw)
+        for name, low, high in (("close_speed_raw", 1, 1000), ("close_force_raw", 50, 1000)):
             value = getattr(self, name)
             if type(value) is not int or not low <= value <= high:
                 raise ValueError(f"{name} 必须为 SDK 支持的 {low}–{high} 整数")
-        for name, minimum in (("open_feedback_raw", 0), ("held_feedback_raw", 0), ("held_force_g", 1)):
+        for name, minimum in (("held_feedback_raw", 0), ("held_force_g", 1)):
             value = getattr(self, name)
             if (not isinstance(value, (list, tuple)) or len(value) != 2
                     or any(type(v) is not int for v in value) or not minimum <= value[0] <= value[1]):
                 raise ValueError(f"{name} 需要两个现场实测的有序整数")
             object.__setattr__(self, name, tuple(value))
         empty = self.empty_closed_feedback_raw
-        if (type(empty) is not int or not 0 <= empty < self.held_feedback_raw[0]
+        # 空夹实测可越过名义零位。保留有符号读回，只核对三种状态的开口顺序。
+        if (type(empty) is not int or empty >= self.held_feedback_raw[0]
                 or self.held_feedback_raw[1] >= self.open_feedback_raw[0]):
             raise ValueError("空夹闭合、实物夹持、张满反馈必须能相互区分")
-        timeout = self.completion_timeout_s
-        if type(timeout) not in (int, float) or not np.isfinite(timeout) or timeout <= 0:
-            raise ValueError("夹爪动作时限必须为有限正数（s）")

@@ -8,7 +8,7 @@ import sys
 
 from realman_rl_simtoreal.apps.cli.real_hardware import add_arm_arguments, print_json
 from realman_rl_simtoreal.deployment.calibration import DEFAULT_CALIBRATION, load_calibration
-from realman_rl_simtoreal.deployment.grasp_config import grasp_site, gripper_limits, motion_limits, read_site
+from realman_rl_simtoreal.deployment.grasp_config import grasp_site, gripper_opening_limits, motion_limits, read_site
 from realman_rl_simtoreal.deployment.real_grasp import GRASP_STAGES, check_tcp_path, execute_grasp, plan_grasp
 from realman_rl_simtoreal.deployment.vision import RealCubeLocalizer
 from realman_rl_simtoreal.hardware.realman import RealManArm, RealManGripper
@@ -51,9 +51,12 @@ def main(argv=None):
     try:
         calibration = load_calibration(args.calibration)
         data = read_site(args.site)
-        site = grasp_site(data, calibration) if args.command == "grasp" else None
-        motion = site.motion if site is not None else motion_limits(data, calibration)
-        jaw = site.gripper if site is not None else gripper_limits(data) if args.command == "open" else None
+        if args.command == "grasp":
+            site = grasp_site(data, calibration)
+            motion, jaw = site.motion, site.gripper
+        else:
+            motion = motion_limits(data, calibration)
+            jaw = gripper_opening_limits(data) if args.command == "open" else None
         print_json({"command": args.command, "site": str(args.site), "calibration": str(calibration.path),
                     "calibration_sha256": calibration.checksum(), "motion_enabled": args.execute})
         if args.validate_site:

@@ -8,7 +8,7 @@ from unittest.mock import Mock, patch
 import numpy as np
 
 from realman_rl_simtoreal.deployment.calibration import DEFAULT_CALIBRATION, load_calibration
-from realman_rl_simtoreal.deployment.grasp_config import GraspGeometry, GraspSite
+from realman_rl_simtoreal.deployment.grasp_config import GraspGeometry, GraspSite, gripper_limits, gripper_opening_limits
 from realman_rl_simtoreal.deployment.real_grasp import GRASP_STAGES, check_tcp_path, execute_grasp, plan_grasp
 from realman_rl_simtoreal.deployment.vision import RealCubeLocalizer, StationaryCube
 from realman_rl_simtoreal.hardware import HardwareError
@@ -162,10 +162,20 @@ class VisualGraspTests(unittest.TestCase):
         with patch.dict(main.__globals__, {"read_site": Mock(return_value={}), "RealManArm": device,
                                            "RealManGripper": Mock(return_value=gripper),
                                            "motion_limits": Mock(return_value=self.site.motion),
-                                           "gripper_limits": Mock(return_value=self.site.gripper), "print_json": Mock()}):
+                                           "gripper_opening_limits": Mock(return_value=self.site.gripper), "print_json": Mock()}):
             self.assertEqual(main(["open", "--site", "fixture.json", "--ip", "192.0.2.1"]), 0)
         self.assertFalse(device.call_args.kwargs["enable_motion"])
         gripper.open_max.assert_not_called()
+
+    def test_opening_config_requires_experimental_speed_feedback_and_timeout(self):
+        data = {"gripper": {"open_speed_raw": 45, "open_feedback_raw": [1001, 1001],
+                            "completion_timeout_s": 2.0, "close_force_raw": None}}
+        self.assertEqual(gripper_opening_limits(data).open_feedback_raw, (1001, 1001))
+        with self.assertRaisesRegex(ValueError, r"gripper.close_force_raw"):
+            gripper_limits(data)
+        del data["gripper"]["completion_timeout_s"]
+        with self.assertRaisesRegex(ValueError, r"gripper.completion_timeout_s"):
+            gripper_opening_limits(data)
 
     def test_path_check_reuses_realman_tcp_kinematics(self):
         model, _, _ = load_model(TABLETOP_CARTESIAN_REALMAN_SCENE)

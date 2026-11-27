@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""只读保存静止 RGB-D 采样，离线比较同一方块的坐标链和估计方法。"""
+"""只读保存静止 RGB-D 采样，离线核对方块坐标链和实测棋盘高度。"""
 
 import argparse
 from dataclasses import asdict
+from itertools import combinations
 import json
 from pathlib import Path
 
@@ -10,6 +11,7 @@ import numpy as np
 
 from realman_rl_simtoreal.deployment.calibration import DEFAULT_CALIBRATION, load_calibration
 from realman_rl_simtoreal.deployment.vision import RealCubeLocalizer
+from realman_rl_simtoreal.deployment.z_reference import BoardReference, board_corners, board_pose, measure_board, upward_normal
 from realman_rl_simtoreal.hardware.realman import RealManArm, RealManGripper
 from realman_rl_simtoreal.hardware.realman_config import REALMAN_TABLETOP
 from realman_rl_simtoreal.hardware.realsense import RealSenseCamera
@@ -104,19 +106,24 @@ def measure_local_support(frame, mask, box, edge_m, expected_table_z):
                 inlier_residual_mm=1000 * float(np.sqrt(np.mean(error[selected] ** 2))))
 
 
-def analyze_capture(path, calibration, *, capture_calibration=None, table_z_base_m=None):
+def load_recording(path, calibration, original):
     with np.load(path, allow_pickle=False) as source:
         rgb, depth, K, flanges = (source[k] for k in ("rgb", "depth_m", "K", "T_base_flange"))
         stamps = source['host_received_s']
         metadata = json.loads(source['metadata'].item()) if 'metadata' in source else {}
         reported = source['controller_pose_m_rad'] if 'controller_pose_m_rad' in source else None
     # 离线替换外参时仍按采样原配置验证哈希，报告同时记录实际回放的配置。
-    original = capture_calibration or calibration
     if metadata.get('calibration_sha256') not in (None, original.checksum()):
         raise ValueError(f"{path} 与采样标定文件校验值不符，使用 --capture-calibration 指定原配置")
     serial = metadata.get('camera', {}).get('serial')
     if calibration.camera_serial is not None and serial not in (None, calibration.camera_serial):
         raise ValueError(f"{path} 的采样相机序列号 {serial} 与回放标定不符")
+    return rgb, depth, K, flanges, stamps, metadata, reported
+
+
+def analyze_capture(path, calibration, *, capture_calibration=None, table_z_base_m=None):
+    original = capture_calibration or calibration
+    rgb, depth, K, flanges, stamps, metadata, reported = load_recording(path, calibration, original)
     H = calibration.T_parent_color
     tcp = calibration.T_flange_tcp
     alternatives = dict(flange=H, tcp=tcp @ H, flange_inverse=inverse(H), tcp_inverse=tcp @ inverse(H))
@@ -193,6 +200,163 @@ def compare(args, calibration):
     print(json.dumps(dict(output=str(args.output), comparisons=pairs), ensure_ascii=False))
 
 
+def analyze_board_capture(path, calibration, original, reference):
+    rgb, depth, K, flanges, stamps, metadata, _ = load_recording(path, calibration, original)
+    if (not calibration.camera_serial or metadata.get('camera', {}).get('serial') != calibration.camera_serial
+            or metadata.get('calibration_sha256') != original.checksum()):
+        raise ValueError(f"{path} 缺少与回放匹配的相机序列号或采集标定校验值")
+    count = len(stamps)
+    if count < 3 or any(len(data) != count for data in (rgb, depth, flanges)):
+        raise ValueError(f"{path} 至少需要三组配对的静止姿态和彩色深度帧")
+    drift_m = float(np.max(np.linalg.norm(flanges[:, :3, 3] - flanges[0, :3, 3], axis=1)))
+    drift_deg = max(rotation_difference_deg(flanges[0, :3, :3], tf[:3, :3]) for tf in flanges)
+    if drift_m > 0.001 or drift_deg > 0.2:
+        raise ValueError(f"{path} 采样批次未保持静止 · {1000 * drift_m:.2f} mm · {drift_deg:.3f}°")
+    accepted, rejected = [], []
+    for index, (pixels, distances, flange, stamp) in enumerate(zip(rgb, depth, flanges, stamps)):
+        optical = calibration.camera_to_base(flange)
+        frame = RgbdFrame(pixels, distances, K, optical, float(stamp))
+        try:
+            measurement = measure_board(frame, reference)
+        except ValueError as exc:
+            rejected.append(dict(frame=index, reason=str(exc)))
+        else:
+            accepted.append(dict(frame=index, **measurement))
+    summary = ({key: float(np.median([row[key] for row in accepted])) for key in accepted[0] if key != "frame"}
+               if accepted else None)
+    return dict(file=str(path), frames=count, usable_frames=len(accepted), enough_frames=len(accepted) >= 3,
+                flange_drift_mm=1000 * drift_m, flange_drift_deg=drift_deg, medians=summary,
+                measurements=accepted, rejected_frames=rejected)
+
+
+def compare_reference(args, calibration):
+    original = load_calibration(args.capture_calibration) if args.capture_calibration else calibration
+    reference = reference_from_args(args)
+    runs = [analyze_board_capture(path, calibration, original, reference) for path in args.samples]
+    report = dict(reference=asdict(reference), expected_top_z_base_m=reference.top_z_base_m,
+                  calibration=str(calibration.path), calibration_sha256=calibration.checksum(),
+                  camera_serial=calibration.camera_serial, capture_calibration_sha256=original.checksum(), samples=runs)
+    write_json(args.output, report, ensure_ascii=False)
+    print(json.dumps(dict(output=str(args.output), samples=[{key: row[key] for key in
+                     ("file", "usable_frames", "frames", "medians")} for row in runs]), ensure_ascii=False))
+    return 0 if all(row['enough_frames'] for row in runs) else 2
+
+
+def reference_from_args(args):
+    return BoardReference(*args.board_corners, args.board_spans_mm[0] / 1000, args.board_spans_mm[1] / 1000,
+                          args.board_top_mm / 1000, args.table_z_base_m)
+
+
+def summarize_board_poses(name, targets, color_board, reference):
+    center = np.median(targets[:, :3, 3], axis=0)
+    normals = [upward_normal(row[:3, 2]) for row in targets]
+    normal = upward_normal(np.median(normals, axis=0))
+    return dict(sample=name, frames=len(targets), center_base_m=center.tolist(),
+                center_base_z_error_mm=1000 * float(center[2] - reference.top_z_base_m),
+                center_optical_z_m=float(np.median(color_board[:, 2, 3])), up_normal_base=normal.tolist(),
+                normal_tilt_deg=float(np.rad2deg(np.arccos(np.clip(normal[2], -1, 1)))))
+
+
+def pairwise_board_differences(samples):
+    comparisons = []
+    for a, b in combinations(samples, 2):
+        shift = 1000 * (np.asarray(b["center_base_m"]) - a["center_base_m"])
+        cosine = np.dot(a["up_normal_base"], b["up_normal_base"])
+        comparisons.append(dict(from_sample=a["sample"], to_sample=b["sample"],
+                                center_xyz_shift_mm=shift.tolist(), center_xy_shift_mm=float(np.linalg.norm(shift[:2])),
+                                center_3d_shift_mm=float(np.linalg.norm(shift)),
+                                normals_angle_deg=float(np.rad2deg(np.arccos(np.clip(cosine, -1, 1))))))
+    return comparisons
+
+
+def compare_hand_eye(args, calibration):
+    """报告原数据残差以及独立棋盘 RGB-D 检查，候选矩阵只存在于诊断报告中。"""
+    import cv2
+
+    from realman_rl_simtoreal.deployment.hand_eye_audit import audit_hand_eye, read_calibration_views
+
+    if calibration.camera_parent != "tcp":
+        raise ValueError("Grip_plus 原始标定位姿需要以 TCP 为父系的部署文件")
+    if args.cube_samples and not args.cube_capture_calibration:
+        raise ValueError("回放方块采样需要提供 --cube-capture-calibration")
+    if not callable(getattr(cv2, "calibrateHandEye", None)):
+        raise ValueError("当前 OpenCV 没有 calibrateHandEye。请使用原 handeye 环境的 OpenCV 4.x")
+
+    reference = reference_from_args(args)
+    historical_tcp, history_pixels, history_size = read_calibration_views(args.legacy_dir, reference)
+    records = []
+    for path in args.samples:
+        reference_result = analyze_board_capture(path, calibration, calibration, reference)
+        if not reference_result["enough_frames"]:
+            raise ValueError(f"{path} 未通过至少三组独立棋盘 RGB-D 的质量校核")
+        rgb, _, K, flanges, _, metadata, controller_pose = load_recording(path, calibration, calibration)
+        size = (rgb.shape[2], rgb.shape[1])
+        camera = metadata["camera"]
+        if (camera.get("color_distortion_model") != "inverse_brown_conrady"
+                or camera.get("color_distortion_coefficients") != [0] * 5):
+            raise ValueError(f"{path} 缺少零畸变 D435 RGB 配置的实测元数据")
+        if records and (size != records[0]["rgb_size"] or not np.array_equal(K, records[0]["K"])):
+            raise ValueError("独立 RGB-D 样本的相机内参与分辨率必须一致")
+        idx = [entry["frame"] for entry in reference_result["measurements"]]
+        pixels = [board_corners(rgb[i], reference) for i in idx]
+        tcp = flanges[idx] @ calibration.T_flange_tcp
+        frames = metadata.get("active_frames", {})
+        if controller_pose is None or frames.get("work", {}).get("name") != "Base" or frames.get("tool", {}).get("name") != "Grip_plus":
+            raise ValueError(f"{path} 缺少 Base / Grip_plus 活动坐标系和 SDK 位姿记录")
+        via_sdk = np.stack([pose_matrix(controller_pose[i]) for i in idx])
+        reference_result.update(
+            nominal_z16_units_m=camera.get("nominal_z16_units_m"),
+            tcp_flange_fk_sdk_max_xyz_mm=1000 * float(np.linalg.norm(tcp[:, :3, 3] - via_sdk[:, :3, 3], axis=1).max()),
+            tcp_flange_fk_sdk_max_rotation_deg=max(rotation_difference_deg(a[:3, :3], b[:3, :3]) for a, b in zip(tcp, via_sdk)))
+        records.append(dict(name=path.stem, pixels=pixels, tcp=tcp, K=K, rgb_size=size, reference=reference_result))
+
+    points = reference.points_m()
+    history, candidates = audit_hand_eye(historical_tcp, history_pixels, history_size, points, records[0]["K"],
+                                         records[0]["rgb_size"], calibration.T_parent_color)
+    for variant, (K, d, alternatives) in candidates.items():
+        paths = []
+        for sample in records:
+            fitted = [board_pose(points, uv, K, d) for uv in sample["pixels"]]
+            paths.append((sample, np.stack([pose for pose, _ in fitted]),
+                          float(np.sqrt(np.mean([error ** 2 for _, error in fitted])))))
+        for method, hand_eye in alternatives.items():
+            board_poses = [dict(**summarize_board_poses(sample["name"], sample["tcp"] @ hand_eye @ color_board,
+                                                       color_board, reference), image_reprojection_rms_px=error)
+                           for sample, color_board, error in paths]
+            history[variant]["models"][method]["held_out_rgbd_reference_rgb_only"] = dict(
+                samples=board_poses, pairs=pairwise_board_differences(board_poses))
+
+    cube_support = []
+    if args.cube_samples:
+        prior = load_calibration(args.cube_capture_calibration)
+        for path in args.cube_samples:
+            cube = analyze_capture(path, calibration, capture_calibration=prior, table_z_base_m=reference.table_z_base_m)
+            estimate = cube["candidates"]["tcp"]["upright"]
+            support = estimate["support_median"]
+            if support is None:
+                raise ValueError(f"{path} 没有可用的方块附近支撑面")
+            slope = np.array([support["apparent_dz_dx"], support["apparent_dz_dy"]])
+            n = upward_normal(np.r_[-slope, 1.])
+            slope_height_m = float(slope @ estimate["median_base_m"][:2])
+            cube_support.append(dict(sample=path.stem, support_frames=estimate["support_frames"],
+                                     up_normal_base=n.tolist(), ground_tilt_deg=float(np.rad2deg(np.arccos(n[2]))),
+                                     cube_center_m=estimate["median_base_m"],
+                                     cube_center_z_error_mm=estimate["center_z_error_mm"],
+                                     diagnostic_slope_height_at_cube_mm=1000 * slope_height_m,
+                                     extrapolated_support_z_at_base_xy_zero_m=support["z_at_cube_m"] - slope_height_m,
+                                     **support))
+
+    report = dict(opencv_version=cv2.__version__, calibration=str(calibration.path), calibration_sha256=calibration.checksum(),
+                  camera_serial=calibration.camera_serial, reference=asdict(reference), expected_top_z_base_m=reference.top_z_base_m,
+                  historical_folder=str(args.legacy_dir), historical_images=len(history_pixels), historical_size=history_size,
+                  native_rgb_size=records[0]["rgb_size"], intrinsics_and_hand_eye=history,
+                  held_out_board_depth=[sample["reference"] for sample in records], cube_nearby_support=cube_support)
+    write_json(args.output, report, ensure_ascii=False)
+    print(json.dumps(dict(output=str(args.output), historical_views=len(history_pixels),
+                          independent_rgbd_views=sum(sample["reference"]["usable_frames"] for sample in records)), ensure_ascii=False))
+    return 0
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
@@ -204,9 +368,22 @@ def main():
     audit.add_argument("--capture-calibration", type=Path,
                        help="采样时使用的原标定 JSON，用于核对保存的校验值")
     audit.add_argument("--table-z-base-m", type=float, help="实测水平桌面的基座 Z（m），用于离线诊断")
-    for command in (live, audit):
+    board = commands.add_parser("reference", help="用实测棋盘格区分光轴深度与基座 Z 残差")
+    board.add_argument("--capture-calibration", type=Path, help="采样时使用的原标定 JSON")
+    hand_eye = commands.add_parser("hand-eye", help="离线比较存档手眼算法、内参与独立 RGB-D 法向")
+    hand_eye.add_argument("--legacy-dir", type=Path, required=True, help="原始 poses.txt 与 1.jpg 至 N.jpg 所在目录")
+    hand_eye.add_argument("--cube-samples", type=Path, nargs="+", help="可选，用旧方块采样复查实际桌面支撑法向")
+    hand_eye.add_argument("--cube-capture-calibration", type=Path, help="采集旧方块采样时的标定 JSON")
+    for command in (board, hand_eye):
+        command.add_argument("samples", type=Path, nargs="+")
+        command.add_argument("--board-corners", type=int, nargs=2, required=True, metavar=("COLS", "ROWS"))
+        command.add_argument("--board-spans-mm", type=float, nargs=2, required=True, metavar=("X", "Y"),
+                             help="首末内角点横向和竖向的实测跨度，单位 mm")
+        command.add_argument("--board-top-mm", type=float, required=True, help="图案表面高出桌面的实测高度，单位 mm")
+        command.add_argument("--table-z-base-m", type=float, required=True, help="水平桌面的基座 Z，单位 m")
+    for command in (live, audit, board, hand_eye):
         command.add_argument("--output", type=Path, required=True)
-        command.add_argument("--calibration", type=Path, default=DEFAULT_CALIBRATION)
+        command.add_argument("--calibration", type=Path, default=DEFAULT_CALIBRATION, required=command in (board, hand_eye))
     args = parser.parse_args()
     if args.output.exists() or (args.command == "capture" and not 2 <= args.frames <= 100):
         parser.error("需要新的输出路径，采样帧数为 2–100")
@@ -216,10 +393,13 @@ def main():
     if calibration.camera_parent not in ("flange", "tcp"):
         parser.error("当前诊断针对眼在手上相机")
     if args.command == "capture":
-        capture(args, calibration)
-    else:
-        compare(args, calibration)
+        return capture(args, calibration)
+    if args.command == "reference":
+        return compare_reference(args, calibration)
+    if args.command == "hand-eye":
+        return compare_hand_eye(args, calibration)
+    return compare(args, calibration)
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

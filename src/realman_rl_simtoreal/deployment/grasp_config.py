@@ -5,7 +5,7 @@ import json
 from math import isfinite
 from pathlib import Path
 
-from ..hardware.safety import GripperLimits, MotionLimits
+from ..hardware.safety import GripperLimits, GripperOpeningLimits, MotionLimits
 
 
 @dataclass(frozen=True)
@@ -60,10 +60,12 @@ def read_site(path):
     return data
 
 
-def _section(data, name, cls, **extra):
+def _section(data, name, cls, *, fields=None, **extra):
     values = data.get(name)
     if not isinstance(values, dict):
         raise ValueError(f"现场抓取配置缺少 {name} 节")
+    if fields is not None:
+        values = {field: values.get(field) for field in fields}
     missing = [key for key, value in values.items() if value is None]
     if missing:
         raise ValueError(f"现场参数未填写 · {', '.join(f'{name}.{key}' for key in missing)}")
@@ -79,6 +81,11 @@ def motion_limits(data, calibration):
 
 def gripper_limits(data):
     return _section(data, "gripper", GripperLimits)
+
+
+def gripper_opening_limits(data):
+    return _section(data, "gripper", GripperOpeningLimits,
+                    fields=("open_speed_raw", "open_feedback_raw", "completion_timeout_s"))
 
 
 def grasp_site(data, calibration):
