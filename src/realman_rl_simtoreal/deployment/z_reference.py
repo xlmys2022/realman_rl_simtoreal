@@ -5,6 +5,8 @@ from math import isfinite
 
 import numpy as np
 
+from ..utils.geometry import transform
+
 
 @dataclass(frozen=True)
 class BoardReference:
@@ -51,8 +53,6 @@ def board_corners(rgb, reference):
 def board_pose(points, pixels, intrinsics, distortion, *, max_reprojection_px=1.0):
     """返回棋盘到 RGB 光学坐标系的变换和该图像的重投影 RMS。"""
     import cv2
-
-    from ..utils.geometry import transform
 
     ok, rotation, translation = cv2.solvePnP(points, pixels, intrinsics, distortion)
     if not ok:
@@ -104,6 +104,25 @@ def upward_normal(normal):
     """选取与基座 +Z 方向同侧的单位法向量。"""
     unit = normal / np.linalg.norm(normal)
     return unit if unit[2] >= 0 else -unit
+
+
+def fit_base_leveling(centers_m, normals, top_z_base_m):
+    """用每个静止批次的棋盘中心和朝上法向，校正视觉基座的俯仰、横滚和 Z 原点。"""
+    centers = np.asarray(centers_m, dtype=float)
+    normals = np.asarray(normals, dtype=float)
+    if (centers.ndim != 2 or centers.shape[1] != 3 or not len(centers) or normals.shape != centers.shape
+            or not np.isfinite(centers).all() or not np.isfinite(normals).all() or not isfinite(top_z_base_m)
+            or np.any(normals[:, 2] <= 0)):
+        raise ValueError("基座水平校正需要有限的棋盘中心、朝上法向和实测图案面 Z")
+
+    unit_normals = normals / np.linalg.norm(normals, axis=1, keepdims=True)
+    normal = upward_normal(unit_normals.mean(axis=0))
+    nx, ny, nz = normal
+    # 绕 normal × Base_Z 做最小旋转，使实测棋盘面与 Base XY 平行。
+    cross = np.array([[0., 0., -nx], [0., 0., -ny], [nx, ny, 0.]])
+    rotation = np.eye(3) + cross + cross @ cross / (1 + nz)
+    offset_z = top_z_base_m - np.median(centers @ rotation[2])
+    return transform([0., 0., offset_z], rotation)
 
 
 def measure_board(frame, reference, *, max_reprojection_px=1.0, pixels=None):

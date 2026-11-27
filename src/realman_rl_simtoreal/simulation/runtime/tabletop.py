@@ -4,7 +4,7 @@ import mujoco
 import numpy as np
 from ..devices.camera_geometry import OPTICAL_TO_MUJOCO, camera_rotation
 from ...paths import TABLETOP_CARTESIAN_SCENE as DEFAULT_SCENE, TABLETOP_CARTESIAN_REALMAN_SCENE
-from ...deployment.calibration import DEFAULT_CALIBRATION, load_calibration
+from ...deployment.calibration import LEGACY_CALIBRATION, load_calibration
 from ...hardware.realman_config import REALMAN_TABLETOP
 from ..physics.model import load_model,initialize,require
 from ..devices.mujoco_gripper import Gripper,SIGNS,MAX_WIDTH,width_to_angle
@@ -47,7 +47,7 @@ class TabletopRuntime:
             return {}
         source = {"intrinsics": "RealSense D435 640×480", "extrinsics": "legacy_mount"}
         if self.config.scene_profile == "realman_hand_eye":
-            calibrated = load_calibration(self.config.hand_eye_file or DEFAULT_CALIBRATION)
+            calibrated = load_calibration(self.config.hand_eye_file or LEGACY_CALIBRATION)
             expected_tcp = np.eye(4)
             expected_tcp[2, 3] = REALMAN_TABLETOP.flange_tcp_m
             if (calibrated.camera_parent == "base"
@@ -56,7 +56,7 @@ class TabletopRuntime:
             if calibrated.camera_serial not in (None, REALMAN_TABLETOP.camera_serial):
                 raise ValueError("手眼标定的序列号与场景 D435 内参的来源不符")
             # 相机局部 +Y/+Z 与 OpenCV 光学轴相反。先拼接一次 TCP，再换轴。
-            flange_color = calibrated.camera_to_base(np.eye(4))
+            flange_color = calibrated.camera_to_flange()
             body = self.model.body('camera_link').id
             self.model.body_pos[body] = flange_color[:3, 3]
             mujoco.mju_mat2Quat(self.model.body_quat[body],

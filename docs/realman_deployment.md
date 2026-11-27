@@ -25,13 +25,14 @@ python -I scripts/diagnostics/check_realsense.py --no-preview --frames 30
 
 ## 实测标定文件
 
-2026-11-26 实机手眼矩阵的父系是 `Grip_plus` TCP。只读验收使用 `--calibration assets/calibration/realman/calibration.20261126.json` 显式加载。静止方块跨视角一致性已复核，抓取高度仍需用实测支撑面完成验收。[新批次证据和回放命令](realman_installation.md#2026-11-26-实机手眼标定)
+定位与抓取入口默认加载 `assets/calibration/realman/calibration.20261127.json`。它以 `Grip_plus` TCP 为手眼父系，并按现场水平棋盘校正视觉基座。独立方块回放的绝对 Z 误差小于 1.5 mm。原始手眼矩阵及采样校验值使用 `calibration.20261126.json` 追溯。[当前水平校正与回放命令](realman_visual_grasp.md#2026-11-27-视觉基座水平校正) · [原始手眼标定](realman_installation.md#2026-11-26-实机手眼标定)
 
 模板位于 [assets/calibration/realman](../assets/calibration/realman/)。其中的 `cube_hsv.json` 是 `cube_hsv_20261124_210413_368026/hsv.json` 的副本，绿色阈值为 `[49, 80, 66]` 到 `[84, 255, 255]`。复制模板后填写现场值，`hsv_file` 支持相对配置文件的路径。
 
 ```bash
-cp -i assets/calibration/realman/calibration.example.json assets/calibration/realman/calibration.local.json
-python -I scripts/demos/locate_real_cube.py --validate-calibration
+cp -i assets/calibration/realman/calibration.example.json assets/calibration/realman/calibration.site.json
+# 填写新站实测值后校验
+python -I scripts/demos/locate_real_cube.py --calibration assets/calibration/realman/calibration.site.json --validate-calibration
 ```
 
 压缩包包含标定程序、棋盘格规格、真机采集照片和求解截图。截图中可读出一组外参，使用现场样本的离线复核结果见实机安装文档。追溯该批次需要与原图逐张对应的 `poses.txt`、当时的工具系记录及相机标识。可用 `unzip -p hand_eye_calibration-main.zip hand_eye_calibration-main/README.md` 查看采样步骤。[手眼标定压缩包](../hand_eye_calibration-main.zip) · [截图外参与 A/B/C 回放](realman_installation.md#手眼矩阵与视觉诊断)
@@ -40,11 +41,12 @@ python -I scripts/demos/locate_real_cube.py --validate-calibration
 - `hand_eye.T_parent_color` 填实际彩色光学系到指定父坐标系的齐次矩阵。压缩包的 `compute_in_hand.py` 输出相机到采样末端的旋转和平移，`compute_to_hand.py` 输出相机到基座的旋转和平移。把实测 `R` 和以米为单位的 `t` 放入前三行，第四行为 `[0, 0, 0, 1]`。
 - `T_flange_tcp` 填从实际 TCP 到法兰的齐次矩阵。用固定参考点和多组法兰姿态标定 TCP 偏移，并明确工具轴向和对应夹爪开口。矩阵必须包含测得的平移和确认的轴方向。
 - `cube_edge_m` 填用卡尺测得的立方体边长，单位为米。`camera_serial` 可填写同一台 RealSense 的序列号，以启用设备校验。
+- `base_leveling` 可选，由实测水平棋盘生成。该刚体变换在光学系投到基座后应用于视觉点，机械臂位姿通过控制器实际 DH 和工作系表达。[生成命令](realman_visual_grasp.md#2026-11-27-视觉基座水平校正)
 
 `T_A_B` 把 B 系坐标变换到 A 系。腕部相机的外参拼接为 `T_base_flange @ T_flange_color` 或 `T_base_flange @ T_flange_tcp @ T_tcp_color`。固定相机直接使用 `T_base_color`。缺少 HSV、手眼、TCP 或方块实测尺寸时，定位入口在打开设备前退出并列出缺项。
 
 ```bash
-CALIB=assets/calibration/realman/calibration.20261126.json
+CALIB=assets/calibration/realman/calibration.20261127.json
 # 腕部相机
 python -I scripts/demos/locate_real_cube.py --calibration "$CALIB" --ip "$ARM_IP"
 

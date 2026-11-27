@@ -92,7 +92,9 @@ class InstallationTests(unittest.TestCase):
             (folder / "hsv.json").write_text(
                 '{"hsv_ranges":[{"low":[49,80,66],"high":[84,255,255]}]}')
             path = folder / "candidate.json"
+            leveling = transform([0., 0., .002], rotation_matrix([0., .03, 0.]))
             path.write_text(json.dumps(dict(hsv_file="hsv.json", cube_edge_m=.02, T_flange_tcp=flange_tcp.tolist(),
+                                            base_leveling=leveling.tolist(),
                                             hand_eye=dict(parent_frame="tcp", T_parent_color=
                                                           (inverse(flange_tcp) @ flange_optical).tolist()))))
             config = CartesianTabletopConfig(scene_profile="realman_hand_eye", hand_eye_file=str(path))

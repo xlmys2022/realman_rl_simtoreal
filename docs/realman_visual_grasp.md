@@ -2,6 +2,27 @@
 
 固定俯视流程沿同一末端姿态完成张爪、水平对准、预抓取、直线下降、力控闭合和垂直抬升。视觉给出 XY、方块边方向及绝对 Z 校核值。下降终点取经过现场验收的 `Grip_plus` 夹持 TCP 高度。现有仿真场景和 PPO 仍使用各自的配置。
 
+## 2026-11-27 视觉基座水平校正
+
+未校正的 RGB 棋盘中心偏高 14.5–16.9 mm，固定棋盘的朝上法向在基座系呈现约 1.3–2.3° 的倾斜。RGB-D 与纯 RGB 的同像素光轴深度中位差为 −1.2～+1.8 mm。使用实测平行桌面拟合得到的水平校正为 1.84°，独立 Z 平移仅 +0.21 mm。沿 Base +X 的倾斜项能解释抓取区域的主要高度偏差。原始光学外参与机械臂实际位姿各自贡献的误差仍需外部位姿基准分离。[棋盘拟合与留出报告](../outputs/validation/realman_installation/base_leveling_fit_20261127.json)
+
+现场默认配置 `calibration.20261127.json` 在完成 `T_base_flange @ T_flange_tcp @ T_tcp_color` 之后左乘 `base_leveling`，把视觉重建对齐现场实测的 Base 水平基准。逐次留出一个棋盘采样位时，RGB 中心 Z 误差最大 1.8 mm。独立的 A/B/C 方块回放中，中心 Z 偏差从 +12.44、+12.92、+12.53 mm 降至 −1.45、−1.00、−1.49 mm。三个位置的 XY 校正量均小于 0.8 mm。固定俯视抓取用校正后的视觉坐标对准 XY，并从现场配置读取实测的 `Grip_plus` 夹持 Z。更换站点或拆装相机后应重新测量参考面和采样。[现场标定文件](../assets/calibration/realman/calibration.20261127.json) · [独立方块回放](../outputs/validation/realman_installation/base_leveling_cube_replay_20261127.json)
+
+真机和 D435 重新只读采集的棋盘 8/8 帧通过校核。使用同一组帧对比，RGB-D 棋盘中心 Z 误差从 +15.87 mm 降至 +0.74 mm，纯 RGB 从 +15.03 mm 降至 −0.13 mm。该批采样未参与拟合。夹爪读回为离线，主动抓取仍待现场验收。[真机只读复测](../outputs/validation/realman_installation/onsite_base_leveling_report_20261127.json)
+
+在 `realman_rl` 环境离线复现。至少采集两组不同位置或腕姿的静止棋盘录像，填写现场实测跨度和图案面高度。命令输出新标定与逐组误差报告。
+
+```bash
+SAMPLES=outputs/validation/realman_installation
+RAW_CALIB=assets/calibration/realman/calibration.20261126.json
+python -I scripts/diagnostics/audit_realman_vision.py reference \
+  "$SAMPLES/onsite_reference_A.npz" "$SAMPLES/onsite_reference_B.npz" "$SAMPLES/onsite_reference_C.npz" \
+  --calibration "$RAW_CALIB" --board-corners 11 8 --board-spans-mm 300 210 \
+  --board-top-mm 3.5 --table-z-base-m -0.040 \
+  --write-leveling-calibration "$SAMPLES/calibration.leveling_replay.json" \
+  --output "$SAMPLES/base_leveling_rerun.json"
+```
+
 ## 现场读回与绝对 Z
 
 - 用户确认桌面水平，基座安装面到方块桌面的实测垂距为 40 mm。桌面到第二关节中心约 214 mm，和安装高度加实机 DH 的 `d1=172 mm` 所得约 212 mm 接近。按现有基座轴定义，执行平面采用水平桌面 `Z=-0.040 m`，20 mm 方块在桌面时的参考中心是 `Z=-0.030 m`。
@@ -9,7 +30,7 @@
 - 以 A/B 首帧中靠近桌面的两个固定黑点做纯 RGB 双视图三角化，得到 Z 约 −34.0、−33.8 mm，重投影误差小于 0.35 px。对应像素周围的 RGB-D 读数约 −30.4 至 −28.5 mm。三角化共用当前 FK 和手眼外参，独立于深度读数。结果提示深度链和两种方法共用的坐标链均需核查，样本不足以分解误差或把偏差应用到其他位置。局部点云斜率作为诊断量记录。部署保留水平平面和原始手眼矩阵。
 - 首次真机只读返回 `Base / Grip_plus`、末端最大线速度 `0.25 m/s` 和动力学碰撞等级 `0`。动作验收前由操作员在示教器按现场要求启用碰撞防护并复查。历史回包记录夹住方块时 `opening_raw=241`、`force_g=787`、`mode=6`，夹爪在线、使能且无报错。力控指令值按厂家定义单独设定。[现场状态快照](../outputs/validation/realman_installation/control_readonly_20261126.json) · [睿尔曼夹爪接口](https://develop.realman-robotics.com/robot/apipython/classes/gripperControl/) · [碰撞等级与线速度接口](https://develop.realman-robotics.com/robot/apipython/classes/tipVelocityParameters/)
 
-绝对 Z 验收需要在抓取区域放置可独立测到基座 XYZ 的参考物。在至少两个 XY 位置比对其相机返回高度，同时使用已知高度差的量块复核 D435 的相对深度。记录基座安装面水平度并保留同帧 RGB-D、机械臂位姿和参考物实测值。当前 12 mm 残差会在规划阶段中止下降。
+绝对 Z 验收需要在抓取区域放置可独立测到基座 XYZ 的参考物。在至少两个 XY 位置比对其相机返回高度，同时使用已知高度差的量块复核 D435 的相对深度。记录基座安装面水平度并保留同帧 RGB-D、机械臂位姿和参考物实测值。未校正配置的 12 mm 残差会在规划阶段中止下降。
 
 2026-11-26 现场复查时，操作员已在示教器设置碰撞防护等级 **4**，只读回包同步确认了该等级。这一姿态的十次静止读回为开口度 237、模式 6、力反馈 0 g。开口或模式的单项读回不足以验收夹持。[复查状态与十次读回](../outputs/validation/realman_installation/onsite_collision_4_20261126.json)
 
@@ -85,7 +106,7 @@ python -I scripts/diagnostics/audit_realsense_board_depth.py --serial 1521220723
 ```bash
 conda activate realman_rl
 ARM_IP=192.168.1.18
-CALIB=assets/calibration/realman/calibration.20261126.json
+CALIB=assets/calibration/realman/calibration.20261127.json
 SITE=assets/calibration/realman/grasp_site.local.json
 ```
 

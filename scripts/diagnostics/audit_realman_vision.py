@@ -2,16 +2,19 @@
 """只读保存静止 RGB-D 采样，离线核对方块坐标链和实测棋盘高度。"""
 
 import argparse
-from dataclasses import asdict
+from dataclasses import asdict, replace
 from itertools import combinations
 import json
+import os
 from pathlib import Path
 
 import numpy as np
 
 from realman_rl_simtoreal.deployment.calibration import DEFAULT_CALIBRATION, load_calibration
 from realman_rl_simtoreal.deployment.vision import RealCubeLocalizer
-from realman_rl_simtoreal.deployment.z_reference import BoardReference, board_corners, board_pose, measure_board, upward_normal
+from realman_rl_simtoreal.deployment.z_reference import (
+    BoardReference, board_corners, board_pose, fit_base_leveling, measure_board, upward_normal,
+)
 from realman_rl_simtoreal.hardware.realman import RealManArm, RealManGripper
 from realman_rl_simtoreal.hardware.realman_config import REALMAN_TABLETOP
 from realman_rl_simtoreal.hardware.realsense import RealSenseCamera
@@ -148,7 +151,7 @@ def analyze_capture(path, calibration, *, capture_calibration=None, table_z_base
             max_xyz_error_mm=float(1000 * np.max(np.linalg.norm(fk[:, :3, 3] - controller[:, :3, 3], axis=1))),
             max_rotation_error_deg=max(rotation_difference_deg(a[:3, :3], b[:3, :3]) for a, b in zip(fk, controller)))
     for name, attachment in alternatives.items():
-        T = flanges @ attachment
+        T = calibration.camera_to_base(flanges) if name == calibration.camera_parent else flanges @ attachment
         candidate = dict(T_base_color=T[0].tolist())
         for detector_type, estimator in ((OrangeCubeDetector, "legacy"), (UprightCubeDetector, "upright")):
             detector = detector_type(edge_m=calibration.cube_edge_m, hsv_ranges=calibration.hsv_ranges)
@@ -232,14 +235,49 @@ def analyze_board_capture(path, calibration, original, reference):
 def compare_reference(args, calibration):
     original = load_calibration(args.capture_calibration) if args.capture_calibration else calibration
     reference = reference_from_args(args)
+    if args.write_leveling_calibration:
+        calibration = replace(calibration, base_leveling=None)
     runs = [analyze_board_capture(path, calibration, original, reference) for path in args.samples]
     report = dict(reference=asdict(reference), expected_top_z_base_m=reference.top_z_base_m,
                   calibration=str(calibration.path), calibration_sha256=calibration.checksum(),
                   camera_serial=calibration.camera_serial, capture_calibration_sha256=original.checksum(), samples=runs)
+    enough_frames = all(row['enough_frames'] for row in runs)
+    if args.write_leveling_calibration and enough_frames:
+        report['base_leveling_fit'] = write_leveling_calibration(args.write_leveling_calibration,
+                                                                calibration, original, reference, runs, args.samples)
     write_json(args.output, report, ensure_ascii=False)
     print(json.dumps(dict(output=str(args.output), samples=[{key: row[key] for key in
                      ("file", "usable_frames", "frames", "medians")} for row in runs]), ensure_ascii=False))
-    return 0 if all(row['enough_frames'] for row in runs) else 2
+    return 0 if enough_frames else 2
+
+
+def write_leveling_calibration(path, calibration, original, reference, runs, samples):
+    """从棋盘 RGB 拟合水平校正，并记录整组留出误差及校正后 RGB-D 残差。"""
+    top_z = reference.top_z_base_m
+    medians = [row['medians'] for row in runs]
+    centers = np.array([[m['rgb_board_center_x_m'], m['rgb_board_center_y_m'],
+                         top_z + m['rgb_board_center_base_z_error_mm'] / 1000] for m in medians])
+    normals = np.array([[m[f'rgb_normal_{axis}_base'] for axis in 'xyz'] for m in medians])
+    leveling = fit_base_leveling(centers, normals, top_z)
+    held_errors = []
+    for i, row in enumerate(runs):
+        train = np.arange(len(runs)) != i
+        held_fit = fit_base_leveling(centers[train], normals[train], top_z)
+        held_z = held_fit[2, :3] @ centers[i] + held_fit[2, 3]
+        held_errors.append(dict(file=row['file'], rgb_board_center_z_error_mm=1000 * float(held_z - top_z)))
+
+    corrected = replace(calibration, base_leveling=leveling)
+    evaluated = [analyze_board_capture(sample, corrected, original, reference) for sample in samples]
+    data = json.loads(calibration.path.read_text(encoding='utf-8-sig'))
+    data['hsv_file'] = os.path.relpath(calibration.hsv_path, start=path.resolve().parent)
+    data['base_leveling'] = leveling.tolist()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open('x', encoding='utf-8') as stream:
+        json.dump(data, stream, indent=2, ensure_ascii=False, allow_nan=False)
+        stream.write('\n')
+    return dict(calibration=str(path), calibration_sha256=load_calibration(path).checksum(),
+                base_leveling=leveling.tolist(), rotation_deg=rotation_difference_deg(np.eye(3), leveling[:3, :3]),
+                leave_one_batch_out=held_errors, corrected_samples=evaluated)
 
 
 def reference_from_args(args):
@@ -370,6 +408,8 @@ def main():
     audit.add_argument("--table-z-base-m", type=float, help="实测水平桌面的基座 Z（m），用于离线诊断")
     board = commands.add_parser("reference", help="用实测棋盘格区分光轴深度与基座 Z 残差")
     board.add_argument("--capture-calibration", type=Path, help="采样时使用的原标定 JSON")
+    board.add_argument("--write-leveling-calibration", type=Path, metavar="JSON",
+                       help="使用多组实测水平棋盘的 RGB 重建结果生成新的基座水平校正标定")
     hand_eye = commands.add_parser("hand-eye", help="离线比较存档手眼算法、内参与独立 RGB-D 法向")
     hand_eye.add_argument("--legacy-dir", type=Path, required=True, help="原始 poses.txt 与 1.jpg 至 N.jpg 所在目录")
     hand_eye.add_argument("--cube-samples", type=Path, nargs="+", help="可选，用旧方块采样复查实际桌面支撑法向")
@@ -389,6 +429,11 @@ def main():
         parser.error("需要新的输出路径，采样帧数为 2–100")
     if args.command == "compare" and args.table_z_base_m is not None and not np.isfinite(args.table_z_base_m):
         parser.error("--table-z-base-m 必须为有限数值")
+    if args.command == "reference" and args.write_leveling_calibration:
+        if len({path.resolve() for path in args.samples}) != len(args.samples) or len(args.samples) < 2:
+            parser.error("基座水平校正需要至少两组不同位置或姿态的独立录像")
+        if args.write_leveling_calibration.exists() or args.write_leveling_calibration.resolve() == args.output.resolve():
+            parser.error("水平校正标定需要单独的新输出路径")
     calibration = load_calibration(args.calibration)
     if calibration.camera_parent not in ("flange", "tcp"):
         parser.error("当前诊断针对眼在手上相机")

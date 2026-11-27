@@ -37,8 +37,7 @@ def main(argv=None):
     for command in (move, open_jaw, grasp):
         add_arm_arguments(command, required=False)
         command.add_argument("--site", type=Path, required=True, help="经现场验收的抓取 JSON")
-        command.add_argument("--calibration", type=Path,
-                             default=DEFAULT_CALIBRATION.with_name("calibration.20261126.json"))
+        command.add_argument("--calibration", type=Path, default=DEFAULT_CALIBRATION)
         command.add_argument("--validate-site", action="store_true", help="仅校验文件，离线退出")
         command.add_argument("--execute", action="store_true", help="启用动作提示，仍须逐条人工确认")
 

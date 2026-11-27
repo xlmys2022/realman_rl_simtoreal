@@ -81,11 +81,13 @@ RealSense 彩色光学系和 OpenCV 一致，X 向右、Y 向下、Z 沿视线�
 
 ```bash
 # 11 月 25 日历史配置的采样和回放命令
+HISTORICAL_CALIB=assets/calibration/realman/calibration.local.json
 python -I scripts/diagnostics/check_realman_arm.py --ip 192.168.1.18 --gripper --kinematics
-python -I scripts/demos/locate_real_cube.py --validate-calibration
-python -I scripts/demos/locate_real_cube.py --ip 192.168.1.18 --no-preview --frames 60
+python -I scripts/demos/locate_real_cube.py --calibration "$HISTORICAL_CALIB" --validate-calibration
+python -I scripts/demos/locate_real_cube.py --calibration "$HISTORICAL_CALIB" --ip 192.168.1.18 --no-preview --frames 60
 
 python -I scripts/diagnostics/audit_realman_vision.py capture --ip 192.168.1.18 \
+  --calibration "$HISTORICAL_CALIB" \
   --output outputs/validation/realman_installation/overhead_A.npz
 # 由操作员用示教器完成平移，保持角度与方块位置，机械臂静止后再采 B
 python -I scripts/diagnostics/audit_realman_vision.py capture --ip 192.168.1.18 \
@@ -93,6 +95,7 @@ python -I scripts/diagnostics/audit_realman_vision.py capture --ip 192.168.1.18 
 python -I scripts/diagnostics/audit_realman_vision.py compare \
   outputs/validation/realman_installation/overhead_A.npz \
   outputs/validation/realman_installation/overhead_B.npz \
+  --calibration "$HISTORICAL_CALIB" \
   --output outputs/validation/realman_installation/overhead_audit.json
 # 斜视复查时，在 compare 命令的位置参数中追加斜视的 .npz 采样文件
 ```

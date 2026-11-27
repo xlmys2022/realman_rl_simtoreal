@@ -18,6 +18,7 @@ from realman_rl_simtoreal.hardware import HardwareError
 from realman_rl_simtoreal.hardware.realman import ArmState
 from realman_rl_simtoreal.hardware.realsense import FrameTiming, RgbdSample
 from realman_rl_simtoreal.paths import PROJECT_ROOT
+from realman_rl_simtoreal.utils.geometry import euler_matrix, inverse, transform
 
 
 def box_sample(center, edge_m, camera_to_base):
@@ -95,6 +96,9 @@ class CalibrationVisionTests(unittest.TestCase):
         self.write_calibration(parent_color=reflection)
         with self.assertRaisesRegex(CalibrationError, "右手刚体"):
             load_calibration(self.path)
+        self.write_calibration(base_leveling=reflection.tolist())
+        with self.assertRaisesRegex(CalibrationError, "base_leveling"):
+            load_calibration(self.path)
         self.write_calibration(cube_edge_m=True)
         with self.assertRaisesRegex(CalibrationError, "cube_edge_m"):
             load_calibration(self.path)
@@ -121,8 +125,10 @@ class CalibrationVisionTests(unittest.TestCase):
         flange_color = np.linalg.inv(self.base_flange) @ self.base_color
         capture_path.write_bytes(self.write_calibration(parent="flange", parent_color=flange_color).read_bytes())
         capture_calibration = load_calibration(capture_path)
-        tcp_color = np.linalg.inv(self.base_flange @ self.flange_tcp) @ self.base_color
-        replay_calibration = load_calibration(self.write_calibration(parent="tcp", parent_color=tcp_color))
+        leveling = transform([0., 0., .001], euler_matrix([0., .035, 0.]))
+        tcp_color = inverse(self.base_flange @ self.flange_tcp) @ inverse(leveling) @ self.base_color
+        replay_calibration = load_calibration(self.write_calibration(parent="tcp", parent_color=tcp_color,
+                                                                     base_leveling=leveling.tolist()))
         sample = self.camera.capture.return_value
         record = self.path.with_name("capture.npz")
         metadata = {"calibration_sha256": capture_calibration.checksum(), "camera": self.camera.info}
@@ -133,6 +139,7 @@ class CalibrationVisionTests(unittest.TestCase):
             analyze_capture(record, replay_calibration)
         result = analyze_capture(record, replay_calibration, capture_calibration=capture_calibration)
         np.testing.assert_allclose(result["candidates"]["tcp"]["upright"]["median_base_m"], self.center, atol=.0018)
+        np.testing.assert_allclose(result["T_base_tcp"], self.base_flange @ self.flange_tcp, atol=1e-12)
         with self.assertRaisesRegex(ValueError, "序列号"):
             analyze_capture(record, replace(replay_calibration, camera_serial="other-camera"),
                             capture_calibration=capture_calibration)
@@ -176,6 +183,18 @@ class CalibrationVisionTests(unittest.TestCase):
         self.assertIs(observation.sample, fresh)
         self.assertEqual(observation.arm_timestamps_s, (self.before.timestamp_s, self.after.timestamp_s))
         self.assertEqual(self.camera.capture.call_args_list[0].kwargs, {"fresh": True})
+
+    def test_wrist_leveling_applies_once_to_camera_and_leaves_arm_readback_in_base(self):
+        leveling = transform([0., 0., .001], euler_matrix([0., .035, 0.]))
+        tcp = self.base_flange @ self.flange_tcp
+        raw_optical = inverse(leveling) @ self.base_color
+        cal = load_calibration(self.write_calibration(parent="tcp", parent_color=inverse(tcp) @ raw_optical,
+                                                       base_leveling=leveling.tolist()))
+        np.testing.assert_allclose(cal.camera_to_flange(), inverse(self.base_flange) @ raw_optical, atol=1e-12)
+        observation = RealCubeLocalizer(cal).capture(self.camera, self.arm)
+        np.testing.assert_allclose(observation.T_base_color, self.base_color, atol=1e-12)
+        np.testing.assert_allclose(observation.T_base_tcp, tcp, atol=1e-12)
+        np.testing.assert_allclose(observation.tracking["position_m"], self.center, atol=.0018)
 
     def test_wrist_rejects_motion_and_long_pose_window(self):
         parent_color = np.linalg.inv(self.base_flange) @ self.base_color

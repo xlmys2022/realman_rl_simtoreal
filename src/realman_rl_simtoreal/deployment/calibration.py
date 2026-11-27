@@ -13,7 +13,8 @@ from ..utils.geometry import validate_transform
 
 
 EXAMPLE_CALIBRATION = PROJECT_ROOT / "assets/calibration/realman/calibration.example.json"
-DEFAULT_CALIBRATION = EXAMPLE_CALIBRATION.with_name("calibration.local.json")
+LEGACY_CALIBRATION = EXAMPLE_CALIBRATION.with_name("calibration.local.json")
+DEFAULT_CALIBRATION = EXAMPLE_CALIBRATION.with_name("calibration.20261127.json")
 HsvTriplet = tuple[int, int, int]
 HsvRange = tuple[HsvTriplet, HsvTriplet]
 
@@ -32,20 +33,29 @@ class RealCalibration:
     T_flange_tcp: np.ndarray
     cube_edge_m: float
     camera_serial: str | None
+    base_leveling: np.ndarray | None = None
 
     def checksum(self):
         """返回当前标定文件的内容校验值。"""
         return file_sha256(self.path)
 
-    def camera_to_base(self, T_base_flange=None):
-        """获得 RealSense 彩色光学系到机械臂基座系的变换。"""
+    def camera_to_flange(self):
+        """返回相机的实测安装变换，供仿真等需使用法兰外参的场景调用。"""
         if self.camera_parent == "base":
-            return self.T_parent_color
-        if T_base_flange is None:
-            raise CalibrationError("腕部相机定位需要同一时段的实机 T_base_flange")
+            raise CalibrationError("固定相机没有法兰外参")
         if self.camera_parent == "tcp":
-            return T_base_flange @ self.T_flange_tcp @ self.T_parent_color
-        return T_base_flange @ self.T_parent_color
+            return self.T_flange_tcp @ self.T_parent_color
+        return self.T_parent_color
+
+    def camera_to_base(self, T_base_flange=None):
+        """将彩色光学系变换到基座系，按现场标定校正视觉重建的水平基准。"""
+        if self.camera_parent == "base":
+            optical = self.T_parent_color
+        else:
+            if T_base_flange is None:
+                raise CalibrationError("腕部相机定位需要同一时段的实机 T_base_flange")
+            optical = T_base_flange @ self.camera_to_flange()
+        return optical if self.base_leveling is None else self.base_leveling @ optical
 
 
 def _read_json(path):
@@ -117,7 +127,10 @@ def load_calibration(path=DEFAULT_CALIBRATION):
     try:
         hand_eye_transform = validate_transform(hand_eye["T_parent_color"], "hand_eye.T_parent_color")
         tcp_transform = validate_transform(data["T_flange_tcp"], "T_flange_tcp")
+        leveling = data.get("base_leveling")
+        if leveling is not None:
+            leveling = validate_transform(leveling, "base_leveling")
     except ValueError as exc:
         raise CalibrationError(f"{path} · {exc}") from exc
     return RealCalibration(path, hsv_path, load_hsv(hsv_path), parent,
-                           hand_eye_transform, tcp_transform, float(edge), serial)
+                           hand_eye_transform, tcp_transform, float(edge), serial, leveling)

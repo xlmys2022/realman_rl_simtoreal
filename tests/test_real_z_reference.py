@@ -12,7 +12,7 @@ import numpy as np
 
 from realman_rl_simtoreal.deployment.calibration import DEFAULT_CALIBRATION, load_calibration
 from realman_rl_simtoreal.deployment.hand_eye_audit import closure_metrics, resized_intrinsics
-from realman_rl_simtoreal.deployment.z_reference import BoardReference, measure_board
+from realman_rl_simtoreal.deployment.z_reference import BoardReference, fit_base_leveling, measure_board
 from realman_rl_simtoreal.hardware.realman import ArmState, GripperState
 from realman_rl_simtoreal.paths import PROJECT_ROOT
 from realman_rl_simtoreal.perception.rgbd import RgbdFrame
@@ -87,6 +87,19 @@ class RealZReferenceTests(unittest.TestCase):
             BoardReference(7, 5, np.nan, .112, .002, -.040)
         with self.assertRaisesRegex(ValueError, "有效对齐深度不足"):
             measure_board(RgbdFrame(self.rgb, np.zeros_like(self.depth), self.K, self.optical, 1.), self.board)
+
+    def test_leveling_recovers_absolute_height_and_preserves_real_height_differences(self):
+        expected = transform([0., 0., .001], cv2.Rodrigues(np.array([.008, .031, 0.]))[0])
+        raw = inverse(expected)
+        z = self.board.top_z_base_m
+        centers = np.array([[.26, -.08, z], [.47, .04, z], [.52, -.06, z]])
+        raw_centers = centers @ raw[:3, :3].T + raw[:3, 3]
+        raw_normals = np.tile(raw[:3, 2], (len(centers), 1))
+        leveling = fit_base_leveling(raw_centers, raw_normals, z)
+        np.testing.assert_allclose(leveling, expected, atol=1e-12)
+
+        raised = np.r_[.41, .02, z + .020, 1.]
+        np.testing.assert_allclose(leveling @ (raw @ raised), raised, atol=1e-12)
 
     def test_batch_reports_bad_frames_and_requires_stationary_provenance(self):
         audit = run_path(str(PROJECT_ROOT / "scripts/diagnostics/audit_realman_vision.py"))
